@@ -10,6 +10,7 @@ use crate::ids::PowerIds as _;
 /// `ModifyDamageMultiplicative`: half a powered attack on its owner, from
 /// another creature whose hit points are no more than its Doom.
 pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     fight: Option<&dyn FightView<V>>,
     hook: ModifyHook<V>,
 ) -> Modify<Number> {
@@ -21,8 +22,7 @@ pub(super) fn modify_hook<V: crate::Build>(
             ..
         } => {
             let fight = fight.expect("a hit is dealt in a fight");
-            let player = fight.player();
-            if target != player || dealer == player {
+            if target != owner || dealer == owner {
                 return Modify::Nothing;
             }
             let doom = match fight.power(dealer, V::Power::DOOM_POWER) {

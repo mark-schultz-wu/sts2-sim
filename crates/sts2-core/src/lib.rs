@@ -36,7 +36,7 @@ mod step;
 pub use play::recording;
 
 pub use content::{
-    ActTable, AfflictionTable, Amount, AscensionKinds, AttackId, AttackResults, BlockGained,
+    ActTable, AfflictionTable, Aim, Amount, AscensionKinds, AttackId, AttackResults, BlockGained,
     CHOICES, CardDraw, CardFields, CardKind, CardLogic, CardModel, CardNumber, CardNumberModifier,
     CardOwner, CardRarityKinds, CardSource, CardTable, CardTagKinds, CardVars, Change,
     CharacterTable, ContentError, ContentVersion, Cost, CostPool, CreatureView, CustomReward,
@@ -49,13 +49,14 @@ pub use content::{
     MonsterKinds, MonsterModel, MonsterSpawn, MonsterTable, MonsterVirtual, MoveKinds, MoveLog,
     MoveMachine, MovePinned, MultiplayerConstraint, Offered, Opponents, Overrides, PastTurns,
     Picked, PileAct, PilePosition, PlayAt, PlayFinished, PlayStarted, Played, PlayerHealth,
-    PlayerStreamKinds, PoolFilter, PotionTable, PotionUsage, PowerAmount, PowerKinds, PowerModel,
-    PowerTable, PowerVirtual, Printed, RarityKinds, RelicModel, RelicPoolKinds, RelicPull,
-    RelicTable, RestKinds, Rests, ResultPile, RewardRarity, RoomKinds, RosterEntry, Rules,
-    RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd, Spawned, Stream,
-    StreamKinds, StunResume, Table, Taken, TargetKinds, Temporary, TurnHistory, TurnPhaseKinds,
-    UnplayableReasonKinds, Version, Writing,
+    PlayerStreamKinds, PoolFilter, PotionTable, PotionUsage, PowerAmount, PowerInstances,
+    PowerKinds, PowerModel, PowerTable, PowerVirtual, Printed, RarityKinds, RelicModel, RelicOwner,
+    RelicPoolKinds, RelicPull, RelicTable, RestKinds, Rests, ResultPile, RewardRarity, RoomKinds,
+    RosterEntry, Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd,
+    Spawned, Stream, StreamKinds, StunResume, Table, Taken, TargetKinds, Temporary, TurnHistory,
+    TurnPhaseKinds, UnplayableReasonKinds, Version, Writing,
 };
+pub use content::{CardResult, MAX_PLAYERS, PARTICIPANTS, Participants, PlayerTurns, ResultHolder};
 pub use event::{CarriedRelic, EventBehavior, EventView};
 pub use hook_response::HookResponse;
 pub use ident::{
@@ -86,9 +87,9 @@ pub use step::decision::{BeltIndex, Decision, HandIndex};
 pub use step::setup::{Gift, Setup};
 pub use step::start::{Player, RunModifier, Start};
 
-pub use play::coop::{Coop, Turn};
-pub use play::recorder::{Recorder, Tape};
 pub use play::recording::Recording;
 pub use play::refusal::{Reason, Refusal};
-pub use play::seat::{Peer, Peers, Seat, SeatAnswered, SeatIndex, Seated};
-pub use play::{Answered, Applied, Construct, Decided, Play, Snapshot};
+pub use play::seat::{Link, Peer, Peers, SeatAnswered, SeatIndex, Seated};
+pub use play::table::{RunTable, Settled};
+pub use play::verdict::{End, Verdict};
+pub use play::{Answered, Applied, Decided, Snapshot};

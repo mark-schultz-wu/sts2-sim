@@ -53,6 +53,11 @@ impl<V: crate::Build> EventBehavior<V> for WhisperingHollow {
         )
     }
 
+    /// `WillKillPlayer`, for `Hug`: its hit point loss.
+    fn kills(&self, _state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 1 && run.hp() <= HP_LOSS
+    }
+
     /// `Gold`: `PlayerCmd.LoseGold`, then `RewardsCmd.OfferCustom` with two
     /// potion rewards. `Hug`: `FromDeckForTransformation` for one card,
     /// `TransformToRandom` off the event's stream, then the HP. Each finishes

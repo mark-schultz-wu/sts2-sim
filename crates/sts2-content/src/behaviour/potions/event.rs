@@ -7,38 +7,15 @@ use sts2_core::{Amount, CreatureView as _, Effect, Fight, Scaling};
 use crate::generated::cards::TargetType;
 use crate::ids::PotionIds as _;
 
-/// Where an event potion stopped on the player's answer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume {
-    /// `GlowwaterPotion`, after a question inside its exhausts was answered.
-    GlowwaterExhausted,
-}
-
-/// The rest of an event potion's use, once the question it stopped on is
-/// answered.
-pub(super) fn resume<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    at: Resume,
-    answer: sts2_core::Taken<V>,
-) -> Played<V, F::Kind> {
-    match (at, answer) {
-        (Resume::GlowwaterExhausted, sts2_core::Taken::Waited) => {
-            fight.draw(V::Potion::GLOWWATER_POTION_CARDS);
-            Played::Done
-        }
-        (at, answer) => unreachable!("{at:?} resumed with {answer:?}"),
-    }
-}
-
 /// What a potion does when it is drunk in a fight.
 ///
 /// # Panics
 ///
 /// An event potion nobody has ported.
-pub(super) fn on_use<V: crate::Build, F: Fight<V>>(
+pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     potion: V::Potion,
-    fight: &mut F,
-) -> Played<V, F::Kind> {
+    fight: &mut K::Fight<'a>,
+) -> Played<V, K> {
     match potion {
         // `CreatureCmd.Damage` on every creature in the fight that is not a
         // pet, its drinker included, from the drinker.
@@ -63,24 +40,39 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(
             });
             Played::Done
         }
-        // `CardCmd.Exhaust` of each card in hand, one at a time, then its
-        // `Cards` drawn.
-        __c0 if __c0 == V::Potion::GLOWWATER_POTION => {
-            let hand = fight.cards_in(sts2_core::Pile::Hand);
-            for card in hand {
-                fight.act_on(sts2_core::PileAct::Exhaust, &[card]);
-            }
-            if fight.waiting() {
-                return Played::Waiting {
-                    at: crate::behaviour::potions::Resume::Event(Resume::GlowwaterExhausted).into(),
-                };
-            }
-            fight.draw(V::Potion::GLOWWATER_POTION_CARDS);
-            Played::Done
-        }
+        __c0 if __c0 == V::Potion::GLOWWATER_POTION => start::<V, K>(potion, fight),
         potion => unimplemented!("what {potion:?} does when it is drunk"),
     }
 }
+
+/// An event potion that stops on a question: from its use to its end,
+/// yielding each question it stops on. Each step is lent the fight, and
+/// after a question the answer.
+#[diapause::coroutine(
+    yield = crate::behaviour::paused::Ask<V>,
+    resume = for<'f, 'a> crate::behaviour::paused::Lent<'f, 'a, V, K>
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<V: crate::Build, K: sts2_core::FightKind<V>>(potion: V::Potion) {
+    match potion {
+        // `GlowwaterPotion`: `CardCmd.Exhaust` of each card in hand, one at
+        // a time, then its `Cards` drawn. A question inside the exhausts
+        // stands the draw still.
+        __c0 if __c0 == V::Potion::GLOWWATER_POTION => {
+            let fight = &mut *resumed!().fight;
+            for card in fight.cards_in(sts2_core::Pile::Hand) {
+                fight.act_on(sts2_core::PileAct::Exhaust, &[card]);
+            }
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            resumed!().fight.draw(V::Potion::GLOWWATER_POTION_CARDS);
+        }
+        potion => unreachable!("{potion:?} never stops on a question"),
+    }
+}
+
+crate::behaviour::paused::paused_play!(V::Potion, crate::behaviour::potions::Resume::Event);
 
 /// `TargetType`, for the one potion that reads whether a fight is on:
 /// Foul Potion hits every enemy in one, and names no creature outside.

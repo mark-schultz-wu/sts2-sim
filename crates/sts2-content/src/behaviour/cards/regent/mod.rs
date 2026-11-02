@@ -1,12 +1,10 @@
 //! The Regent's cards the generator leaves to a hand port, filed by rarity.
 
 use crate::behaviour::Played;
-use crate::behaviour::cards::{Ask, Lent, Number};
+use crate::behaviour::cards::Number;
+use crate::behaviour::paused::{Ask, Lent};
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 use sts2_core::{CardIdent, Fight, FightKind, Pile, PowerAmount};
-
-/// Cards a play offers from the hand.
-type Hand<V> = smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>;
 
 /// One card, as a pick asks for it.
 const ONE: sts2_core::Selection = sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE);
@@ -55,6 +53,25 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
     fight: &mut K::Fight<'a>,
 ) -> Played<V, K> {
     match card {
+        // `Largesse`: one colorless card made for the ally it is pointed at,
+        // off its owner's `CombatCardGeneration`, upgraded where Largesse
+        // is, into that ally's hand.
+        __c0 if __c0 == V::Card::LARGESSE => {
+            use sts2_core::RunStreamKinds as _;
+
+            let target = fight.target();
+            let upgrade = u8::from(fight.upgraded());
+            fight.for_player(target, |fight| {
+                let mut pool = V::combat_colorless_cards(fight.multiplayer()).to_vec();
+                let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
+                let [card] = fight
+                    .generate_cards::<1>(&mut pool, stream)
+                    .unwrap_or_else(|_| unimplemented!("an empty colorless pool"));
+                let card = sts2_core::CardIdent { upgrade, ..card };
+                fight.add_generated_cards(card, sts2_core::Pile::Hand, 1);
+            });
+            Played::Done
+        }
         // `Stardust`: its damage once for each star its X spent, each hit at
         // an enemy drawn at random.
         __c0 if __c0 == V::Card::STARDUST => {
@@ -146,7 +163,7 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
         {
             start::<V, K>(card, fight)
         }
-        card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
+        card => crate::behaviour::cards::generated::<V, K>(card, fight),
     }
 }
 
@@ -211,13 +228,13 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             if resumed!().fight.waiting() {
                 yield_!(Ask::Waiting);
             }
-            let skills: Hand<V> = playable_skills::<V, _>(resumed!().fight);
             yield_!(Ask::AskingAmong {
-                cards: skills,
+                pile: Pile::Hand,
+                filter: crate::behaviour::CardFilter::PlayableSkill,
                 selection: ONE,
             });
             let picked: Option<sts2_core::CardAt<V>> =
-                match crate::behaviour::cards::selected::<V>(&resumed!().taken).as_slice() {
+                match crate::behaviour::paused::selected::<V>(&resumed!().taken).as_slice() {
                     [] => None,
                     &[skill] => Some(skill),
                     many => unreachable!("Decisions, Decisions picked {} cards", many.len()),
@@ -262,7 +279,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 offered,
                 skippable: true,
             });
-            if let Some(taken) = crate::behaviour::cards::chosen::<V>(&resumed!().taken) {
+            if let Some(taken) = crate::behaviour::paused::chosen::<V>(&resumed!().taken) {
                 resumed!().fight.add_generated_cards(taken, Pile::Hand, 1);
             }
         }
@@ -274,13 +291,13 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             if resumed!().fight.waiting() {
                 yield_!(Ask::Waiting);
             }
-            let colorless: Hand<V> = colorless_in_hand::<V, _>(resumed!().fight);
             yield_!(Ask::AskingAmong {
-                cards: colorless,
+                pile: Pile::Hand,
+                filter: crate::behaviour::CardFilter::Colorless,
                 selection: ONE,
             });
             let Lent { fight, taken } = resumed!();
-            if let Some(picked) = crate::behaviour::cards::selected::<V>(taken).one_or_none() {
+            if let Some(picked) = crate::behaviour::paused::selected::<V>(taken).one_or_none() {
                 // The game's loop reads its count before each pass.
                 let mut pass = 0;
                 while pass < fight.var(V::CardVar::REPEAT) {
@@ -309,7 +326,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             common::begone_transform::<V, _>(
                 &mut **fight,
-                crate::behaviour::cards::selected::<V>(taken),
+                crate::behaviour::paused::selected::<V>(taken),
             );
         }
         // `Charge`: its `Cards` of the draw pile picked, each
@@ -403,7 +420,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::cards::paused_play!(Regent);
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Regent);
 
 /// Its damage to the target, as one attack, and the attack's results.
 fn strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> sts2_core::AttackResults<V> {
@@ -439,8 +456,9 @@ fn summon_forth<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kin
 
 /// `MakeItSo.AfterCardPlayedLate`: after a Skill of its owner's, into hand
 /// from outside it. That is once the Skills finished this turn come to a
-/// whole multiple of its `Cards`. A fight here has one player.
+/// whole multiple of its `Cards`.
 fn make_it_so<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
+    owner: sts2_core::CombatId,
     printed: &P,
     history: sts2_core::History<'_, V>,
     hook: sts2_core::EventHook<V>,
@@ -448,10 +466,10 @@ fn make_it_so<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 ) {
     use sts2_core::CardKind;
 
-    let sts2_core::EventHook::CardPlayedLate { card, .. } = hook else {
+    let sts2_core::EventHook::CardPlayedLate { card, player, .. } = hook else {
         unimplemented!("what MakeItSo does for {hook:?}");
     };
-    if V::card_kind(card) != Some(CardKind::Skill) {
+    if player != owner || V::card_kind(card) != Some(CardKind::Skill) {
         return;
     }
     let skills = history
@@ -543,6 +561,7 @@ fn manifest_authority<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, 
 pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     card: V::Card,
     id: sts2_core::CardId<V>,
+    owner: sts2_core::CombatId,
     printed: &P,
     history: sts2_core::History<'_, V>,
     hook: sts2_core::EventHook<V>,
@@ -553,43 +572,11 @@ pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
         __c0 if __c0 == V::Card::KINGLY_PUNCH => {
             uncommon::kingly_punch::<V, _>(id, printed, hook, asked)
         }
-        __c0 if __c0 == V::Card::MAKE_IT_SO => make_it_so::<V, _>(printed, history, hook, asked),
+        __c0 if __c0 == V::Card::MAKE_IT_SO => {
+            make_it_so::<V, _>(owner, printed, history, hook, asked)
+        }
         card => unimplemented!("what {card:?} does for {hook:?}"),
     }
-}
-
-/// `DecisionsDecisions`' `FromHand`: the Skills of the hand that can be
-/// played.
-///
-/// # Panics
-///
-/// A card in hand whose type the fight works out.
-fn playable_skills<V: crate::Build, F: Fight<V>>(fight: &F) -> Hand<V> {
-    use sts2_core::CardKind;
-
-    use crate::generated::cards::CardKeyword;
-
-    fight
-        .cards_in(Pile::Hand)
-        .into_iter()
-        .filter(|&at| {
-            let kind = V::card_kind(fight.card_ident(at).card).unwrap_or_else(|| {
-                unimplemented!("Decisions, Decisions reading a card whose type is computed")
-            });
-            kind == CardKind::Skill && !fight.card_keyword(at, CardKeyword::Unplayable)
-        })
-        .collect()
-}
-
-/// The cards of the hand that show as colorless.
-fn colorless_in_hand<V: crate::Build, F: Fight<V>>(fight: &F) -> Hand<V> {
-    use sts2_core::CardTable as _;
-
-    fight
-        .cards_in(Pile::Hand)
-        .into_iter()
-        .filter(|&card| fight.card_ident(card).card.visually_colorless())
-        .collect()
 }
 
 /// `Quasar`'s offer: three distinct colorless cards off
@@ -660,7 +647,7 @@ fn transform_taken<V: crate::Build, K: FightKind<V>>(
 ) {
     let Lent { fight, taken } = lent;
     let upgrade = u8::from(fight.upgraded());
-    for &picked in crate::behaviour::cards::selected::<V>(taken).as_slice() {
+    for &picked in crate::behaviour::paused::selected::<V>(taken).as_slice() {
         let mut into = CardIdent::new(token);
         into.upgrade = upgrade;
         fight.transform(picked, into);
@@ -672,6 +659,6 @@ fn put_back_taken<V: crate::Build, K: FightKind<V>>(lent: &mut Lent<'_, '_, V, K
     let Lent { fight, taken } = lent;
     fight.act_on(
         sts2_core::PileAct::OntoDrawTop,
-        crate::behaviour::cards::selected::<V>(taken).as_slice(),
+        crate::behaviour::paused::selected::<V>(taken).as_slice(),
     );
 }

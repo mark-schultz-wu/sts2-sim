@@ -1,0 +1,14 @@
+# Cacophony counts every card any player draws, and the 33rd hits one enemy
+# for its stack. Five cards come each turn for each player, so the hit comes
+# in the middle of the fifth turn's draw.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"DEFECT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"power","power":"CACOPHONY_POWER","amount":7,"target":0,"seat":0}
+{"cmd":"end_turn","seat":0}
+{"cmd":"end_turn","seat":1}
+{"cmd":"end_turn","seat":0}
+{"cmd":"end_turn","seat":1}
+{"cmd":"end_turn","seat":0}
+{"cmd":"end_turn","seat":1}
+{"cmd":"end_turn","seat":0}
+{"cmd":"end_turn","seat":1}
