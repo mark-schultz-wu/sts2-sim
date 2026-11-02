@@ -2,16 +2,19 @@
 //! first hand.
 
 use crate::vars::RelicVars as _;
-use sts2_core::{EventHook, HookEffect, SideKinds as _};
+use sts2_core::{EventHook, HookEffect};
 
 /// `BeforeSideTurnStart` for the player's side on its first turn: the draw
 /// pile's cards that cost nothing, shuffled, and the first two into hand.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    if let EventHook::BeforeSideTurnStart { side, turn, .. } = hook
-        && side == <V as sts2_core::ContentVersion>::CombatSide::PLAYER
+    if let EventHook::BeforeSideTurnStart {
+        participants, turn, ..
+    } = hook
+        && participants.contains(owner)
         && turn <= 1
     {
         asked.push(HookEffect::ZeroCostFromDraw(

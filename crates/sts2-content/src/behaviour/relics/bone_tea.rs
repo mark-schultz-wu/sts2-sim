@@ -3,7 +3,6 @@
 use sts2_core::{EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
-use crate::generated::runstate::CombatSide;
 
 /// `_combatsLeft`, which the relic is picked up with.
 const COMBATS: Number = 1;
@@ -51,10 +50,10 @@ pub(super) fn event_hook<V: crate::Build>(
     }
     match hook {
         EventHook::SideTurnStart {
-            side: CombatSide::Player,
+            participants,
             turn: 1,
             ..
-        } if !state.used_up() => {
+        } if participants.contains(owner) && !state.used_up() => {
             state.combats_left -= 1;
             asked.push(HookEffect::UpgradeHand)
         }

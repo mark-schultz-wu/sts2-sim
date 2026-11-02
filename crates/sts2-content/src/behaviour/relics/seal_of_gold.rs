@@ -2,18 +2,16 @@
 
 use sts2_core::{EventHook, HookEffect};
 
-use crate::generated::runstate::CombatSide;
 use crate::vars::RelicVars as _;
 
-/// `AfterSideTurnStart`, on the side that holds its owner, the one player.
+/// `AfterSideTurnStart`, where its owner takes part.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    if let EventHook::SideTurnStart {
-        side: CombatSide::Player,
-        ..
-    } = hook
+    if let EventHook::SideTurnStart { participants, .. } = hook
+        && participants.contains(owner)
     {
         asked.push(HookEffect::GainEnergyForGold {
             energy: V::Relic::SEAL_OF_GOLD_ENERGY,
