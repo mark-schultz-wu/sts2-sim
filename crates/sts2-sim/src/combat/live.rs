@@ -127,9 +127,19 @@ pub(super) struct Resuming<V: Rules> {
     /// The other player a card's `CardSelectCmd` asks, for whom the rest of
     /// its effect acts. Nothing while the card's owner picks.
     pub(super) chooser: Option<sts2_core::SeatIndex>,
+    /// The other player whose choice context the effect runs in, as a card
+    /// another player's potion auto-plays does. A choice that is not theirs
+    /// branches, as `BranchingPlayerChoiceContext` does.
+    pub(super) context: Option<sts2_core::SeatIndex>,
 }
 
 impl<V: Rules> Resuming<V> {
+    /// Whether the effect's choice is another player's than the one whose
+    /// context it runs in, which `BranchingPlayerChoiceContext` branches on.
+    pub(super) fn chooser_elsewhere(&self, live: &Live<V>, seat: sts2_core::SeatIndex) -> bool {
+        self.reaching(live, seat).unwrap_or(seat) != self.context.unwrap_or(seat)
+    }
+
     /// The other player a potion is aimed at, for whom its effect acts and
     /// whom its `CardSelectCmd` asks. Nothing for a card, or a potion aimed
     /// at its drinker in `seat`.
@@ -177,6 +187,9 @@ pub(super) enum Asked<V: Rules> {
     Among {
         cards: smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>,
         selection: sts2_core::Selection,
+        /// The filter of a pick from the hand, which lists the hand as it
+        /// stands each time it is shown, as `NPlayerHand.SelectCards` does.
+        hand: Option<V::CardFilter>,
     },
     /// A selection through a filter whose choice signalled and has not
     /// listed yet. It lists as [`Asked::Among`] once its task goes on.
@@ -380,7 +393,11 @@ pub(super) enum Deferred<V: Rules> {
     AutoPlayAtRandom { id: CardId<V> },
     /// `CardCmd.AutoPlay` of a card `AutoPlayFromDrawPile` already took into
     /// the play pile, with `ExhaustOnNextPlay` set to `force_exhaust` first.
-    AutoPlayTaken { id: CardId<V>, force_exhaust: bool },
+    AutoPlayTaken {
+        id: CardId<V>,
+        force_exhaust: bool,
+        context: Option<sts2_core::SeatIndex>,
+    },
     /// The rest of a play's `AfterCardPlayed` walk, which a question a
     /// listener asked stood still, then `AfterCardPlayedLate`.
     Played {
@@ -3619,12 +3636,21 @@ impl<V: Rules> Live<V> {
     /// on goes to the front of `seat`'s queue, with what waits behind it. The
     /// other seats act around it until `seat` answers.
     pub(crate) fn stop_for_answer(&mut self, seat: sts2_core::SeatIndex) {
-        if self.players.len() == 1 {
-            return;
+        if let Some((answerer, task)) = self.paused_for_answer(seat) {
+            self.queues.stop(seat, answerer, task);
         }
-        let Some(asking) = self.asking.take() else {
-            return;
-        };
+    }
+
+    /// The question `seat`'s decision ended on, with what waits behind it,
+    /// beside who answers it. Nothing in a fight of one.
+    fn paused_for_answer(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+    ) -> Option<(sts2_core::SeatIndex, Paused<V>)> {
+        if self.players.len() == 1 {
+            return None;
+        }
+        let asking = self.asking.take()?;
         // A potion aimed at another player asks them, and its choice stands
         // in their queue.
         let answerer = match &asking.then {
@@ -3635,17 +3661,15 @@ impl<V: Rules> Live<V> {
             asking,
             waiting: self.deferred.take_fresh((0, None)),
         };
-        self.queues.stop(seat, answerer.unwrap_or(seat), task);
+        Some((answerer.unwrap_or(seat), task))
     }
 
     /// [`Live::stop_for_answer`], with the question at the front of its
     /// answerer's queue, where its task stood before it listed.
     pub(super) fn stop_at_front(&mut self, seat: sts2_core::SeatIndex) {
-        if self.asking.is_none() {
-            return;
+        if let Some((answerer, task)) = self.paused_for_answer(seat) {
+            self.queues.stop_first(seat, answerer, task);
         }
-        self.stop_for_answer(seat);
-        self.queues.last_to_front();
     }
 
     /// The question `seat` answers, back in play with what waits behind it,
@@ -3766,7 +3790,9 @@ impl<V: Rules> Live<V> {
                 let (min, max) = bounds(*selection);
                 (min, max, self.players[seat].cards.len(*pile))
             }
-            Asked::Among { cards, selection } => {
+            Asked::Among {
+                cards, selection, ..
+            } => {
                 let (min, max) = bounds(*selection);
                 (min, max, cards.len())
             }
