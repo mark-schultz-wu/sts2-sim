@@ -555,14 +555,14 @@ pub(super) fn auto_play_in_play<V: Rules>(
         }
         kind if kind == V::TargetType::ANY_ALLY && named.is_some() => named,
         // `CombatState.Allies`: a living player other than the card's owner,
-        // drawn off `CombatTargets`.
+        // drawn off `CombatTargets`. `IsPlayer` leaves out pets.
         kind if kind == V::TargetType::ANY_ALLY => {
             use sts2_core::rng::GameRng as _;
 
             let owner = seat.creature();
             let allies: smallvec::SmallVec<[CombatId; 4]> = (live.creatures.iter())
                 .filter(|creature| creature.alive && creature.id != owner)
-                .filter(|creature| live.seat_of(creature.id).is_some())
+                .filter(|creature| matches!(creature.model, Some(sts2_core::ModelId::Character(_))))
                 .map(|creature| creature.id)
                 .collect();
             let Some(target) = rngs.targets.choose(&allies).ok().copied() else {

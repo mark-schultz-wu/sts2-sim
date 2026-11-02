@@ -3198,7 +3198,8 @@ fn first_playable<V: Rules>(
             enemies.into_iter().next()
         }
         t if t == <V::TargetType as TargetKinds>::ANY_PLAYER => Some(live.player(seat).id),
-        // `NextItem` off `CombatTargets` over the other living players.
+        // `NextItem` off `CombatTargets` over the other living players, and
+        // no pet.
         t if t == <V::TargetType as TargetKinds>::ANY_ALLY => {
             let own = live.player(seat).id;
             let allies: SmallVec<[CombatId; 4]> = (live.creatures.iter())
@@ -3206,7 +3207,7 @@ fn first_playable<V: Rules>(
                     creature.side == <V::CombatSide as SideKinds>::PLAYER
                         && creature.alive
                         && creature.id != own
-                        && live.seat_of(creature.id).is_some()
+                        && matches!(creature.model, Some(sts2_core::ModelId::Character(_)))
                 })
                 .map(|creature| creature.id)
                 .collect();
