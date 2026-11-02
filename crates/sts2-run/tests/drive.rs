@@ -71,8 +71,8 @@ fn a_seat_that_ended_its_turn_or_voted_waits() {
             seats: vec![Peer::default(); 2],
             awaiting: Vec::new(),
             in_flight: false,
-            synced: 0,
-            checksums: 0,
+            still: true,
+            links: vec![Default::default(); 2],
         },
     };
     let me = SeatIndex(0);

@@ -113,6 +113,13 @@ pub trait EventBehavior<V: ContentVersion> {
         rng: &mut R,
     ) -> crate::HookEffects<V>;
 
+    /// `EventOption.WillKillPlayer` of `option` on the page as it stands:
+    /// whether choosing it kills the event's player, which
+    /// `NEventOptionButton.OnRelease` refuses in a run of several players.
+    fn kills(&self, _state: &Self::State, _option: u8, _run: &impl EventView<V>) -> bool {
+        false
+    }
+
     /// The question the event parks on after
     /// [`HookEffect::AskEvent`](crate::HookEffect::AskEvent), as it stands.
     fn question(&self, _state: &Self::State) -> Option<crate::Question<V>> {

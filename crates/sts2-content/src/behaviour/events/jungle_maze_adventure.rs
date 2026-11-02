@@ -61,6 +61,11 @@ impl<V: crate::Build> EventBehavior<V> for JungleMazeAdventure {
         )
     }
 
+    /// `WillKillPlayer`, for `SoloQuest`: its hit point loss.
+    fn kills(&self, _state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 0 && run.hp() <= SOLO_HP
+    }
+
     /// `SoloQuest`: `StableShuffle` of its three effects off the event's
     /// stream, the damage, then the gold. `JoinForces`: the gold. Each
     /// finishes the event.

@@ -18,7 +18,8 @@ pub(super) fn event_hook<V: crate::Build>(
                 from_owner: true,
             })
         }
-        EventHook::Obtained { .. } => {}
+        // `card.Owner == base.Owner`: another player's card does nothing.
+        EventHook::CardExhausted { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what ForgottenSoul does for {hook:?}"),
     }
 }
