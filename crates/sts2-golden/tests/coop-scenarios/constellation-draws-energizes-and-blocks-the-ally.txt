@@ -1,0 +1,8 @@
+# Constellation has the ally it is pointed at draw a card, then gives them
+# energy, then block. It costs two stars, which Venerate pays for.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"REGENT"},{"character":"IRONCLAD"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"VENERATE","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":null,"seat":0}
+{"cmd":"grant","card":"CONSTELLATION","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":1,"seat":0}

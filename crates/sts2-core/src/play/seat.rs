@@ -52,14 +52,22 @@ pub struct Peers {
     pub awaiting: Vec<SeatIndex>,
     /// A move of this seat's is not back from the host yet.
     pub in_flight: bool,
-    /// How many shared actions this machine has taken in from the host, in
-    /// order: actions, hook actions and resumes after a choice. Every seat
-    /// comes to the same count once it has caught up with the others.
-    pub synced: u64,
-    /// How many checksums this machine's game generated. Every seat
-    /// generates them at the same points, a turn's changes among them. A
-    /// seat still running a turn's change has fewer than one past it.
-    pub checksums: u64,
+    /// The game stands still: it asks this seat, or does nothing until a
+    /// seat acts or a packet comes in.
+    pub still: bool,
+    /// The reliable packets between this machine and each seat's, in seat
+    /// order. This seat's own entry is empty.
+    pub links: Vec<Link>,
+}
+
+/// The reliable packets between one machine and another, as one end counts
+/// them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Link {
+    /// The packets this end sent to the other.
+    pub sent: u64,
+    /// The packets this end took in from the other.
+    pub received: u64,
 }
 
 /// Where one seat stands: its own view of the run, and of the others.

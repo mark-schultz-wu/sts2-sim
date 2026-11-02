@@ -10,7 +10,7 @@ use sts2_core::{
 };
 
 use crate::session::error::Error;
-use crate::{Config, GameSeat, Oracle, SeatHost};
+use crate::{Config, GameSeat, JoinOrder, Oracle, SeatHost};
 
 /// A solo run on one game.
 #[derive(Debug)]
@@ -95,19 +95,38 @@ impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for OracleTable<V> {
     }
 }
 
+/// The file a client's game writes in its data home once it has joined.
+const JOINED: &str = "coop-joined";
+
 /// How many times a lobby looks again at seats that have no move and are not
 /// all over. Each game runs on its own, so a move one seat sent can still be
 /// on its way to the others.
 const STALLS: usize = 20;
 
-/// How many times a lobby looks again at a seat that has not caught up with
-/// the others before it calls the seats stalled. Each look waits for the
-/// seat's game to stand still, so this is a few seconds at most.
+/// How many times a lobby looks at every seat again before it calls the
+/// seats stalled. Each look waits for the seat's game to stand still, so
+/// this is a few seconds at most.
 const CATCH_UP: usize = 1000;
 
 /// Every seat as it stands, once each caught up with the others, or as they
 /// stood when one never did.
 type CaughtUp<V> = Result<Vec<Seated<V>>, Vec<Seated<V>>>;
+
+/// Whether every game stands still with nothing on its way between them.
+///
+/// A game alone cannot tell a packet is on its way to it. So each counts
+/// the reliable packets it sent to each other game, and those it took in
+/// from each. Where each end of every link took in what the other sent,
+/// no packet is on its way.
+fn quiet<V: sts2_core::ContentVersion>(seated: &[Seated<V>]) -> bool {
+    let still = seated.iter().all(|seat| seat.peers.still);
+    let balanced = (seated.iter().enumerate()).all(|(from, seat)| {
+        (seat.peers.links.iter().enumerate())
+            .filter(|&(to, _)| to != from)
+            .all(|(to, link)| link.sent == seated[to].peers.links[from].received)
+    });
+    still && balanced
+}
 
 /// A run of several players, one game for each seat.
 pub struct LobbyTable<V: sts2_content_wire::WireContentVersion> {
@@ -117,33 +136,52 @@ pub struct LobbyTable<V: sts2_content_wire::WireContentVersion> {
     seated: Option<Vec<Seated<V>>>,
 }
 
-impl<V: sts2_content_wire::WireContentVersion> LobbyTable<V> {
+impl<V: sts2_content_wire::WireContentVersion> LobbyTable<V>
+where
+    Seated<V>: Send,
+{
     /// Each seat's game. See [`GameSeat`].
     pub fn seats(&self) -> &[GameSeat<V>] {
         &self.seats
     }
 
-    /// Where every seat stands, once each has caught up with the others.
+    /// Where the seats at `which` stand, each asked of its own game. The games
+    /// are processes of their own, so they are asked at once.
+    fn looked_at(&mut self, which: &[usize]) -> Result<Vec<(usize, Seated<V>)>, Error> {
+        if let [one] = which {
+            return Ok(vec![(*one, self.seats[*one].observe()?)]);
+        }
+        let looked: Vec<(usize, Result<Seated<V>, Error>)> = std::thread::scope(|scope| {
+            let asked: Vec<_> = (self.seats.iter_mut().enumerate())
+                .filter(|(at, _)| which.contains(at))
+                .map(|(at, seat)| (at, scope.spawn(move || seat.observe())))
+                .collect();
+            asked
+                .into_iter()
+                .map(|(at, asked)| (at, asked.join().expect("a seat's look does not panic")))
+                .collect()
+        });
+        looked
+            .into_iter()
+            .map(|(at, seated)| Ok((at, seated?)))
+            .collect()
+    }
+
+    /// Where every seat stands, once nothing is on its way between them.
     ///
-    /// Moves reach a seat over the network, so a seat can be behind another.
-    /// Each one behind is looked at again, until all have taken in as much,
-    /// with as many checksums. Seats that never catch up are the error, as
-    /// they stood.
+    /// A still game moves only when a packet or a command reaches it. So
+    /// once every game is still and [`quiet`] finds every link balanced, the
+    /// run stands still on every machine. Until then every seat is looked
+    /// at again. Seats that never settle are the error, as they stood.
     fn caught_up(&mut self) -> Result<CaughtUp<V>, Error> {
-        let mut seated = (self.seats.iter_mut())
-            .map(GameSeat::observe)
-            .collect::<Result<Vec<_>, _>>()?;
+        let every: Vec<usize> = (0..self.seats.len()).collect();
+        let mut seated: Vec<Seated<V>> = Vec::new();
         for _ in 0..CATCH_UP {
-            let synced = seated.iter().map(|seat| seat.peers.synced).max();
-            let checksums = seated.iter().map(|seat| seat.peers.checksums).max();
-            let mut behind = false;
-            for (seat, at) in self.seats.iter_mut().zip(&mut seated) {
-                if Some(at.peers.synced) < synced || Some(at.peers.checksums) < checksums {
-                    *at = seat.observe()?;
-                    behind = true;
-                }
-            }
-            if !behind {
+            seated = (self.looked_at(&every)?)
+                .into_iter()
+                .map(|(_, seated)| seated)
+                .collect();
+            if quiet(&seated) {
                 return Ok(Ok(seated));
             }
         }
@@ -182,7 +220,14 @@ impl<V: sts2_content_wire::WireContentVersion> LobbyTable<V> {
     }
 }
 
-impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for LobbyTable<V> {
+/// The seats are looked at on threads of their own, so where one stands has
+/// to cross from one to another, as every build's does.
+impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for LobbyTable<V>
+where
+    Seated<V>: Send,
+    sts2_core::Answered<V>: Send,
+    Setup<V>: Sync,
+{
     type Error = Error;
     type Host = Vec<SeatHost>;
     type Seen<'a> = &'a Observation<V>;
@@ -198,9 +243,29 @@ impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for LobbyTable<V> {
     /// When the hosts and the run's players differ in number.
     fn begin(host: Vec<SeatHost>, start: &Start<V>) -> Result<Self, Error> {
         assert_eq!(host.len(), start.players.len(), "one host for each player");
+        // The lobby seats each client in the order it joins, and the run's
+        // players follow it. So each client joins once the one before it
+        // has, which it marks in its own data home.
+        let joined: Vec<Option<std::path::PathBuf>> = (host.iter())
+            .map(|host| host.config.data_home.as_ref().map(|home| home.join(JOINED)))
+            .collect();
+        for marker in joined.iter().flatten() {
+            match std::fs::remove_file(marker) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                    return Err(Error::Io("removing a join marker", e));
+                }
+                _ => {}
+            }
+        }
         let begun: Vec<Result<GameSeat<V>, Error>> = std::thread::scope(|scope| {
             let threads: Vec<_> = (host.into_iter().zip(SeatIndex::all(start.players.len())))
-                .map(|(host, me)| scope.spawn(move || GameSeat::begin(host, start, me)))
+                .map(|(host, me)| {
+                    let order = JoinOrder {
+                        after: (me.at() > 1).then(|| joined[me.at() - 1].clone()).flatten(),
+                        joined: (me.at() > 0).then(|| joined[me.at()].clone()).flatten(),
+                    };
+                    scope.spawn(move || GameSeat::begin(host, start, me, order))
+                })
                 .collect();
             threads
                 .into_iter()
@@ -243,6 +308,25 @@ impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for LobbyTable<V> {
         self.seated = None;
         let answered = self.seats[seat.at()].setup(setup)?;
         Ok(answered.map(|applied| applied.split().0))
+    }
+
+    /// Every game at once, on a thread each: a game entering a fight waits
+    /// for the others to enter it too.
+    fn construct_everywhere(&mut self, setup: &Setup<V>) -> Result<Vec<Settled<V>>, Error> {
+        self.seated = None;
+        let answered: Vec<Result<sts2_core::Answered<V>, Error>> = std::thread::scope(|scope| {
+            let threads: Vec<_> = (self.seats.iter_mut())
+                .map(|seat| scope.spawn(move || seat.setup(setup)))
+                .collect();
+            threads
+                .into_iter()
+                .map(|thread| thread.join().expect("a seat's setup does not panic"))
+                .collect()
+        });
+        answered
+            .into_iter()
+            .map(|answered| Ok(answered?.map(|applied| applied.split().0)))
+            .collect()
     }
 
     fn logged(&mut self) -> Vec<(SeatIndex, String)> {
