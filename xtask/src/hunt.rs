@@ -170,7 +170,6 @@ pub fn run(args: Args) -> Result<String, Error> {
     let root = crate::workspace();
     let version = crate::codegen::version()?;
     let runner = crate::error::build_runner(&root)?;
-    let merger = crate::error::build_example(&root, "merge_runs")?;
     let scratch = root.join("target/hunt").join(&version);
     let _ = std::fs::remove_dir_all(&scratch);
     crate::error::create_dir(&scratch.join("runs"))?;
@@ -212,7 +211,11 @@ pub fn run(args: Args) -> Result<String, Error> {
         .join(format!("parted-{version}.bin"));
     let _ = std::fs::remove_file(&out);
     if !kept.is_empty() {
-        crate::error::status(Command::new(&merger).arg(&out).args(&kept))?;
+        crate::error::status(
+            Command::new(crate::error::merger(&root)?)
+                .arg(&out)
+                .args(&kept),
+        )?;
     }
     Ok(report(&jobs, &went, &out, retried.load(Ordering::Relaxed)))
 }
