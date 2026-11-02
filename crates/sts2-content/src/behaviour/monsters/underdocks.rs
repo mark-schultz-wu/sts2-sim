@@ -262,15 +262,17 @@ pub(super) fn perform<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         (__c0, __c1) if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::STOMP_MOVE) => {
             return start::<V, K>((monster, move_id), fight);
         }
-        // `SiphonMove`: `SiphonHeal` for each player, of which a fight here
-        // has one, then three Steam Eruption.
+        // `SiphonMove`: `SiphonHeal` for each player, then three Steam
+        // Eruption.
         (__c0, __c1) if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::SIPHON_MOVE) => {
             let heal = match fight.ascension().has(AscensionLevel::ToughEnemies) {
                 true => 15,
                 false => 10,
             };
             let giant = fight.actor();
-            fight.heal(giant, heal);
+            let players =
+                Number::try_from(fight.players().len()).expect("a fight's players fit a number");
+            fight.heal(giant, heal * players);
             fight.apply_to_actor(
                 V::Power::STEAM_ERUPTION_POWER,
                 PowerAmount::Counted(GIANT_STEAM),

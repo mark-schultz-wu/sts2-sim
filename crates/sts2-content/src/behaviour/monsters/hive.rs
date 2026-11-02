@@ -863,11 +863,12 @@ fn ponder<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     // `ThrowingPlayerChoiceContext`'s `PowerCmd.Apply<StrengthPower>`.
     const PONDER_STRENGTH: Number = 2;
     const DEADLY_PONDER_STRENGTH: Number = 3;
-    // `30 * Players.Count`, and a fight here has one player.
+    // `30 * Players.Count`.
     const PONDER_HEAL: Number = 30;
 
     let actor = fight.actor();
-    fight.heal(actor, PONDER_HEAL);
+    let players = Number::try_from(fight.players().len()).expect("a fight's players fit a number");
+    fight.heal(actor, PONDER_HEAL * players);
     let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
         true => DEADLY_PONDER_STRENGTH,
         false => PONDER_STRENGTH,

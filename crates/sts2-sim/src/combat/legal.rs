@@ -208,12 +208,12 @@ pub(super) fn reasons<V: Rules>(
             <V::UnplayableReason as UnplayableReasonKinds>::STAR_COST_TOO_HIGH,
         );
     }
-    // One player creature is the player's own, so a card pointed at an ally
-    // needs a second one alive.
+    // `PlayerCreatures`: one is the player's own, so a card pointed at an
+    // ally needs a second player alive. A pet is no ally here.
     if target == <V::TargetType as TargetKinds>::ANY_ALLY
-        && creatures
+        && creatures[..fight.live.players.len()]
             .iter()
-            .filter(|c| c.side == <V::CombatSide as SideKinds>::PLAYER && c.alive)
+            .filter(|c| c.alive)
             .count()
             <= 1
     {
@@ -266,23 +266,26 @@ fn refused<V: Rules>(
     })
 }
 
-/// The creatures this card can legally be pointed at.
+/// The creatures `seat` can legally point this card at.
 ///
 /// Empty for a card that cannot be played at all, because the game stops
 /// asking once a rule has refused it.
 #[inline(always)]
 pub(super) fn targets<V: Rules>(
+    seat: sts2_core::SeatIndex,
     target: V::TargetType,
-    creatures: &[Fighter<V>],
+    live: &Live<V>,
     refused: bool,
 ) -> Targets {
     if refused {
         return Targets::new();
     }
-    creatures
+    let players = live.players.len();
+    live.creatures
         .iter()
-        .filter(|creature| valid_target::<V>(target, creature))
-        .map(|creature| creature.id)
+        .enumerate()
+        .filter(|&(at, creature)| valid_target::<V>(seat, target, at < players, creature))
+        .map(|(_, creature)| creature.id)
         .collect()
 }
 
@@ -310,7 +313,6 @@ impl<'a, V: Rules> InHand<'a, V> {
         fight: Walk<'a, V>,
         facts: &HandFacts<V>,
     ) -> Self {
-        let creatures = &fight.live.creatures;
         let target = target_type::<V>(held.face.ident, fight.live, seat);
         let (cost, star_cost) = costs::<V>(seat, &held, Some(Pile::Hand), fight);
         let (reason, preventer) = reasons::<V>(
@@ -330,7 +332,7 @@ impl<'a, V: Rules> InHand<'a, V> {
             target,
             reason,
             preventer,
-            targets: targets::<V>(target, creatures, reason.is_some()),
+            targets: targets::<V>(seat, target, fight.live, reason.is_some()),
         }
     }
 
@@ -430,7 +432,7 @@ pub(crate) fn moves<V: Rules>(
             &facts,
         );
         if refused.is_none() {
-            let targets = targets::<V>(target, &live.creatures, false);
+            let targets = targets::<V>(seat, target, live, false);
             // A card that names a creature has nothing to be played at while
             // none is alive to name.
             if targets.is_empty() && names_creature::<V>(target) {
@@ -458,7 +460,8 @@ pub(crate) fn drinks<V: Rules>(
     moves: &mut Legal<V>,
 ) {
     for (at, &potion) in potions.iter().enumerate() {
-        if undrinkable::<V>(seat, potion, fight, merchant, alive, stuck).is_some() {
+        let queued = fight.is_some_and(|fight| fight.potion_queued(seat, at));
+        if undrinkable::<V>(seat, potion, fight, merchant, alive, queued, stuck).is_some() {
             continue;
         }
         let targets = match fight {
@@ -479,7 +482,8 @@ pub(crate) fn drinks<V: Rules>(
 /// The belt, and why each potion in it cannot be drunk.
 ///
 /// The order `NPotionPopup.RefreshButtons` asks in, minus the questions this
-/// slice cannot raise. Nothing is queued, because a decision resolves whole.
+/// slice cannot raise. A potion is queued only behind its owner's queue in a
+/// fight of several players.
 /// `stuck` is `CanRemovePotions` off, which an event sets while it runs.
 /// `merchant` is whether the room has a merchant a Foul Potion can be
 /// thrown at, which [`Rules::computed_potion_check`] reads.
@@ -491,8 +495,9 @@ pub(crate) fn belt<'a, V: Rules>(
     alive: bool,
     stuck: bool,
 ) -> impl ExactSizeIterator<Item = Held<V>> + 'a {
-    potions.iter().map(move |&potion| {
-        let reason = undrinkable::<V>(seat, potion, fight, merchant, alive, stuck);
+    potions.iter().enumerate().map(move |(at, &potion)| {
+        let queued = fight.is_some_and(|fight| fight.potion_queued(seat, at));
+        let reason = undrinkable::<V>(seat, potion, fight, merchant, alive, queued, stuck);
         Held {
             potion,
             // The game reads both out of its localisation tables, which
@@ -524,10 +529,15 @@ fn undrinkable<V: Rules>(
     fight: Option<&Live<V>>,
     merchant: bool,
     alive: bool,
+    queued: bool,
     stuck: bool,
 ) -> Option<Undrinkable> {
     if !alive {
         return Some(Undrinkable::Dead);
+    }
+    // `IsQueued`: its use already waits in its owner's queue.
+    if queued {
+        return Some(Undrinkable::Queued);
     }
     if stuck {
         return Some(Undrinkable::Stuck);
@@ -633,18 +643,29 @@ pub(super) fn names_creature<V: Rules>(target: V::TargetType) -> bool {
         || target == <V::TargetType as TargetKinds>::ANY_ALLY
 }
 
-fn valid_target<V: Rules>(target: V::TargetType, creature: &Fighter<V>) -> bool {
+/// Whether `seat` can point a card of this target type at `creature`.
+///
+/// An ally is narrower than `IsValidTarget` says. `NTargetManager` lets the
+/// screen point an `AnyAlly` card only at another living player, never at
+/// the player's own creature or a pet. `IsValidTarget` takes both, and
+/// Tutor at a pet throws, since a pet has no player.
+fn valid_target<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    target: V::TargetType,
+    player: bool,
+    creature: &Fighter<V>,
+) -> bool {
     if !creature.is_alive() {
         return false;
     }
     // The player is the only creature a card is played from, so "the other
-    // side" and "this side" are the enemy's and the player's.
+    // side" is the enemy's.
     match target {
         t if t == <V::TargetType as TargetKinds>::ANY_ENEMY => {
             creature.side == <V::CombatSide as SideKinds>::ENEMY
         }
         t if t == <V::TargetType as TargetKinds>::ANY_ALLY => {
-            creature.side == <V::CombatSide as SideKinds>::PLAYER
+            player && creature.id != seat.creature()
         }
         _ => false,
     }
@@ -772,7 +793,8 @@ fn previewed<V: Rules>(
                             modifier, var.id, dealer, target,
                         )
                         .map(|effect| {
-                            super::board::resolve::<V>(seat, fight, Some(held), effect).amount()
+                            super::board::resolve::<V>(seat, fight, Some(held), target, effect)
+                                .amount()
                         }),
                         // `OstyDamageVar` with `Owner.Osty` null: `Hook.ModifyDamage`
                         // with no dealer.
@@ -783,8 +805,11 @@ fn previewed<V: Rules>(
                 }
                 (None, _) => None,
             };
-            // A number no hook reaches reads what the card reads.
-            (var.id, resolved.unwrap_or_else(printed))
+            // A number no hook reaches reads what the card reads. One it
+            // does not work out is what it prints, whose whole part is the
+            // game's `(int)PreviewValue`.
+            let unresolved = || if var.calculated { printed() } else { var.base };
+            (var.id, resolved.unwrap_or_else(unresolved))
         })
         .collect()
 }

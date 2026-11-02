@@ -7,6 +7,7 @@ members = [
     "crates/sts2-core",
     "crates/sts2-golden",
     "crates/sts2-headless",
+    "crates/sts2-run",
     "crates/sts2-sim",
     "crates/sts2-trace",
     "xtask",
@@ -48,6 +49,7 @@ sts2-content = { path = "crates/sts2-content", default-features = false }
 sts2-content-wire = { path = "crates/sts2-content-wire" }
 sts2-core = { path = "crates/sts2-core" }
 sts2-headless = { path = "crates/sts2-headless" }
+sts2-run = { path = "crates/sts2-run" }
 sts2-sim = { path = "crates/sts2-sim" }
 thiserror = "2.0.20"
 # Spans and events stay in the code, and a release build compiles every one of

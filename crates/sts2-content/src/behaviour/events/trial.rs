@@ -77,6 +77,11 @@ impl<V: crate::Build> EventBehavior<V> for Trial {
         room
     }
 
+    /// `DoubleDown`, which always kills: `ThatWillKillPlayerIf(_ => true)`.
+    fn kills(&self, state: &State, option: u8, _run: &impl EventView<V>) -> bool {
+        matches!(state.page, Page::Reject) && option == 1
+    }
+
     /// `Accept`: one `Rng.NextInt(3)` for the defendant's page. `Reject`:
     /// a page that accepts after all. Each verdict finishes the event.
     fn choose<R: GameRng>(

@@ -2,19 +2,16 @@
 
 use sts2_core::{CardKind, EventHook, HookEffect, PoolFilter};
 
-use crate::generated::runstate::CombatSide;
-
 /// `AfterSideTurnStart`, for the side its owner is among: one Attack of the
 /// character's pool by `GetDistinctForCombat` off `CombatCardGeneration`,
 /// free this turn, into hand.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    if let EventHook::SideTurnStart {
-        side: CombatSide::Player,
-        ..
-    } = hook
+    if let EventHook::SideTurnStart { participants, .. } = hook
+        && participants.contains(owner)
     {
         asked.push(HookEffect::GenerateFromPool {
             filter: PoolFilter::OfKind(CardKind::Attack),
