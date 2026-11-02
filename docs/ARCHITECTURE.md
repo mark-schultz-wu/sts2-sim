@@ -44,8 +44,9 @@ sts2-content    <build>/generated/    xtask writes this, never hand-edited
 sts2-headless   a client for the headless mod, the oracle's transport
                 recording.rs          a run, as the decisions that made it
 sts2-cli        `sts2`: a daemon holding one game, and one command per
-                invocation. `sts2-fuzz`: random legal play until something
-                breaks
+                invocation
+sts2-run        the one runner: every run played or replayed, at the
+                simulator's table or the game's. See RUNNERS.md
 xtask           cargo xtask dump, cargo xtask codegen
 ```
 
@@ -172,26 +173,22 @@ walked. It draws the edges the game itself draws.
 
 ## Playing at random
 
-`just fuzz` starts a run, stacks a hundred `Gorget`, and takes legal moves at
-random until the run ends or something breaks. It drives its own game process
-rather than the daemon, and records every move, so a finding is a file rather
-than a story.
+`just fuzz <seed> <character>` plays a run on the game, takes legal moves at
+random, each as likely as the next, until the run ends or something breaks.
+It is `sts2-run play --player uniform`, and the run is kept, so a finding is
+a file rather than a story. [RUNNERS.md](RUNNERS.md) says how the runner
+plays it.
 
 It fuzzes whichever build `STS2_GAME_VERSION` names. That makes it the cheapest
 check on a newly pinned build: thousands of states an afternoon, each one read
 through that build's own tables.
 
-Three things count as a finding. The game refuses a move the oracle offered, the
-game logs an error while running one, or the game dies. The first is the useful
-one. It means the legality the oracle reports and the legality the game enforces
-came apart. That is precisely the class of bug that a simulator inherits.
+Two things count as a finding. The game refuses a move it reported as legal,
+or the game logs an error while running one. The first is the useful one. It
+means the legality the oracle reports and the legality the game enforces came
+apart. That is precisely the class of bug that a simulator inherits.
 
-The legal set comes from `cli::moves`, which enumerates what `cli::choose`
-accepts. That shared source is deliberate. A fuzzer with its own idea of
-legality finds disagreements between itself and the CLI, rather than between the
-oracle and the game.
-
-It earns its keep immediately. Three runs found two real defects nobody
+It earned its keep immediately. Three runs found two real defects nobody
 constructs by hand. One is a shop offering a potion to a full belt: stocked,
 affordable, and refused. The other is every run stalling on floor 17 with the
 act boss dead and nothing legal. The act transition was not in the protocol at
@@ -333,7 +330,7 @@ because a person at a terminal has to be able to say which game they mean.
 
 `STS2_GAME_VERSION` is that setting. `.envrc` exports it, `mod/build.sh`
 compiles the mods against it, `cargo xtask` dumps and generates under it, and
-`sts2` and `sts2-fuzz` drive it. Each binary turns the name into a type in one
+`sts2` and `sts2-run` drive it. Each binary turns the name into a type in one
 `match`, and everything below that is generic. A new build adds one arm.
 
 A lock under `mod/games/` is the list. `just check` builds every lock, so a
@@ -448,7 +445,7 @@ that starts from the other build's code. A move can shift what the compiler
 inlines. The relics' and the cards' decision dispatchers stay out of line,
 since the walk inlining them cost 3.9% and 3.4%.
 
-`follow_run <file> <index> --diff <dir>` plays a recorded run on the game
+`sts2-run follow <file> <index> --diff <dir>` plays a recorded run on the game
 beside the simulator, and names the sections where they first differ. A
 temporary Harmony patch in the mod that logs a stack trace at the model in
 question finds the rest.

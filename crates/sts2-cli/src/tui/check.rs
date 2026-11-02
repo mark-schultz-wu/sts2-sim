@@ -14,7 +14,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use sts2_core::{
-    Answer, Answered, Decision, Play, Question, RewardKind, Room, Snapshot, Start, TakeReward,
+    Answer, Decision, Question, RewardKind, Room, RunTable, SeatIndex, Start, TakeReward,
 };
 
 use super::app::App;
@@ -61,7 +61,7 @@ impl Position {
 /// and a simulator adopts one. What they have in common is all this trait asks
 /// for.
 pub trait Stage<V: crate::tui::Build> {
-    type Game: Play<V>;
+    type Game: RunTable<V>;
 
     /// A game standing in that position, or why it cannot be.
     ///
@@ -72,8 +72,8 @@ pub trait Stage<V: crate::tui::Build> {
 
 /// Every decision an implementation was told, in order.
 ///
-/// Shared with the [`Spy`] rather than read back off it. The front end owns the
-/// game it is driving, and a test cannot reach through it.
+/// Shared with [`Driven`] rather than read back off it, so a claim reads it
+/// beside the screen.
 #[derive(Debug)]
 pub struct Sent<V: crate::tui::Build>(Rc<RefCell<Watched<V>>>);
 
@@ -81,7 +81,7 @@ pub struct Sent<V: crate::tui::Build>(Rc<RefCell<Watched<V>>>);
 ///
 /// The start is beside the decisions rather than the first of them, because it
 /// is not one. It reaches the game through
-/// [`Play::begin`](sts2_core::Play::begin), so the spy notes it there.
+/// [`RunTable::begin`](sts2_core::RunTable::begin), which notes it there.
 #[derive(Debug)]
 struct Watched<V: crate::tui::Build> {
     started: Option<Start<V>>,
@@ -129,6 +129,7 @@ impl<V: crate::tui::Build> Sent<V> {
     }
 
     /// Writes down the run the game was started with.
+    #[cfg(test)]
     pub(crate) fn note_start(&self, start: &Start<V>) {
         self.0.borrow_mut().started = Some(start.clone());
     }
@@ -140,54 +141,71 @@ impl<V: crate::tui::Build> Sent<V> {
     }
 }
 
-/// An implementation, and a note of everything it was told.
+/// The front end in front of a table of one seat, as a person at a terminal
+/// plays it. What a key asks is played at the table, and the screen shows
+/// where the run then stands. Everything sent is noted.
 ///
-/// Wraps rather than replaces. The game underneath is the real one, so a check
-/// asserts about a decision that actually happened, rather than one that was
-/// intercepted.
-pub struct Spy<V: crate::tui::Build, G: Play<V>> {
-    game: G,
+/// It reads as the screen it holds, so a claim reads the screen's state
+/// through it.
+pub struct Driven<V: crate::tui::Build, G: RunTable<V>> {
+    app: App<V>,
+    table: G,
     sent: Sent<V>,
 }
 
-impl<V: crate::tui::Build, G: Play<V>> Spy<V, G> {
-    pub fn new(game: G) -> (Spy<V, G>, Sent<V>) {
+impl<V: crate::tui::Build, G: RunTable<V>> Driven<V, G>
+where
+    G::Error: std::fmt::Debug,
+{
+    /// The screen in front of `table`, showing where its run stands.
+    pub fn new(table: G) -> (Driven<V, G>, Sent<V>) {
         let sent = Sent::default();
-        (
-            Spy {
-                game,
-                sent: sent.clone(),
-            },
-            sent,
-        )
+        let mut driven = Driven {
+            app: App::new(Options::default()),
+            table,
+            sent: sent.clone(),
+        };
+        driven.look();
+        (driven, sent)
+    }
+
+    /// One action, and what it asks played at the table.
+    pub fn press(&mut self, action: Action) {
+        match self.app.press(action) {
+            super::app::Intent::Nothing => {}
+            super::app::Intent::Look => self.look(),
+            super::app::Intent::Send(decision) => {
+                self.sent.note(decision);
+                let settled = self
+                    .table
+                    .play(SeatIndex(0), &decision)
+                    .expect("the table answered the decision");
+                self.app.answered(&decision, &settled);
+                self.look();
+            }
+        }
+    }
+
+    fn look(&mut self) {
+        let standing = self
+            .table
+            .snapshot(SeatIndex(0))
+            .expect("the table answered a look");
+        self.app.show(standing);
     }
 }
 
-impl<V: crate::tui::Build, G: Play<V>> Play<V> for Spy<V, G> {
-    type Error = G::Error;
+impl<V: crate::tui::Build, G: RunTable<V>> std::ops::Deref for Driven<V, G> {
+    type Target = App<V>;
 
-    /// What the game underneath needs, and where to note what is sent.
-    ///
-    /// The caller supplies the sink, the way it does when it builds a `Spy`
-    /// around a game it already has.
-    type Host = (G::Host, Sent<V>);
-
-    fn begin(host: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
-        let (inner, sent) = host;
-        sent.note_start(start);
-        Ok(Spy {
-            game: G::begin(inner, start)?,
-            sent,
-        })
+    fn deref(&self) -> &App<V> {
+        &self.app
     }
+}
 
-    fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
-        self.sent.note(*decision);
-        self.game.play(decision)
-    }
-
-    fn observe(&mut self) -> Result<Snapshot<V>, Self::Error> {
-        self.game.observe()
+impl<V: crate::tui::Build, G: RunTable<V>> std::ops::DerefMut for Driven<V, G> {
+    fn deref_mut(&mut self) -> &mut App<V> {
+        &mut self.app
     }
 }
 
@@ -212,16 +230,14 @@ pub fn run<V, S>(stage: &mut S) -> Vec<Check>
 where
     V: crate::tui::Build,
     S: Stage<V>,
-    <S::Game as Play<V>>::Error: std::error::Error + Send + Sync + 'static,
+    <S::Game as RunTable<V>>::Error: std::fmt::Debug,
 {
     let mut out = Vec::new();
     for (name, position, check) in claims::<V, S>() {
         let outcome = match stage.reach(position) {
             Err(why) => Outcome::Unreachable(why),
             Ok(game) => {
-                let (spy, sent) = Spy::new(game);
-                let mut app = App::playing(spy, Options::default());
-                app.look_now();
+                let (mut app, sent) = Driven::new(game);
                 let before = sent.count();
                 check(&mut app, &sent, before)
             }
@@ -232,20 +248,16 @@ where
 }
 
 /// The type every check has: drive the front end, then say what happened.
-type Claim<V, G> = fn(&mut App<V, G>, &Sent<V>, usize) -> Outcome;
+type Claim<V, G> = fn(&mut Driven<V, G>, &Sent<V>, usize) -> Outcome;
 
 /// One claim, with the name it is reported under and where it has to stand.
-type Claimed<V, S> = (
-    &'static str,
-    Position,
-    Claim<V, Spy<V, <S as Stage<V>>::Game>>,
-);
+type Claimed<V, S> = (&'static str, Position, Claim<V, <S as Stage<V>>::Game>);
 
 fn claims<V, S>() -> Vec<Claimed<V, S>>
 where
     V: crate::tui::Build,
     S: Stage<V>,
-    <S::Game as Play<V>>::Error: std::error::Error + Send + Sync + 'static,
+    <S::Game as RunTable<V>>::Error: std::fmt::Debug,
 {
     vec![
         (
@@ -324,11 +336,11 @@ fn failed(what: impl Into<String>) -> Outcome {
 /// The point of aiming is not choosing. A card with one legal target has
 /// nothing to choose. It is that the card shows what it does to *that*
 /// creature. A front end that plays on confirm never shows it.
-fn aiming_sends_nothing<V, G>(app: &mut App<V, G>, sent: &Sent<V>, before: usize) -> Outcome
+fn aiming_sends_nothing<V, G>(app: &mut Driven<V, G>, sent: &Sent<V>, before: usize) -> Outcome
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     let Some(at) = first_targeted(app) else {
         return Outcome::Unreachable("no card in hand takes a target".into());
@@ -345,11 +357,15 @@ where
     }
 }
 
-fn confirming_an_aim_plays_it<V, G>(app: &mut App<V, G>, sent: &Sent<V>, before: usize) -> Outcome
+fn confirming_an_aim_plays_it<V, G>(
+    app: &mut Driven<V, G>,
+    sent: &Sent<V>,
+    before: usize,
+) -> Outcome
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     let Some(at) = first_targeted(app) else {
         return Outcome::Unreachable("no card in hand takes a target".into());
@@ -375,11 +391,11 @@ where
     }
 }
 
-fn cancelling_sends_nothing<V, G>(app: &mut App<V, G>, sent: &Sent<V>, before: usize) -> Outcome
+fn cancelling_sends_nothing<V, G>(app: &mut Driven<V, G>, sent: &Sent<V>, before: usize) -> Outcome
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     let Some(at) = first_targeted(app) else {
         return Outcome::Unreachable("no card in hand takes a target".into());
@@ -397,11 +413,11 @@ where
     }
 }
 
-fn ending_the_turn<V, G>(app: &mut App<V, G>, sent: &Sent<V>, before: usize) -> Outcome
+fn ending_the_turn<V, G>(app: &mut Driven<V, G>, sent: &Sent<V>, before: usize) -> Outcome
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     app.press(Action::EndTurn);
     match sent.since(before).as_slice() {
@@ -412,14 +428,14 @@ where
 
 /// A stray key is silence, not a beep and not a move.
 fn a_meaningless_key_does_nothing<V, G>(
-    app: &mut App<V, G>,
+    app: &mut Driven<V, G>,
     sent: &Sent<V>,
     before: usize,
 ) -> Outcome
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     let logged = app.ui.log.len();
     app.press(Action::Mark);
@@ -437,14 +453,14 @@ where
 /// The game already said why on the card's face. Asking again is a round trip
 /// for a line of log nobody needs.
 fn an_unplayable_card_is_not_sent<V, G>(
-    app: &mut App<V, G>,
+    app: &mut Driven<V, G>,
     sent: &Sent<V>,
     before: usize,
 ) -> Outcome
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     let Some(at) = first_unplayable(app) else {
         return Outcome::Unreachable("every card in hand can be played".into());
@@ -467,11 +483,15 @@ where
 /// The digit beside a row is the digit that takes it, and it takes *that* row.
 /// That is the part that breaks when a screen and its keys are numbered by two
 /// different pieces of code.
-fn a_digit_takes_that_option<V, G>(app: &mut App<V, G>, sent: &Sent<V>, _before: usize) -> Outcome
+fn a_digit_takes_that_option<V, G>(
+    app: &mut Driven<V, G>,
+    sent: &Sent<V>,
+    _before: usize,
+) -> Outcome
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     // Worked out from the room, not from `App::moves` — a numbering that is
     // both the expectation and the thing under test is never wrong.
@@ -508,11 +528,11 @@ where
 
 /// A room that has been answered still reports itself. If leaving is not a move
 /// the run is stuck in it.
-fn a_spent_room_can_be_left<V, G>(app: &mut App<V, G>, sent: &Sent<V>, before: usize) -> Outcome
+fn a_spent_room_can_be_left<V, G>(app: &mut Driven<V, G>, sent: &Sent<V>, before: usize) -> Outcome
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     let moves = app.moves();
     if moves.is_empty() {
@@ -532,11 +552,11 @@ where
 /// [`App::takeable`]. Asking the front end what it takes, and then checking
 /// that it took that, is a claim about nothing. The numbering bug this is here
 /// to catch moves both answers together.
-fn a_digit_takes_that_reward<V, G>(app: &mut App<V, G>, sent: &Sent<V>, before: usize) -> Outcome
+fn a_digit_takes_that_reward<V, G>(app: &mut Driven<V, G>, sent: &Sent<V>, before: usize) -> Outcome
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     let Some(Question::Rewards { rewards, .. }) = app.view().and_then(|a| a.asking.as_ref()) else {
         return Outcome::Unreachable("the game is not offering rewards".into());
@@ -565,14 +585,14 @@ where
 /// The same promise a card gets, and for the same reason. Aiming is when the
 /// screen shows which creature the potion is about to land on.
 fn aiming_a_potion_sends_nothing<V, G>(
-    app: &mut App<V, G>,
+    app: &mut Driven<V, G>,
     sent: &Sent<V>,
     before: usize,
 ) -> Outcome
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     let Some(at) = first_targeted_potion(app) else {
         return Outcome::Unreachable("no potion in the belt takes a target".into());
@@ -590,14 +610,14 @@ where
 }
 
 fn confirming_a_potion_drinks_it<V, G>(
-    app: &mut App<V, G>,
+    app: &mut Driven<V, G>,
     sent: &Sent<V>,
     before: usize,
 ) -> Outcome
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     let Some(at) = first_targeted_potion(app) else {
         return Outcome::Unreachable("no potion in the belt takes a target".into());
@@ -626,14 +646,14 @@ where
 /// The belt already said why. Asking the game again is a round trip for a line
 /// of log nobody needs.
 fn an_undrinkable_potion_is_not_sent<V, G>(
-    app: &mut App<V, G>,
+    app: &mut Driven<V, G>,
     sent: &Sent<V>,
     before: usize,
 ) -> Outcome
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     let Some(at) = first_undrinkable(app) else {
         return Outcome::Unreachable("every potion in the belt can be drunk".into());
@@ -663,11 +683,11 @@ where
 /// Fewest rather than first, because a card with exactly *one* legal target is
 /// where the promise hides. Aiming it chooses nothing, so a front end that
 /// plays on confirm looks correct everywhere else. Ties go to the first card.
-fn first_targeted<V, G>(app: &App<V, G>) -> Option<usize>
+fn first_targeted<V, G>(app: &Driven<V, G>) -> Option<usize>
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     app.view()?
         .fight()?
@@ -711,11 +731,11 @@ fn still_open<V: crate::tui::Build>(room: &Room<V>) -> Vec<u8> {
 ///
 /// Fewest for the reason [`first_targeted`] is: a potion with exactly one legal
 /// target is where a front end that drinks on confirm looks correct.
-fn first_targeted_potion<V, G>(app: &App<V, G>) -> Option<usize>
+fn first_targeted_potion<V, G>(app: &Driven<V, G>) -> Option<usize>
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     app.view()?
         .potions
@@ -726,20 +746,20 @@ where
         .map(|(at, _)| at)
 }
 
-fn first_undrinkable<V, G>(app: &App<V, G>) -> Option<usize>
+fn first_undrinkable<V, G>(app: &Driven<V, G>) -> Option<usize>
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     app.view()?.potions.iter().position(|p| p.reason.is_some())
 }
 
-fn first_unplayable<V, G>(app: &App<V, G>) -> Option<usize>
+fn first_unplayable<V, G>(app: &Driven<V, G>) -> Option<usize>
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
+    G: RunTable<V>,
+    G::Error: std::fmt::Debug,
 {
     app.view()?
         .fight()?

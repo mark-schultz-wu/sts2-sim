@@ -1,9 +1,7 @@
 # `SetupPlayerTurn` pauses on Tyranny's question, and `AfterSideTurnStart`
 # runs on while it waits. Furnace forges a Sovereign Blade into the hand
-# then, after Tyranny listed the hand, so the Blade is not among the
-# choices.
-#
-# A question that lists the hand as it is shown offers the Blade.
+# then. The hand screen offers the hand as it stands, so the Blade is
+# among the choices.
 {"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
 {"cmd":"fight","encounter":"NIBBITS_WEAK"}
 {"cmd":"power","power":"TYRANNY_POWER","amount":1,"target":0}
