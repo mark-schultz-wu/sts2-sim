@@ -146,6 +146,10 @@ public static class MapLegality
     /// nothing in the run, so the move it leads to is travel to the second.
     /// Headless, that call opens no map, and a proceed there left the run
     /// standing still for good.
+    ///
+    /// Out of a boss room, proceeding is a vote, and
+    /// <c>ActChangeSynchronizer</c> moves the run on once every player has
+    /// voted. A player who voted waits, and has no proceed until then.
     /// </remarks>
     public static bool CanProceed(RunState state)
     {
@@ -160,8 +164,19 @@ public static class MapLegality
             return false;
         }
 
+        if (ResumesEvent(state))
+        {
+            return true;
+        }
+
+        // A player who voted to move on waits for the others.
+        if (Peers.VotedNextAct(state, Seat.Me(state)))
+        {
+            return false;
+        }
+
         AbstractRoom? room = state.CurrentRoom;
-        return room is { RoomType: RoomType.Boss } || ResumesEvent(state);
+        return room is { RoomType: RoomType.Boss };
     }
 
     /// <summary>

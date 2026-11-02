@@ -31,6 +31,7 @@ mod plays;
 mod reached;
 mod record;
 mod respell;
+mod runner;
 mod scenario_diff;
 mod split;
 mod trace;
