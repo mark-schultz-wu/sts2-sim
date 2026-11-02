@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Godot;
 using MegaCrit.Sts2.Core.Assets;
-using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer;
@@ -25,8 +25,12 @@ namespace Sts2Net;
 /// <param name="Character">The character this seat plays.</param>
 /// <param name="Seed">The run's seed, which the host sets.</param>
 /// <param name="Unlocks">What each player starts with unlocked.</param>
+/// <param name="JoinAfter">A file the client before this one writes once it
+/// has joined, which this client waits for.</param>
+/// <param name="Joined">A file this client writes once it has joined.</param>
 public sealed record Session(
-    bool Host, ushort Port, ulong NetId, int Seats, CharacterModel Character, string Seed, UnlockState Unlocks);
+    bool Host, ushort Port, ulong NetId, int Seats, CharacterModel Character, string Seed, UnlockState Unlocks,
+    string? JoinAfter = null, string? Joined = null);
 
 /// <summary>
 /// Co-op over the game's ENet transport, with no Steam and no lobby screen.
@@ -65,11 +69,16 @@ public static class Net
             lobby.SetSeed(session.Seed);
             lobby.SetLocalCharacter(session.Character);
             Log.Info($"[net] hosting on {session.Port} for {session.Seats} seats");
-            // The run's players follow the lobby's join order, so the host
-            // starts once every seat has joined, in seat order.
-            while (!InSeatOrder(lobby.Players.Select(player => player.id).ToList(), session.Seats))
+            while (lobby.Players.Count < session.Seats)
             {
                 await tree.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+            }
+            // The run's players follow the lobby's join order, which the
+            // clients keep to seat order.
+            if (!InSeatOrder(lobby.Players.Select(player => player.id).ToList(), session.Seats))
+            {
+                throw new InvalidOperationException(
+                    $"the clients joined out of seat order: {string.Join(", ", lobby.Players.Select(player => player.id))}");
             }
             lobby.SetReady(true);
         }
@@ -122,6 +131,12 @@ public static class Net
     /// </summary>
     private static async Task<(JoinFlow, JoinResult)> Join(Session session, SceneTree tree)
     {
+        // The client before this one joins first, so the lobby seats the
+        // clients in seat order.
+        while (session.JoinAfter != null && !File.Exists(session.JoinAfter))
+        {
+            await tree.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+        }
         while (true)
         {
             JoinFlow join = NetApi.NewJoin();
@@ -129,18 +144,11 @@ public static class Net
             {
                 JoinResult joined = await join.Begin(
                     new ENetClientConnectionInitializer(session.NetId, "127.0.0.1", session.Port), tree);
-                // A seat that joined ahead of an earlier one leaves and joins
-                // again, as a player can, so the join order is the seat order.
-                int seat = (int)(session.NetId - FirstClientNetId) + 1;
-                var inLobby = joined.joinResponse?.playersInLobby?.Select(player => player.id).ToList()
-                    ?? new List<ulong>();
-                if (InSeatOrder(inLobby, seat + 1))
+                if (session.Joined != null)
                 {
-                    return (join, joined);
+                    File.WriteAllText(session.Joined, session.NetId.ToString());
                 }
-                Log.Info($"[net] seat {seat} joined ahead of an earlier seat; joining again");
-                join.NetService?.Disconnect(NetError.Quit, now: true);
-                await tree.ToSignal(tree.CreateTimer(0.25 * seat), SceneTreeTimer.SignalName.Timeout);
+                return (join, joined);
             }
             catch (ClientConnectionFailedException e)
             {

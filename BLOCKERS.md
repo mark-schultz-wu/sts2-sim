@@ -270,7 +270,8 @@ run as its own machine sees it. The work goes in this order:
    player's potion auto-plays runs in the drinker's choice context, so
    its owner's pick branches onto the owner's queue. A lobby's clients
    join in seat order, so a run of three players seats them the same way
-   every time.
+   every time. Fur Coat seeds its marks with its owner's slot, as
+   `new Rng(Owner, Id)` does.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
@@ -280,7 +281,8 @@ run as its own machine sees it. The work goes in this order:
    agreed to their end. On 2026-11-01 a fresh hunt
    of seeds 0 to 15 for each of the four pairs agreed on 63 of the 64
    seeds. The last, Silent and Defect seed 2, needed the room-entry sync,
-   and agrees too. What is still open is listed below, worked by
+   and agrees too. A hunt of seeds 16 to 31 for the four pairs agreed on 55
+   of the 64 seeds, and all 64 agree now. What is still open is listed below, worked by
    class, with the seeds that show it.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. A lobby moves only once every game stands still and
@@ -330,9 +332,9 @@ run as its own machine sees it. The work goes in this order:
      filter no longer lets through drops, and a pick left with nothing
      picked and nothing to pick ends with no cards. Neither the mod nor
      the simulator does this yet. Both offer the hand as it stands.
-   - The splits a hunt of seeds 16 to 31 for the four pairs found on
-     2026-11-01, where 55 of the 64 seeds agreed:
-     - A travel. Silent and Defect seed 28 at step 1107.
+   - Two players who each hold Fur Coat. The game leaves out of each
+     coat's marks the points another coat marked, which the simulator's
+     map does not record, so it is `unimplemented!`.
    - The splits the hunt of 2026-10-30 found, by where they show:
      - A co-op scenario's `enter_room` setup hangs: the host leaves its
        room and enters none, and the reply never comes. The mod's
