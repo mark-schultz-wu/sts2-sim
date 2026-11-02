@@ -40,6 +40,11 @@ impl<V: crate::Build> EventBehavior<V> for SpiritGrafter {
         )
     }
 
+    /// `WillKillPlayer`, for `Rejection`: its hit point loss.
+    fn kills(&self, _state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 1 && run.hp() <= HP_LOSS
+    }
+
     /// `LetItIn`: the heal, then a Metamorphosis into the deck. `Rejection`:
     /// `FromDeckForUpgrade` for one card, then the damage. Each finishes the
     /// event.

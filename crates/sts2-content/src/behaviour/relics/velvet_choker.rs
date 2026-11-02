@@ -5,7 +5,6 @@ use crate::vars::RelicVars as _;
 use sts2_core::{DecisionHook, EventHook, HookResponse, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-use crate::generated::runstate::CombatSide;
 
 /// `_cardsPlayedThisTurn`, every play of its owner's, auto-plays and replays
 /// among them.
@@ -29,11 +28,10 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::RoomEntered { room, .. } if crate::behaviour::relics::combat_room(room) => {
             state.played = 0
         }
-        EventHook::BeforeSideTurnStart {
-            side: CombatSide::Player,
-            ..
+        EventHook::BeforeSideTurnStart { participants, .. } if participants.contains(owner) => {
+            state.played = 0
         }
-        | EventHook::CombatEnd { .. } => state.played = 0,
+        EventHook::CombatEnd { .. } => state.played = 0,
         _ => {}
     }
 }

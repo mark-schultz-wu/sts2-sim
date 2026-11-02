@@ -16,7 +16,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use sts2_core::{Answered, Construct, Decision, Play, Setup, Snapshot, Start, Step};
+use sts2_core::{Answered, Decision, Setup, Snapshot, Start, Step};
 
 use super::error::Error;
 use crate::wire::command::Command;
@@ -58,7 +58,7 @@ pub struct Cached<P> {
     path: Option<PathBuf>,
     /// Whether anything has been added since it was read.
     grown: bool,
-    /// The last answer, for [`Play::observe`], which moves nothing.
+    /// The last answer, for [`Cached::observe`], which moves nothing.
     last: Option<Response>,
 }
 
@@ -209,10 +209,7 @@ pub struct FromTranscript<P> {
     pub inner: Option<P>,
 }
 
-impl<V: sts2_content_wire::WireContentVersion, P: Transport> Play<V> for Cached<P> {
-    type Error = Error;
-    type Host = FromTranscript<P>;
-
+impl<P: Transport> Cached<P> {
     /// Answers the start from the transcript, the way a game answers it.
     ///
     /// Starting is a command like any other, so it is the first entry. A cache
@@ -220,7 +217,10 @@ impl<V: sts2_content_wire::WireContentVersion, P: Transport> Play<V> for Cached<
     ///
     /// A refused start takes the cache with it, there being none to hand back.
     /// Filling one starts from a run the game accepts.
-    fn begin(host: Self::Host, start: &Start<V>) -> Result<Self, Error> {
+    pub fn begin<V: sts2_content_wire::WireContentVersion>(
+        host: FromTranscript<P>,
+        start: &Start<V>,
+    ) -> Result<Self, Error> {
         // The game's `start` begins a solo run.
         start.alone();
         let mut cached = match host.inner {
@@ -235,20 +235,115 @@ impl<V: sts2_content_wire::WireContentVersion, P: Transport> Play<V> for Cached<
         }
     }
 
-    fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Error> {
+    /// Answers one decision from the transcript.
+    pub fn play<V: sts2_content_wire::WireContentVersion>(
+        &mut self,
+        decision: &Decision<V>,
+    ) -> Result<Answered<V>, Error> {
         self.answered(Command::from(decision))
     }
 
     /// The last answer, which is what an observation of a run that has not
     /// moved is. No transcript entry is spent, because nothing moved.
-    fn observe(&mut self) -> Result<Snapshot<V>, Error> {
+    pub fn observe<V: sts2_content_wire::WireContentVersion>(
+        &mut self,
+    ) -> Result<Snapshot<V>, Error> {
         super::snapshot_of(self.last.as_ref())
+    }
+
+    /// Answers one setup from the transcript.
+    pub fn setup<V: sts2_content_wire::WireContentVersion>(
+        &mut self,
+        step: &Setup<V>,
+    ) -> Result<Answered<V>, Error> {
+        self.answered(Command::from(step))
+    }
+
+    /// Answers one line of a recording, whichever half it is.
+    pub fn step<V: sts2_content_wire::WireContentVersion>(
+        &mut self,
+        step: &Step<V>,
+    ) -> Result<Answered<V>, Error> {
+        match step {
+            Step::Decision(decision) => self.play(decision),
+            Step::Setup(setup) => self.setup(setup),
+        }
     }
 }
 
-impl<V: sts2_content_wire::WireContentVersion, P: Transport> Construct<V> for Cached<P> {
-    fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Error> {
-        self.answered(Command::from(step))
+/// A transcript's run as a table of one seat.
+///
+/// Each move and setup is one command, as [`Cached`] answers it, and where it
+/// left the run is the answer itself. So a table over a transcript asks it
+/// for exactly what a [`Cached`] driven by hand asks.
+pub struct CachedTable<V: sts2_content_wire::WireContentVersion, P: Transport> {
+    cached: Cached<P>,
+    last: Snapshot<V>,
+}
+
+impl<V: sts2_content_wire::WireContentVersion, P: Transport> CachedTable<V, P> {
+    /// The answer, keeping where it left the run.
+    fn settled(&mut self, answered: Answered<V>) -> sts2_core::Settled<V> {
+        let (decided, snapshot) = answered?.split();
+        self.last = snapshot;
+        Ok(decided)
+    }
+}
+
+impl<V: sts2_content_wire::WireContentVersion, P: Transport> sts2_core::RunTable<V>
+    for CachedTable<V, P>
+{
+    type Error = Error;
+    type Host = FromTranscript<P>;
+    type Seen<'a>
+        = &'a sts2_core::Observation<V>
+    where
+        Self: 'a;
+
+    fn begin(host: Self::Host, start: &Start<V>) -> Result<Self, Error> {
+        let mut cached = Cached::begin(host, start)?;
+        let last = cached.observe()?;
+        Ok(Self { cached, last })
+    }
+
+    fn seats(&self) -> usize {
+        1
+    }
+
+    fn seen(&mut self, _: sts2_core::SeatIndex) -> Result<Self::Seen<'_>, Error> {
+        Ok(&self.last.observation)
+    }
+
+    fn moves(
+        &mut self,
+        _: sts2_core::SeatIndex,
+        moves: &mut Vec<Decision<V>>,
+    ) -> Result<(), Error> {
+        moves.clear();
+        moves.extend_from_slice(&self.last.observation.moves);
+        Ok(())
+    }
+
+    fn play(
+        &mut self,
+        _: sts2_core::SeatIndex,
+        decision: &Decision<V>,
+    ) -> Result<sts2_core::Settled<V>, Error> {
+        let answered = self.cached.play(decision)?;
+        Ok(self.settled(answered))
+    }
+
+    fn snapshot(&mut self, _: sts2_core::SeatIndex) -> Result<Snapshot<V>, Error> {
+        Ok(self.last.clone())
+    }
+
+    fn construct(
+        &mut self,
+        _: sts2_core::SeatIndex,
+        setup: &Setup<V>,
+    ) -> Result<sts2_core::Settled<V>, Error> {
+        let answered = self.cached.setup(setup)?;
+        Ok(self.settled(answered))
     }
 }
 

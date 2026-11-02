@@ -4,7 +4,6 @@ use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-use crate::generated::runstate::CombatSide;
 
 /// `_cardsPlayedThisTurn` and `_cardsPlayedLastTurn`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -26,10 +25,7 @@ pub(super) fn event_hook<V: crate::Build>(
 ) {
     match hook {
         EventHook::CardPlayed { player, .. } if player == owner => state.played_this_turn += 1,
-        EventHook::BeforeSideTurnStart {
-            side: CombatSide::Player,
-            ..
-        } => {
+        EventHook::BeforeSideTurnStart { participants, .. } if participants.contains(owner) => {
             state.played_last_turn = state.played_this_turn;
             state.played_this_turn = 0;
         }
