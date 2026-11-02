@@ -37,6 +37,11 @@ impl<V: crate::Build> EventBehavior<V> for DrowningBeacon {
         )
     }
 
+    /// `WillKillPlayer`, for `Climb`: the maximum it takes.
+    fn kills(&self, _state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 1 && run.max_hp() <= MAX_HP_LOSS
+    }
+
     /// `BottleOption`: a Glowwater Potion offered as a reward. `ClimbOption`:
     /// its Max HP lost, then Fresnel Lens. Each finishes the event.
     fn choose<R: sts2_core::rng::GameRng>(

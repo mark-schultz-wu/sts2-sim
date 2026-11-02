@@ -5,24 +5,21 @@ use sts2_content::v0_107_1::{
     encounters::Encounter, monsters::Monster,
 };
 use sts2_core::fixture::at;
-use sts2_core::{Answer, Coord, Decision, ModelId, Play, Reason, Seed, Start};
+use sts2_core::{Answer, Coord, Decision, ModelId, Reason, Seed, Start};
 use sts2_sim::Sim;
 
 type V = V0_107_1;
 
 fn opened() -> Sim<V> {
-    let mut sim = Sim::begin(
-        (),
-        &Start {
-            seed: Seed::new("0RACLE1").expect("a canonical seed"),
-            players: vec![sts2_core::Player {
-                character: Character::Regent,
-                wins: 0,
-            }],
-            ascension: AscensionLevel::None,
-            modifiers: Vec::new(),
-        },
-    )
+    let mut sim = Sim::begin(&Start {
+        seed: Seed::new("0RACLE1").expect("a canonical seed"),
+        players: vec![sts2_core::Player {
+            character: Character::Regent,
+            wins: 0,
+        }],
+        ascension: AscensionLevel::None,
+        modifiers: Vec::new(),
+    })
     .expect("the run starts");
     sim.play(&Decision::ChooseOption {
         index: 0,

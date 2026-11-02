@@ -66,6 +66,17 @@ impl Pick {
         (self.next() % n as u64) as usize
     }
 
+    /// Any of `n` moves, each as likely as the next: the fuzzer's pick,
+    /// which leaves nothing out.
+    ///
+    /// # Panics
+    ///
+    /// On no moves, which a run waiting on nobody has.
+    pub fn any(&mut self, n: usize) -> usize {
+        assert!(n > 0, "a choice among no moves");
+        self.below(n)
+    }
+
     /// Which of `legal` to play.
     ///
     /// Ending the turn is picked one time in ten while anything else is

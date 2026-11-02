@@ -31,10 +31,12 @@ pub enum End {
     GameError,
     /// A game stopped answering, or never started.
     GameGone,
+    /// A player stopped the run, as a person at a terminal leaves one.
+    Quit,
 }
 
 impl End {
-    const NAMES: [(End, &'static str); 11] = [
+    const NAMES: [(End, &'static str); 12] = [
         (End::Won, "won"),
         (End::Lost, "lost"),
         (End::Capped, "capped"),
@@ -46,6 +48,7 @@ impl End {
         (End::Failed, "failed"),
         (End::GameError, "game-error"),
         (End::GameGone, "game-gone"),
+        (End::Quit, "quit"),
     ];
 
     fn name(self) -> &'static str {
@@ -54,6 +57,13 @@ impl End {
             .find(|(end, _)| *end == self)
             .map(|(_, name)| *name)
             .expect("every end has a name")
+    }
+}
+
+impl std::fmt::Display for End {
+    /// The end as a verdict line spells it, such as `game-error`.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
     }
 }
 
