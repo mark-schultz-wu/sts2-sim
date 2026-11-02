@@ -640,6 +640,60 @@ pub(crate) fn observe<V: crate::Build>(state: &State<V>, run: &impl EventView<V>
     }
 }
 
+/// [`sts2_core::EventBehavior::kills`] for the event entered.
+pub(crate) fn kills<V: crate::Build>(
+    state: &State<V>,
+    option: u8,
+    run: &impl EventView<V>,
+) -> bool {
+    match state {
+        State::Own(state) => V::OwnEvents::default().kills(state, option, run),
+        State::TheLegendsWereTrue(state) => {
+            the_legends_were_true::TheLegendsWereTrue.kills(state, option, run)
+        }
+        State::Trial(state) => trial::Trial.kills(state, option, run),
+        State::AbyssalBaths(state) => abyssal_baths::AbyssalBaths.kills(state, option, run),
+        State::DenseVegetation(state) => {
+            dense_vegetation::DenseVegetation.kills(state, option, run)
+        }
+        State::SpiritGrafter(state) => spirit_grafter::SpiritGrafter.kills(state, option, run),
+        State::ThisOrThat(state) => this_or_that::ThisOrThat.kills(state, option, run),
+        State::SlipperyBridge(state) => slippery_bridge::SlipperyBridge.kills(state, option, run),
+        State::DollRoom(state) => doll_room::DollRoom.kills(state, option, run),
+        State::Vakuu(state) => vakuu::Vakuu.kills(state, option, run),
+        State::HungryForMushrooms(state) => {
+            hungry_for_mushrooms::HungryForMushrooms.kills(state, option, run)
+        }
+        State::StoneOfAllTime(state) => stone_of_all_time::StoneOfAllTime.kills(state, option, run),
+        State::ColossalFlower(state) => colossal_flower::ColossalFlower.kills(state, option, run),
+        State::RoundTeaParty(state) => round_tea_party::RoundTeaParty.kills(state, option, run),
+        State::SunkenStatue(state) => sunken_statue::SunkenStatue.kills(state, option, run),
+        State::RoomFullOfCheese(state) => {
+            room_full_of_cheese::RoomFullOfCheese.kills(state, option, run)
+        }
+        State::BrainLeech(state) => brain_leech::BrainLeech.kills(state, option, run),
+        State::WhisperingHollow(state) => {
+            whispering_hollow::WhisperingHollow.kills(state, option, run)
+        }
+        State::DrowningBeacon(state) => drowning_beacon::DrowningBeacon.kills(state, option, run),
+        State::JungleMazeAdventure(state) => {
+            jungle_maze_adventure::JungleMazeAdventure.kills(state, option, run)
+        }
+        State::UnrestSite(state) => unrest_site::UnrestSite.kills(state, option, run),
+        State::TrashHeap(state) => trash_heap::TrashHeap.kills(state, option, run),
+        State::TabletOfTruth(state) => tablet_of_truth::TabletOfTruth.kills(state, option, run),
+        _ => false,
+    }
+}
+
+/// The relic the option at `option` hands over, on a page that names one.
+pub(crate) fn option_relic<V: crate::Build>(room: &Room<V>, option: u8) -> Option<V::Relic> {
+    match room {
+        Room::Event { options, .. } => options.get(usize::from(option))?.relic,
+        _ => None,
+    }
+}
+
 pub(crate) fn choose<V: crate::Build, R: sts2_core::rng::GameRng>(
     state: &mut State<V>,
     option: u8,

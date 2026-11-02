@@ -90,6 +90,9 @@ impl<V: Rules> State<V> {
         moving: Move<V>,
     ) -> Result<Decided, crate::combat::Error> {
         let Move { to, destination } = moving;
+        // `CombatStateSynchronizer`, once the room is left and before the next
+        // is rolled or built.
+        self.room_synced();
         let point = self.point_type(Location::MapPoint(to));
         // A `?` point picks its room first, and raises this once it has.
         if !matches!(destination, Destination::Other(kind) if kind == V::MapPointType::UNKNOWN) {
