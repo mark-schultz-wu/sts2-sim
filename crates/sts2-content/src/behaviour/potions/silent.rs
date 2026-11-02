@@ -40,7 +40,8 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(
         }
         // `AnyPlayer`: its Intangible on the player drinking it.
         __c0 if __c0 == V::Potion::GHOST_IN_A_JAR => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::INTANGIBLE_POWER,
                 PowerAmount::Counted(V::Potion::GHOST_IN_A_JAR_INTANGIBLE_POWER),
             );

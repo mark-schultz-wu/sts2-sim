@@ -1,0 +1,12 @@
+# Pael's Eye gives the Ironclad, who played no card, an extra turn. The
+# Silent played one, and takes none. The turn ends and starts again for
+# the Ironclad alone, whose turn number counts up, while the Silent waits
+# ready. The Ironclad's next end of turn hands the turn to the enemies.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"grant","relic":"PAELS_EYE","target":1,"seat":0}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"STRIKE_SILENT","target":1001,"seat":0}
+{"cmd":"play_card","index":7,"target":2,"seat":1}
+{"cmd":"end_turn","seat":0}
+{"cmd":"end_turn","seat":1}
+{"cmd":"end_turn","seat":0}

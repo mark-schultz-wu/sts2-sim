@@ -4,12 +4,17 @@ use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 
-/// `ModifyOrbPassiveTriggerCounts`: one more for `Orbs[0]`. A fight here has
-/// one player, so every orb is its owner's.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+/// `ModifyOrbPassiveTriggerCounts`: one more for its owner's `Orbs[0]`.
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
-        ModifyHook::OrbPassiveTriggerCount { first: true } => Modify::Added(1),
-        ModifyHook::OrbPassiveTriggerCount { first: false } => Modify::Nothing,
+        ModifyHook::OrbPassiveTriggerCount {
+            player,
+            first: true,
+        } if player == owner => Modify::Added(1),
+        ModifyHook::OrbPassiveTriggerCount { .. } => Modify::Nothing,
         hook => unimplemented!("what GoldPlatedCables does for {hook:?}"),
     }
 }

@@ -37,7 +37,8 @@ prefix names the file it lives in.
 | `sts2-content` | the game's content as Rust tables, generated from the dumps |
 | `sts2-headless` | a client for the headless mod: launch, handshake, one typed call per decision |
 | `sts2-sim` | the game engine and its draw stream, checked against the real game |
-| [`sts2-cli`](crates/sts2-cli/README.md) | `sts2`, which plays a run at a terminal, and `sts2-fuzz`, which plays one at random |
+| `sts2-run` | `sts2-run`, the one runner: a table, a player for each seat, and layers. See [RUNNERS.md](docs/RUNNERS.md) |
+| [`sts2-cli`](crates/sts2-cli/README.md) | `sts2`, which plays a run at a terminal |
 | `xtask` | `cargo xtask dump` asks the game for its tables, and `codegen` turns them into `sts2-content` |
 
 Content is thirteen domains: acts, afflictions, cards, characters, enchantments,

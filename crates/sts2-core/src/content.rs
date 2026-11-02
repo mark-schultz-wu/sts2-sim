@@ -188,6 +188,10 @@ pub trait EventTable: Table {
     /// The event id's deterministic hash, already cast for seed arithmetic.
     fn seed_name(self) -> &'static str;
 
+    /// `EventModel.IsShared`: every player goes through one copy of it and
+    /// votes on each option, rather than each through their own.
+    fn shared(self) -> bool;
+
     /// The fights a build names.
     type Encounter: Copy + 'static;
 
@@ -307,7 +311,13 @@ pub trait CardTable: Table {
     /// build spells as an exact decimal. [`num_traits::ToPrimitive`] is how a
     /// printed number reaches the run: it yields nothing for one no integer
     /// can hold.
-    type Number: std::fmt::Debug + Copy + Eq + std::hash::Hash + num_traits::ToPrimitive + 'static;
+    type Number: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + num_traits::ToPrimitive
+        + Into<crate::Decimal>
+        + 'static;
 
     /// The character whose pool holds it, or `None` for one held by no
     /// character: colourless, curses, statuses, tokens, quest and event cards.
@@ -451,6 +461,13 @@ impl Fixed {
             self.coefficient < 0,
             self.scale as u32,
         )
+    }
+}
+
+/// The game's `decimal`, exactly.
+impl From<Fixed> for crate::Decimal {
+    fn from(number: Fixed) -> Self {
+        number.exact()
     }
 }
 
@@ -1326,6 +1343,9 @@ impl<V: ContentVersion> EnchantmentModel<V> for EnchantmentStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DamageResult<V: ContentVersion> {
     pub receiver: crate::CombatId,
+    /// Which of the attack's hits it came from, counted from zero.
+    /// `AttackCommand.Results` holds a list of results for each hit.
+    pub hit: u8,
     /// `TotalDamage`: what the block took and what the hit points lost.
     pub total: V::Number,
     /// `UnblockedDamage`: what the hit points lost.
@@ -1336,8 +1356,75 @@ pub struct DamageResult<V: ContentVersion> {
     pub killed: bool,
 }
 
-/// `AttackCommand.Results`: every hit's results, in the order they landed.
+/// `AttackCommand.Results`: every hit's results, in the order they landed,
+/// each naming its hit.
 pub type AttackResults<V> = smallvec::SmallVec<[DamageResult<V>; 4]>;
+
+/// Whose a played card is once its play is over, which
+/// `GetResultLocationForCardPlay`'s `player` names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultHolder {
+    /// Its owner's, as the base class answers.
+    Owner,
+    /// A living teammate's, other than the owner, drawn off `CombatTargets`,
+    /// as The Ball's override picks. Where none stands, the base location
+    /// stands instead.
+    RandomTeammate,
+}
+
+/// Where a played card goes once its play is over, where in that pile, and
+/// whose it is then.
+pub type CardResult = (Option<crate::Pile>, PilePosition, ResultHolder);
+
+/// The most players a fight holds.
+pub const MAX_PLAYERS: usize = 4;
+
+/// Each player's `TurnNumber`, by seat. A seat the fight lacks holds zero.
+pub type PlayerTurns<V> = [<V as ContentVersion>::Count; MAX_PLAYERS];
+
+/// The most creatures a side's turn names as taking part.
+///
+/// Four players and a pet each, or an encounter's six slots and their
+/// summons. Fixed, so an [`EventHook`] stays `Copy` and no larger than its
+/// other variants make it.
+pub const PARTICIPANTS: usize = 10;
+
+/// The creatures a side's turn hook names as taking part, which is its
+/// `participants`.
+///
+/// A turn's start names the creatures starting it: the side's, or in an
+/// extra turn its takers' alone. The player side's end names the players
+/// ending the turn, and the enemy side's end the enemies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Participants([Option<crate::CombatId>; PARTICIPANTS]);
+
+impl Participants {
+    /// `participants.Contains(creature)`.
+    #[inline]
+    pub fn contains(&self, creature: crate::CombatId) -> bool {
+        self.0.contains(&Some(creature))
+    }
+
+    /// Each one, in the order the game lists them.
+    pub fn iter(&self) -> impl Iterator<Item = crate::CombatId> + '_ {
+        self.0.iter().map_while(|c| *c)
+    }
+}
+
+impl FromIterator<crate::CombatId> for Participants {
+    /// # Panics
+    ///
+    /// More than [`PARTICIPANTS`] creatures.
+    fn from_iter<I: IntoIterator<Item = crate::CombatId>>(creatures: I) -> Self {
+        let mut list = [None; PARTICIPANTS];
+        for (at, creature) in creatures.into_iter().enumerate() {
+            *list.get_mut(at).unwrap_or_else(|| {
+                unimplemented!("more than {PARTICIPANTS} creatures taking part in a turn")
+            }) = Some(creature);
+        }
+        Self(list)
+    }
+}
 
 /// The player's current and maximum hit points.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1362,6 +1449,8 @@ pub struct RelicOwner<V: ContentVersion> {
 pub struct CardSource<V: ContentVersion> {
     pub id: crate::CardId<V>,
     pub card: V::Card,
+    /// `Owner.Creature`, the player whose card it is.
+    pub owner: crate::CombatId,
     /// `Pile.Type == PileType.Play`: the card stands in the play pile, as it
     /// does while it is played. A card in hand is being previewed.
     pub playing: bool,
@@ -1369,6 +1458,10 @@ pub struct CardSource<V: ContentVersion> {
     pub upgraded: bool,
     /// Whether an enchantment sits on it.
     pub enchanted: bool,
+    /// `EnergyCost.GetWithModifiers(CostModifiers.All)`, for a card not
+    /// being played, as a preview reads it. Nothing while it is played,
+    /// where the play's own spending is in the history.
+    pub cost: Option<Cost>,
 }
 
 /// A number an enchantment works out for the card it is on.
@@ -1427,6 +1520,10 @@ pub trait RelicTable: Table {
 
     /// Whether a merchant is allowed to stock it, which is `IsAllowedInShops`.
     fn allowed_in_shops(self) -> bool;
+
+    /// Where this relic sorts against every other: `ModelId.CompareTo`,
+    /// ordinal over the id the wire spells. `StableShuffle` sorts by it.
+    fn order(self) -> u16;
 
     /// `IsStackable`: whether a run can hold more than one. `RelicCmd.Obtain`
     /// takes one that is not out of both relic bags.
@@ -1752,13 +1849,15 @@ pub trait RestKinds<V: ContentVersion>: std::fmt::Debug + Copy + Eq + 'static {
     /// Upgrade a card the deck can still upgrade.
     const SMITH: Self;
 
-    /// What a rest site offers this run, in the game's own order.
+    /// What a rest site offers a player of a run of `players`, in the
+    /// game's own order.
     ///
     /// `RestSiteOption.Generate` opens with `HEAL` and `SMITH`, adds `MEND`
-    /// for a second player, and then runs `TryModifyRestSiteOptions`. That
-    /// hook is why the list is the build's answer and not a constant. Its
-    /// listeners add `added`, in the order they answered.
-    fn offered(added: &[Self]) -> Vec<Self>;
+    /// where there are several players, and then runs
+    /// `TryModifyRestSiteOptions`. That hook is why the list is the build's
+    /// answer and not a constant. Its listeners add `added`, in the order
+    /// they answered.
+    fn offered(players: usize, added: &[Self]) -> Vec<Self>;
 
     /// `RestSiteOption.OnSelect` for an option whose selection is something
     /// the run carries out: `HATCH` obtains Byrdpip.
@@ -1975,9 +2074,16 @@ pub trait FightView<V: ContentVersion> {
     /// `Creature.Monster`, or nothing for a player.
     fn monster(&self, creature: crate::CombatId) -> Option<V::Monster>;
 
-    /// The player's creature, which a card's `Owner.Creature` is. A fight
-    /// here has one player.
-    fn player(&self) -> crate::CombatId;
+    /// `Creature.IsPlayer`: whether `creature` is a player's own creature. A
+    /// pet is not one.
+    fn is_player(&self, creature: crate::CombatId) -> bool;
+
+    /// `Creature.Side`, or nothing for a creature not in the fight.
+    fn side_of(&self, creature: crate::CombatId) -> Option<V::CombatSide>;
+
+    /// `CombatState.GetTeammatesOf(creature)`: its side's creatures, itself
+    /// and dead ones included, in fight order.
+    fn teammates(&self, creature: crate::CombatId) -> smallvec::SmallVec<[crate::CombatId; 8]>;
 
     /// The first of `AttackCommand.Results` whose receiver is `creature`, for
     /// the attack whose `AfterAttack` is being raised. Nothing outside one.
@@ -2213,6 +2319,15 @@ pub trait Fight<V: ContentVersion> {
         });
         self.attack(Scaling::Dynamic, |fight| {
             for _ in 0..repeats {
+                // `if (Attacker.IsDead) break;` before each hit. A hit the
+                // attacker died during still lands on every target.
+                let actor = fight.actor();
+                let alive = (fight.creatures())
+                    .find(|creature| creature.id() == actor)
+                    .is_some_and(|creature| creature.alive());
+                if !alive {
+                    break;
+                }
                 let hit = |fight: &mut Self, target| {
                     let attack = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
@@ -2313,6 +2428,14 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a card cloning itself")
     }
 
+    /// `CreateCloneForPlayer`, then `CardPileCmd.AddGeneratedCardToCombat`
+    /// into `pile`, of the card being played, for each living player on its
+    /// owner's side, the owner too, in order. Each clone is its player's,
+    /// and its owner added it.
+    fn clone_this_for_each_player(&mut self, _pile: crate::Pile) {
+        unimplemented!("a card cloning itself for each player")
+    }
+
     /// [`Fight::clone_this`] for another card in the fight, as it holds
     /// now.
     fn clone_card(
@@ -2332,6 +2455,18 @@ pub trait Fight<V: ContentVersion> {
         _pile: crate::Pile,
     ) -> Option<crate::CardAt<V>> {
         unimplemented!("a card added to the fight")
+    }
+
+    /// [`Fight::add_generated_cards`] with the player who made them named:
+    /// `CardPileCmd.AddGeneratedCardsToCombat(cards, pile, creator)`.
+    fn add_generated_cards_by(
+        &mut self,
+        _card: crate::CardIdent<V>,
+        _pile: crate::Pile,
+        _count: usize,
+        _creator: crate::CombatId,
+    ) -> Vec<crate::CardAt<V>> {
+        unimplemented!("adding generated cards a named player made")
     }
 
     /// Add copies of a generated card to one combat pile.
@@ -2632,6 +2767,13 @@ pub trait Fight<V: ContentVersion> {
     /// `CreatureCmd.SetMaxAndCurrentHp`: both numbers at once.
     fn set_max_and_current_hp(&mut self, _creature: crate::CombatId, _hp: V::Health) {
         unimplemented!("setting a creature's hit points")
+    }
+
+    /// `Creature.ScaleHpForMultiplayer` of a monster's `hp`, for the fight's
+    /// player count, truncated as `SetMaxHpInternal` takes a decimal. The
+    /// same `hp` in a fight of one player.
+    fn scaled_for_players(&self, _hp: V::Health) -> V::Health {
+        unimplemented!("scaling health for the player count")
     }
 
     /// `RunRng.Niche.NextInt(min, max)`, which stops short of `max`.
@@ -3061,6 +3203,67 @@ pub trait Fight<V: ContentVersion> {
     ) where
         V: Hooks;
 
+    /// [`Fight::write_power`] of the `nth` instance of `power` the creature
+    /// `at` carries, in the order they were applied.
+    fn write_power_at(
+        &mut self,
+        _at: crate::CombatId,
+        _power: V::Power,
+        _nth: usize,
+        _write: impl FnOnce(&mut V::PowerState),
+    ) where
+        V: Hooks,
+    {
+        unimplemented!("a power instance's model written in a fight")
+    }
+
+    /// [`Fight::modify_power_amount`] of the `nth` instance of `power` the
+    /// creature `at` carries, in the order they were applied.
+    fn modify_power_at(
+        &mut self,
+        _at: crate::CombatId,
+        _power: V::Power,
+        _nth: usize,
+        _amount: V::Number,
+        _applier: Option<crate::CombatId>,
+    ) {
+        unimplemented!("a power instance's amount moved")
+    }
+
+    /// `GetPowerInstances`: the `Target` and the stack of each instance of
+    /// `power` the creature `at` carries, in the order they were applied.
+    fn power_instances(&self, _at: crate::CombatId, _power: V::Power) -> PowerInstances<V> {
+        unimplemented!("a power's instances read in a fight")
+    }
+
+    /// `PowerCmd.Apply` of a new instance of `power` on `at`, from
+    /// `applier`, whose `Target` its applier set to `target` first.
+    fn apply_aimed(
+        &mut self,
+        _at: crate::CombatId,
+        _power: V::Power,
+        _amount: PowerAmount<V::Number>,
+        _applier: Option<crate::CombatId>,
+        _target: crate::CombatId,
+    ) {
+        unimplemented!("an aimed power applied in a fight")
+    }
+
+    /// `CombatState.PlayerCreatures`: each player's creature, in seat order,
+    /// living or not.
+    fn players(&self) -> smallvec::SmallVec<[crate::CombatId; 4]> {
+        unimplemented!("the fight's players")
+    }
+
+    /// `act`, with the actor's command reaching `player`: their piles and
+    /// gold are what it reads and writes. The actor stays the actor.
+    fn for_player(&mut self, _player: crate::CombatId, _act: impl FnOnce(&mut Self))
+    where
+        Self: Sized,
+    {
+        unimplemented!("acting for one of several players")
+    }
+
     /// The character whose pool combat generation reads.
     fn character(&self) -> V::Character {
         unimplemented!("the character in this fight")
@@ -3187,6 +3390,9 @@ pub enum Played<V: ContentVersion, R> {
     Done,
     /// The play stopped on a `CardSelectCmd`, which is a question.
     Asking {
+        /// The player who picks, from their own pile, which is
+        /// `CardSelectCmd`'s `player`. Nothing for the card's owner.
+        of: Option<crate::CombatId>,
         /// The pile it selects from.
         pile: crate::Pile,
         /// How many it takes, which decides whether it asks at all.
@@ -3194,11 +3400,12 @@ pub enum Played<V: ContentVersion, R> {
         /// Where the card stopped, in the card's own words.
         at: R,
     },
-    /// The play stopped on a `CardSelectCmd` whose filter lets these cards
-    /// through, which are the ones it offers. They stand in one pile, in its
-    /// order.
+    /// The play stopped on a `CardSelectCmd` over the cards of `pile` that
+    /// `filter` lets through. The command lists them once its choice has
+    /// signalled, which [`Rules::among`] does.
     AskingAmong {
-        cards: smallvec::SmallVec<[crate::CardAt<V>; MAX_CARDS_IN_HAND]>,
+        pile: crate::Pile,
+        filter: V::CardFilter,
         /// How many it takes, which decides whether it asks at all.
         selection: Selection,
         at: R,
@@ -3436,9 +3643,10 @@ pub enum Modify<N> {
 /// it. A listener reads whether it is one of them.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModifyHook<V: ContentVersion> {
-    /// `ModifyGoldGained`: the gold the player is about to gain, outside a
-    /// fight.
-    GoldGained,
+    /// `ModifyGoldGained`: the gold `player` is about to gain.
+    GoldGained {
+        player: crate::CombatId,
+    },
     /// `ModifyRestSiteHealAmount`: what a rest site's heal gives the player,
     /// whose maximum health is `max_hp`.
     RestSiteHealAmount {
@@ -3489,6 +3697,8 @@ pub enum ModifyHook<V: ContentVersion> {
         powered: bool,
         /// `cardSource`: the card whose own play gives the block.
         card: Option<V::Card>,
+        /// `cardSource.Owner.Creature`.
+        player: Option<crate::CombatId>,
     },
     /// `ModifyBlockMultiplicative`, over what the additions left.
     BlockMultiplicative {
@@ -3499,6 +3709,8 @@ pub enum ModifyHook<V: ContentVersion> {
         moved: bool,
         /// `cardSource`, as [`ModifyHook::BlockAdditive`] carries it.
         card: Option<V::Card>,
+        /// `cardSource.Owner.Creature`.
+        player: Option<crate::CombatId>,
         /// `cardPlay`, as the play's [`PlayAt`].
         play: Option<PlayAt>,
         /// `cardSource`: which copy gives the block.
@@ -3569,6 +3781,8 @@ pub enum ModifyHook<V: ContentVersion> {
     /// play.
     StarCost {
         card: (crate::CardId<V>, V::Card),
+        /// The card's `Owner.Creature`.
+        player: crate::CombatId,
         /// `Pile.Type` for the copy, or nothing for the play pile.
         pile: Option<crate::Pile>,
     },
@@ -3588,6 +3802,9 @@ pub enum ModifyHook<V: ContentVersion> {
     /// hand or being played. An auto-play reads the pile the card stood in.
     EnergyCost {
         card: (crate::CardId<V>, V::Card),
+        /// The card's `Owner.Creature`, which a listener compares with its
+        /// own.
+        player: crate::CombatId,
         /// `Keywords.Contains(Ethereal)` for the copy.
         ethereal: bool,
         /// The copy's `Affliction`.
@@ -3600,17 +3817,22 @@ pub enum ModifyHook<V: ContentVersion> {
     /// left.
     EnergyCostLate {
         card: (crate::CardId<V>, V::Card),
+        /// The card's `Owner.Creature`.
+        player: crate::CombatId,
         ethereal: bool,
         affliction: Option<V::Affliction>,
         pile: Option<crate::Pile>,
     },
-    /// `ModifyOrbPassiveTriggerCounts`: how many times one of the player's
+    /// `ModifyOrbPassiveTriggerCounts`: how many times one of `player`'s
     /// orbs triggers its passive. `first` is whether it is `Orbs[0]`.
     OrbPassiveTriggerCount {
+        player: crate::CombatId,
         first: bool,
     },
-    /// `ModifyXValue`: the X a card of the player's resolves to.
-    XValue,
+    /// `ModifyXValue`: the X a card of `player`'s resolves to.
+    XValue {
+        player: crate::CombatId,
+    },
     /// `ModifyOrbValue`: a number `player`'s orb shows, as its passive or its
     /// evoke reads it.
     OrbValue {
@@ -3622,6 +3844,8 @@ pub enum ModifyHook<V: ContentVersion> {
     CardPlayCount {
         player: crate::CombatId,
         card: V::Card,
+        /// `CardPlay.Target`, which a listener can read.
+        target: Option<crate::CombatId>,
     },
 }
 
@@ -3631,7 +3855,7 @@ impl<V: ContentVersion> ModifyHook<V> {
     /// run's, which keep answering.
     pub const fn combat_listeners(&self) -> bool {
         match self {
-            ModifyHook::GoldGained
+            ModifyHook::GoldGained { .. }
             | ModifyHook::RestSiteHealAmount { .. }
             | ModifyHook::OddsIncreaseForUnrolledRoomType { .. }
             | ModifyHook::DamageAdditive { .. }
@@ -3655,7 +3879,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             | ModifyHook::EnergyCost { .. }
             | ModifyHook::EnergyCostLate { .. }
             | ModifyHook::OrbPassiveTriggerCount { .. }
-            | ModifyHook::XValue
+            | ModifyHook::XValue { .. }
             | ModifyHook::OrbValue { .. }
             | ModifyHook::CardPlayCount { .. } => true,
         }
@@ -3682,7 +3906,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             }
             ModifyHook::PowerAmountReceived { .. } => ModelHook::TryModifyPowerAmountReceived,
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
-            ModifyHook::GoldGained => ModelHook::ModifyGoldGained,
+            ModifyHook::GoldGained { .. } => ModelHook::ModifyGoldGained,
             ModifyHook::RestSiteHealAmount { .. } => ModelHook::ModifyRestSiteHealAmount,
             ModifyHook::OddsIncreaseForUnrolledRoomType { .. } => {
                 ModelHook::ModifyOddsIncreaseForUnrolledRoomType
@@ -3696,7 +3920,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::CardPlayCount { .. } => ModelHook::ModifyCardPlayCount,
             ModifyHook::OrbValue { .. } => ModelHook::ModifyOrbValue,
             ModifyHook::OrbPassiveTriggerCount { .. } => ModelHook::ModifyOrbPassiveTriggerCounts,
-            ModifyHook::XValue => ModelHook::ModifyXValue,
+            ModifyHook::XValue { .. } => ModelHook::ModifyXValue,
         }
     }
 }
@@ -3710,12 +3934,8 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `PowerModel.OwnerIsSecondaryEnemy`, which the game reads off the
     /// powers on one creature rather than raising.
     ShouldCountForCombatEnd,
-    /// `ShouldClearBlock`, as `creature` starts its turn. `player` is the
-    /// player's creature, which a relic reads its owner as.
-    ShouldClearBlock {
-        creature: crate::CombatId,
-        player: crate::CombatId,
-    },
+    /// `ShouldClearBlock`, as `creature` starts its turn.
+    ShouldClearBlock { creature: crate::CombatId },
     /// `ShouldFlush`, as `player`'s turn ends. A hand any listener answers no
     /// for keeps every card.
     ShouldFlush {
@@ -3728,6 +3948,8 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `BlockedByHook`.
     ShouldPlay {
         card: V::Card,
+        /// `card.Owner.Creature`.
+        player: crate::CombatId,
         affliction: Option<V::Affliction>,
         /// `autoPlayType != AutoPlayType.None`: the play is an auto-play.
         auto: bool,
@@ -3738,32 +3960,35 @@ pub enum DecisionHook<V: ContentVersion> {
     /// answers no to draws nothing. `hand_draw` is `fromHandDraw`, which the
     /// turn's own draw is.
     /// `ShouldDie`, as `creature`'s hit points are gone, asked ahead of
-    /// [`DecisionHook::ShouldDieLate`]. `player` is the player's creature.
-    ShouldDie {
-        creature: crate::CombatId,
-        player: crate::CombatId,
-    },
-    /// `ShouldDieLate`, as `creature`'s hit points are gone. `player` is the
-    /// player's creature, which a relic reads its owner as. A creature no
+    /// [`DecisionHook::ShouldDieLate`]. A listener compares it with its own
+    /// owner.
+    ShouldDie { creature: crate::CombatId },
+    /// `ShouldDieLate`, as `creature`'s hit points are gone. A creature no
     /// listener lets die stays in the fight.
-    ShouldDieLate {
-        creature: crate::CombatId,
-        player: crate::CombatId,
-    },
+    ShouldDieLate { creature: crate::CombatId },
     /// `ShouldForcePotionReward`, as a won fight's rewards roll for a potion
     /// in a room of this type. One listener answering yes gives the potion.
-    ShouldForcePotionReward { room: V::RoomType },
+    ShouldForcePotionReward {
+        /// The player whose rewards these are.
+        player: crate::CombatId,
+        room: V::RoomType,
+    },
     /// `ShouldTakeExtraTurn`, once the player's turn is over. `plays` is the
     /// player's plays finished this turn that no auto-play made. One
     /// listener answering yes keeps the turn with the player. `turn` is the
     /// player's `TurnNumber`.
-    ShouldTakeExtraTurn { plays: u8, turn: V::Count },
+    ShouldTakeExtraTurn {
+        /// The player asked about.
+        player: crate::CombatId,
+        plays: u8,
+        turn: V::Count,
+    },
     /// `ShouldRefillMerchantEntry`, once a shelf's purchase went through. One
     /// listener answering yes restocks the shelf rather than emptying it.
     ShouldRefillMerchantEntry,
     /// `ShouldDisableRemainingRestSiteOptions`, once a rest site's option
     /// went through. One listener answering no keeps the other options up.
-    ShouldDisableRemainingRestSiteOptions,
+    ShouldDisableRemainingRestSiteOptions { player: crate::CombatId },
     /// `ShouldGenerateTreasure`, as a treasure room begins its relic picking.
     /// One listener answering no leaves the chest empty.
     ShouldGenerateTreasure,
@@ -3822,9 +4047,12 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `ShouldAllowMerchantCardRemoval`: whether a merchant's card removal
     /// is on sale. One no marks it used as its slot fills.
     ShouldAllowMerchantCardRemoval,
-    /// `ShouldProcurePotion`: whether the player takes `potion`. One no
+    /// `ShouldProcurePotion`: whether `player` takes `potion`. One no
     /// refuses it.
-    ShouldProcurePotion { potion: V::Potion },
+    ShouldProcurePotion {
+        player: crate::CombatId,
+        potion: V::Potion,
+    },
 }
 
 impl<V: ContentVersion> DecisionHook<V> {
@@ -3856,7 +4084,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldForcePotionReward { .. } => ModelHook::ShouldForcePotionReward,
             DecisionHook::ShouldTakeExtraTurn { .. } => ModelHook::ShouldTakeExtraTurn,
             DecisionHook::ShouldRefillMerchantEntry => ModelHook::ShouldRefillMerchantEntry,
-            DecisionHook::ShouldDisableRemainingRestSiteOptions => {
+            DecisionHook::ShouldDisableRemainingRestSiteOptions { .. } => {
                 ModelHook::ShouldDisableRemainingRestSiteOptions
             }
             DecisionHook::ShouldGenerateTreasure => ModelHook::ShouldGenerateTreasure,
@@ -3872,10 +4100,16 @@ impl<V: ContentVersion> DecisionHook<V> {
 pub enum EventHook<V: ContentVersion> {
     /// `AfterSideTurnStartLate`, once every listener has answered
     /// [`EventHook::SideTurnStart`].
-    SideTurnStartLate { side: V::CombatSide },
+    SideTurnStartLate {
+        side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
+    },
     /// `BeforePotionUsed`, as the player drinks a potion in a fight, before
     /// it leaves the belt.
     PotionUsing {
+        /// `potion.Owner.Creature`, its drinker.
+        player: crate::CombatId,
         /// The creature it is aimed at, where it aims.
         target: Option<crate::CombatId>,
     },
@@ -3883,12 +4117,18 @@ pub enum EventHook<V: ContentVersion> {
     /// `CombatManager.IsInProgress`, and `holding_potions` is
     /// `Owner.Potions.Any()`.
     PotionUsed {
+        /// `potion.Owner.Creature`, its drinker.
+        player: crate::CombatId,
         in_fight: bool,
         holding_potions: bool,
     },
     /// `AfterPotionProcured`, once a potion is in a belt slot. `in_fight` is
-    /// `CombatManager.IsInProgress`.
-    PotionProcured { in_fight: bool },
+    /// `CombatManager.IsInProgress`, and `holding_potions` is
+    /// `Owner.Potions.Any()`.
+    PotionProcured {
+        in_fight: bool,
+        holding_potions: bool,
+    },
     /// `AfterPotionDiscarded`, once a potion leaves the belt unused.
     /// `in_fight` is `CombatManager.IsInProgress`, and `holding_potions` is
     /// `Owner.Potions.Any()`.
@@ -3921,6 +4161,8 @@ pub enum EventHook<V: ContentVersion> {
     CardPlayedLate {
         card: V::Card,
         id: crate::CardId<V>,
+        /// `CardPlay.Card.Owner.Creature`.
+        player: crate::CombatId,
         /// `CardPlay.Resources.EnergyValue`: the energy the play spent.
         energy: V::Count,
     },
@@ -3934,7 +4176,11 @@ pub enum EventHook<V: ContentVersion> {
     EnergyGainModified,
     /// `AfterStarsGained`, once `PlayerCmd.GainStars` has added `amount` to
     /// the player's stars.
-    StarsGained { amount: V::Number },
+    StarsGained {
+        /// `gainer.Creature`.
+        player: crate::CombatId,
+        amount: V::Number,
+    },
     /// `AfterBlockGained`, once `CreatureCmd.GainBlock` has given `creature`
     /// `amount`, which is what the modifiers left, and can be none.
     BlockGained {
@@ -3943,12 +4189,14 @@ pub enum EventHook<V: ContentVersion> {
         /// Whether the game's decimal was above nothing. A fraction below one
         /// is, though `amount` floors it to nothing.
         positive: bool,
+        /// `CombatState.CurrentSide`: whose turn the gain falls in.
+        side: V::CombatSide,
     },
     /// `AfterPreventingDraw`, once a listener answered no to `ShouldDraw`.
     DrawPrevented,
-    /// `AfterShuffle`, once the discard pile is shuffled into the draw pile.
-    /// A fight here has one player, who is the shuffler.
-    Shuffled,
+    /// `AfterShuffle`, once `player`'s discard pile is shuffled into their
+    /// draw pile.
+    Shuffled { player: crate::CombatId },
     /// `ModifyShuffleOrder`, over the draw pile just shuffled. `initial` is
     /// the shuffle a fight opens on.
     ShuffleOrder { initial: bool },
@@ -3958,8 +4206,9 @@ pub enum EventHook<V: ContentVersion> {
         /// `RunState.CurrentActIndex`.
         act: usize,
     },
-    /// `ModifyGeneratedMap`, as the act at this index has its map generated.
-    GeneratedMap { act: usize },
+    /// `ModifyGeneratedMap`, as the act at this index has its map generated,
+    /// in a run of `players` players.
+    GeneratedMap { act: usize, players: usize },
     /// `ModifyGeneratedMapLate`, once every listener has heard
     /// [`EventHook::GeneratedMap`].
     GeneratedMapLate { act: usize },
@@ -3968,7 +4217,11 @@ pub enum EventHook<V: ContentVersion> {
     /// options take a change to their pools. `elite_encounter` is a won
     /// elite's reward: `Source` is `Encounter` and `RarityOdds` is
     /// `EliteEncounter`.
-    CardRewardCreationOptions { elite_encounter: bool },
+    CardRewardCreationOptions {
+        /// The player the reward is for.
+        player: crate::CombatId,
+        elite_encounter: bool,
+    },
     /// `ModifyMerchantCardPool`, as a merchant stocks a card from the
     /// character's own pool. The colorless shelves are left out, which every
     /// listener here leaves alone.
@@ -3983,9 +4236,10 @@ pub enum EventHook<V: ContentVersion> {
         /// room stands on, whatever room it rolled. None off the map.
         point: Option<V::MapPointType>,
         /// How many cards the deck holds, which a relic reads off its owner.
+        /// The walk fills in each listener's own player's.
         deck: usize,
-        /// The first player's hit points, which `Terminal` reads for every
-        /// player.
+        /// The player's hit points, which the walk fills in for each
+        /// listener's owner. A modifier reads the first player's.
         player: PlayerHealth<V>,
         /// `room == RunState.BaseRoom`: not a room an event opened inside its
         /// own.
@@ -4005,11 +4259,15 @@ pub enum EventHook<V: ContentVersion> {
     /// `TryModifyRewardsLate`, once `TryModifyRewards` is through, for the
     /// same rewards as [`EventHook::ModifyRewards`].
     ModifyRewardsLate { room: Option<V::RoomType> },
-    /// `TryModifyCardRewardAlternatives`, for one card reward.
-    CardRewardAlternatives,
-    /// A card reward's alternative chosen, which is its `OnSelect`. Only the
-    /// model that added it hears it.
-    CardRewardAlternativeChosen(crate::RewardAlternative),
+    /// `TryModifyCardRewardAlternatives`, for one card reward of `player`'s.
+    CardRewardAlternatives { player: crate::CombatId },
+    /// A card reward of `player`'s, its alternative chosen, which is the
+    /// `OnSelect` of the model that added it. That model is `player`'s own,
+    /// and only it hears this.
+    CardRewardAlternativeChosen {
+        alternative: crate::RewardAlternative,
+        player: crate::CombatId,
+    },
     /// `BeforeCombatStart`, once the fight is built and before it opens, in
     /// a room of this type. `holding_potions` is `Owner.Potions.Any()`.
     CombatStarting {
@@ -4025,13 +4283,22 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterCombatEnd`, for the fight the run has just finished, in a room
     /// of this type.
     CombatEnd { room: V::RoomType },
-    /// `AfterRestSiteHeal`, once a rest site's heal has landed. `mimicked`
-    /// for a heal an event gives the way a rest site does. `max_hp` is the
-    /// player's maximum health then.
-    RestSiteHeal { mimicked: bool, max_hp: V::Number },
+    /// `AfterRestSiteHeal`, once a rest site's heal has landed on `player`,
+    /// whom a relic compares with its owner. `mimicked` for a heal an event
+    /// gives the way a rest site does. `max_hp` is that player's maximum
+    /// health then.
+    RestSiteHeal {
+        player: crate::CombatId,
+        mimicked: bool,
+        max_hp: V::Number,
+    },
     /// `TryModifyRestSiteHealRewards`, once `AfterRestSiteHeal` has run. A
     /// listener answers with the rewards it adds.
-    RestSiteHealRewards { mimicked: bool },
+    RestSiteHealRewards {
+        /// The player healed.
+        player: crate::CombatId,
+        mimicked: bool,
+    },
     /// `AfterCombatVictoryEarly`, raised on every listener before any hears
     /// `AfterCombatVictory`.
     CombatVictoryEarly { room: V::RoomType },
@@ -4069,6 +4336,8 @@ pub enum EventHook<V: ContentVersion> {
     /// turn ends.
     BeforeSideTurnEndVeryEarly {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         /// The player's `Block`, which a relic reads off its owner.
         block: V::Number,
     },
@@ -4112,6 +4381,8 @@ pub enum EventHook<V: ContentVersion> {
     /// fight. `cloned` is `clonedBy` being set, for a copy a listener made.
     AddedToDeck {
         card: V::Card,
+        /// `card.Owner.Creature`, whose deck it joined.
+        player: crate::CombatId,
         id: crate::DeckCardId,
         cloned: bool,
         /// `CardCmd.Transform` landed it, which hands the hook the deck as
@@ -4146,11 +4417,17 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterOrbEvoked`, once an orb's evoke has run. The creatures it hit
     /// stay with the fight, which [`HookEffect::DamageTargets`] reaches.
-    OrbEvoked { orb: V::Orb },
+    OrbEvoked {
+        /// The orb's `Owner.Creature`.
+        player: crate::CombatId,
+        orb: V::Orb,
+    },
     /// `AfterCardExhausted`, once the card lies in the exhaust pile.
     CardExhausted {
         card: V::Card,
         id: crate::CardId<V>,
+        /// `card.Owner.Creature`.
+        player: crate::CombatId,
         /// `causedByEthereal`: Ethereal exhausted it as its turn ended.
         ethereal: bool,
     },
@@ -4159,6 +4436,9 @@ pub enum EventHook<V: ContentVersion> {
         card: V::Card,
         /// `CardPlay.Card`: which copy.
         id: crate::CardId<V>,
+        /// `CardPlay.Card.Owner.Creature`, which a listener compares with
+        /// its own.
+        player: crate::CombatId,
         /// `CardPlay.Card.Affliction`.
         affliction: Option<V::Affliction>,
         /// `Keywords.Contains(Ethereal)` for the copy.
@@ -4249,6 +4529,9 @@ pub enum EventHook<V: ContentVersion> {
     CardPlaying {
         card: V::Card,
         id: crate::CardId<V>,
+        /// The card's `Owner.Creature`, which a listener compares with its
+        /// own.
+        player: crate::CombatId,
         /// The copy's `Affliction`.
         affliction: Option<V::Affliction>,
         /// `CardPlay.Target`.
@@ -4264,12 +4547,16 @@ pub enum EventHook<V: ContentVersion> {
         side: V::CombatSide,
         /// `IsDupe`: the copy is a dupe, made to be played once.
         dupe: bool,
+        /// `CardPlay.IsFirstInSeries`: the first of the card's replays.
+        first: bool,
     },
     /// `AfterCardDrawnEarly`, the pass `Hook.AfterCardDrawn` makes over every
     /// listener before the one [`EventHook::CardDrawn`] names.
     CardDrawnEarly {
         card: V::Card,
         id: crate::CardId<V>,
+        /// `card.Owner.Creature`.
+        player: crate::CombatId,
         /// `fromHandDraw`.
         hand_draw: bool,
     },
@@ -4281,6 +4568,8 @@ pub enum EventHook<V: ContentVersion> {
     CardDrawn {
         card: V::Card,
         id: crate::CardId<V>,
+        /// `card.Owner.Creature`.
+        player: crate::CombatId,
         /// `Keywords.Contains(Ethereal)` for the copy drawn, which a word
         /// written on it counts toward.
         ethereal: bool,
@@ -4301,6 +4590,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `RoundNumber`, which an extra turn does not move on.
     BeforeSideTurnStart {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         turn: V::Count,
         round: V::Count,
     },
@@ -4308,6 +4599,8 @@ pub enum EventHook<V: ContentVersion> {
     /// this type.
     SideTurnStart {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         turn: V::Count,
         /// `RoundNumber`, which an extra turn does not move on.
         round: V::Count,
@@ -4315,9 +4608,14 @@ pub enum EventHook<V: ContentVersion> {
         /// `CombatManager.PlayersTakingExtraTurn` is not empty: the player
         /// takes another turn, and the enemy's turn did not run between.
         extra: bool,
+        /// `RunState.Players.Count`, which an enemy's Plating loses each of
+        /// its turns.
+        players: u8,
     },
     BeforeSideTurnEndEarly {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         /// The player's plays finished this turn that no auto-play made,
         /// which a listener reads off `CardPlaysFinished`, at most 255.
         plays: u8,
@@ -4325,10 +4623,12 @@ pub enum EventHook<V: ContentVersion> {
         turn: V::Count,
     },
     /// `AfterTakingExtraTurn`, as the player's side keeps the turn.
-    TakingExtraTurn,
+    TakingExtraTurn { player: crate::CombatId },
     /// `BeforeSideTurnEnd`, the last of the three before a side's turn ends.
     BeforeSideTurnEnd {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         /// The player's `PlayerCombatState.Energy`, which a listener reads.
         energy: V::Count,
         /// How many cards the player's hand holds, which a card in it reads
@@ -4337,11 +4637,17 @@ pub enum EventHook<V: ContentVersion> {
     },
     SideTurnEnd {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         /// The player's `Creature.Block`, which a listener reads.
         block: V::Number,
     },
     /// `AfterSideTurnEndLate`, once every `AfterSideTurnEnd` has run.
-    SideTurnEndLate { side: V::CombatSide },
+    SideTurnEndLate {
+        side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
+    },
     /// `AfterStarsSpent`: `SpendStars` took `amount` from `player`, which is
     /// more than none.
     StarsSpent {
@@ -4357,25 +4663,50 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterAutoPrePlayPhaseEnteredEarly`, once the player's turn is set up,
     /// in the player's `TurnNumber`.
-    AutoPrePlayPhaseEarly { turn: V::Count },
+    AutoPrePlayPhaseEarly {
+        /// The player whose turn it is.
+        player: crate::CombatId,
+        turn: V::Count,
+    },
     /// `AfterAutoPrePlayPhaseEntered`, once every listener heard the early
     /// pass.
-    AutoPrePlayPhase { turn: V::Count },
+    AutoPrePlayPhase {
+        player: crate::CombatId,
+        turn: V::Count,
+    },
     /// `AfterAutoPrePlayPhaseEnteredLate`, the last pass before the play
     /// phase.
-    AutoPrePlayPhaseLate { turn: V::Count },
+    AutoPrePlayPhaseLate {
+        player: crate::CombatId,
+        turn: V::Count,
+    },
     /// `AfterEnergySpent`, once a card's `SpendEnergy` took `amount` off the
     /// player's pool, which can be none.
-    EnergySpent { amount: V::Number },
+    EnergySpent {
+        /// The spending card's `Owner.Creature`.
+        player: crate::CombatId,
+        amount: V::Number,
+    },
     /// `AfterForge`, once `ForgeCmd.Forge` raised the Sovereign Blades'
     /// damage by `amount`.
-    Forged { amount: V::Number },
+    Forged {
+        amount: V::Number,
+        /// `forger.Creature`.
+        player: crate::CombatId,
+        /// `source`, where a power's hook forged. Nothing for a card's or a
+        /// potion's.
+        source: Option<V::Power>,
+    },
     /// `BeforeFlushLate`, the second pass of `Hook.BeforeFlush`, once
-    /// `DoTurnEnd` is over and before the hand is flushed.
-    FlushingLate,
+    /// `DoTurnEnd` is over and before `player`'s hand is flushed.
+    FlushingLate { player: crate::CombatId },
     /// `AfterAutoPostPlayPhaseEntered`, as `EndPlayerTurnPhaseOne` opens and
     /// before `BeforeTurnEnd`, in the player's `TurnNumber`.
-    AutoPostPlayPhase { turn: V::Count },
+    AutoPostPlayPhase {
+        /// The player whose turn is ending.
+        player: crate::CombatId,
+        turn: V::Count,
+    },
     /// `AfterEnergyReset`, carrying the player's creature.
     EnergyReset {
         player: crate::CombatId,
@@ -4393,19 +4724,22 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterModifyingGoldGained`, asked of the models that changed a gain.
     GoldGainModified,
-    /// `AfterGoldGained`, once gold the player gained has landed.
-    GoldGained,
+    /// `AfterGoldGained`, once gold `player` gained has landed.
+    GoldGained { player: crate::CombatId },
     /// `AfterPreventingBlockClear`, asked of the one model whose
     /// `ShouldClearBlock` kept its owner's block, with the block kept.
     BlockClearPrevented { block: V::Number },
-    /// `AfterFlush`, once the player's hand is flushed. The cards left in
-    /// hand are the ones it retained.
-    Flushed,
-    /// `AfterOrbChanneled`, once an orb is in the player's queue.
-    OrbChanneled,
-    /// `AfterCardDiscarded`, once a card of the player's is in the discard
+    /// `AfterFlush`, once `player`'s hand is flushed. The cards left in hand
+    /// are the ones it retained.
+    Flushed { player: crate::CombatId },
+    /// `AfterOrbChanneled`, once an orb is in `player`'s queue.
+    OrbChanneled { player: crate::CombatId },
+    /// `AfterCardDiscarded`, once a card of `player`'s is in the discard
     /// pile. `side` is the side whose turn it is.
-    CardDiscarded { side: V::CombatSide },
+    CardDiscarded {
+        player: crate::CombatId,
+        side: V::CombatSide,
+    },
     /// `BeforePowerAmountChanged`, as `amount` of `power` is about to land on
     /// `target`, or to change what it carries.
     PowerAmountChanging {
@@ -4510,6 +4844,8 @@ pub enum EventHook<V: ContentVersion> {
     CardEnteredCombat {
         at: crate::CardAt<V>,
         card: V::Card,
+        /// `card.Owner`'s creature, which a listener compares with its own.
+        player: crate::CombatId,
         /// `IsClone`: the card is a clone of another, which is `CloneOf`.
         clone: bool,
         /// The card has an `Affliction`, which a clone keeps from its
@@ -4519,8 +4855,12 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterCardGeneratedForCombat`, once a card made in the fight has
     /// landed where `at` says.
     CardGeneratedForCombat {
-        at: crate::CardAt<V>,
+        /// Nothing for a card made for a dead player, which
+        /// `CardPileCmd.Add` puts in no pile.
+        at: Option<crate::CardAt<V>>,
         card: V::Card,
+        /// `card.Owner.Creature`.
+        player: crate::CombatId,
         /// The player that made it. Nothing for a card a monster gave.
         creator: Option<crate::CombatId>,
     },
@@ -4531,8 +4871,9 @@ pub enum EventHook<V: ContentVersion> {
         /// `Attacker`.
         attacker: crate::CombatId,
         /// `ModelSource`, which is the card for a card's attack and nothing
-        /// for a monster's: which copy, and which card it is.
-        source: Option<(crate::CardId<V>, V::Card)>,
+        /// for a monster's: which copy, which card it is, and its
+        /// `Owner.Creature`.
+        source: Option<(crate::CardId<V>, V::Card, crate::CombatId)>,
         /// `DamageProps.IsPoweredAttack()`.
         powered: bool,
     },
@@ -4550,6 +4891,8 @@ pub enum EventHook<V: ContentVersion> {
         command: AttackId,
         /// `Attacker`.
         attacker: crate::CombatId,
+        /// `Attacker.PetOwner.Creature`, for a pet's attack.
+        pet_of: Option<crate::CombatId>,
         /// `ModelSource` where it is a card: which copy, and which card.
         source: Option<(crate::CardId<V>, V::Card)>,
         /// `Attacker.Monster`, which is nothing for the player.
@@ -4568,6 +4911,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `BeforeCombatRewardOffered`, once a won fight's rewards are made and
     /// before they are offered. A hook v0.111.0 has and v0.107.1 lacks.
     CombatRewardOffering {
+        /// `rewards.Player`: whose rewards they are.
+        player: crate::CombatId,
         /// Whether a `CardReward` is among them.
         card_reward: bool,
     },
@@ -4590,13 +4935,13 @@ impl<V: ContentVersion> EventHook<V> {
     pub fn model_hook(&self) -> Option<ModelHook> {
         Some(match self {
             EventHook::ShuffleOrder { .. } => ModelHook::ModifyShuffleOrder,
-            EventHook::Shuffled => ModelHook::AfterShuffle,
+            EventHook::Shuffled { .. } => ModelHook::AfterShuffle,
             EventHook::DrawPrevented => ModelHook::AfterPreventingDraw,
             EventHook::HandDrawModified => ModelHook::AfterModifyingHandDraw,
             EventHook::EnergyGainModified => ModelHook::AfterModifyingEnergyGain,
             EventHook::StarsGained { .. } => ModelHook::AfterStarsGained,
             EventHook::BlockGained { .. } => ModelHook::AfterBlockGained,
-            EventHook::FlushingLate => ModelHook::BeforeFlushLate,
+            EventHook::FlushingLate { .. } => ModelHook::BeforeFlushLate,
             EventHook::EnergySpent { .. } => ModelHook::AfterEnergySpent,
             EventHook::Forged { .. } => ModelHook::AfterForge,
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
@@ -4626,14 +4971,15 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::MerchantCardPool => ModelHook::ModifyMerchantCardPool,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::ModifyRewardsLate { .. } => ModelHook::TryModifyRewardsLate,
-            EventHook::CardRewardAlternatives | EventHook::CardRewardAlternativeChosen(_) => {
+            EventHook::CardRewardAlternatives { .. }
+            | EventHook::CardRewardAlternativeChosen { .. } => {
                 ModelHook::TryModifyCardRewardAlternatives
             }
             EventHook::CombatStarting { .. } => ModelHook::BeforeCombatStart,
             EventHook::CombatStartingLate { .. } => ModelHook::BeforeCombatStartLate,
             EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
-            EventHook::Flushed => ModelHook::AfterFlush,
-            EventHook::OrbChanneled => ModelHook::AfterOrbChanneled,
+            EventHook::Flushed { .. } => ModelHook::AfterFlush,
+            EventHook::OrbChanneled { .. } => ModelHook::AfterOrbChanneled,
             EventHook::CardDiscarded { .. } => ModelHook::AfterCardDiscarded,
             EventHook::PowerAmountChanging { .. } => ModelHook::BeforePowerAmountChanged,
             EventHook::BlockAmountModified { .. } => ModelHook::AfterModifyingBlockAmount,
@@ -4668,7 +5014,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CardPlaying { .. } => ModelHook::BeforeCardPlayed,
             EventHook::BeforeSideTurnStart { .. } => ModelHook::BeforeSideTurnStart,
             EventHook::SideTurnStart { .. } => ModelHook::AfterSideTurnStart,
-            EventHook::TakingExtraTurn => ModelHook::AfterTakingExtraTurn,
+            EventHook::TakingExtraTurn { .. } => ModelHook::AfterTakingExtraTurn,
             EventHook::BeforeSideTurnEndEarly { .. } => ModelHook::BeforeSideTurnEndEarly,
             EventHook::BeforeSideTurnEnd { .. } => ModelHook::BeforeSideTurnEnd,
             EventHook::SideTurnEnd { .. } => ModelHook::AfterSideTurnEnd,
@@ -4682,7 +5028,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::HandEmptied { .. } => ModelHook::AfterHandEmptied,
             EventHook::BlockCleared { .. } => ModelHook::AfterBlockCleared,
             EventHook::GoldGainModified => ModelHook::AfterModifyingGoldGained,
-            EventHook::GoldGained => ModelHook::AfterGoldGained,
+            EventHook::GoldGained { .. } => ModelHook::AfterGoldGained,
             EventHook::AfterDeath { .. } => ModelHook::AfterDeath,
             EventHook::BeforeDeath { .. } => ModelHook::BeforeDeath,
             EventHook::BlockBroken { .. } => ModelHook::AfterBlockBroken,
@@ -4735,6 +5081,23 @@ pub enum PowerVirtual {
     BeforeApplied,
     AfterApplied,
     AfterRemoved,
+}
+
+/// [`Fight::power_instances`]: each instance's `Target` and stack.
+pub type PowerInstances<V> = smallvec::SmallVec<
+    [(
+        Option<crate::CombatId>,
+        PowerAmount<<V as ContentVersion>::Number>,
+    ); 4],
+>;
+
+/// Whom a monster aims a starting power at, one instance for each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Aim {
+    /// `CombatState.GetOpponentsOf`, pets included.
+    EachOpponent,
+    /// `CombatState.Players`.
+    EachPlayer,
 }
 
 /// One power instance a creature holds, as a card that copies it reads it.
@@ -4792,6 +5155,8 @@ pub enum Writing<V: ContentVersion> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayStarted<V: ContentVersion> {
     pub card: V::Card,
+    /// `CardPlay.Player`: whose play it is, by their creature.
+    pub player: crate::CombatId,
     /// Which copy it is, which `CardPlay.Card` is.
     pub id: crate::CardId<V>,
     /// `CardPlay.Resources.EnergyValue`: what the card costs, which an
@@ -4814,6 +5179,8 @@ pub struct PlayStarted<V: ContentVersion> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayFinished<V: ContentVersion> {
     pub card: V::Card,
+    /// `CardPlay.Player`: whose play it was, by their creature.
+    pub player: crate::CombatId,
     /// Which copy it was, which `CardPlay.Card` is.
     pub id: crate::CardId<V>,
     /// `WasEthereal`: the copy was Ethereal as it was played.
@@ -4833,35 +5200,60 @@ pub enum HistoryEntry<V: ContentVersion> {
     Started(PlayStarted<V>),
     Finished(PlayFinished<V>),
     /// An `EnergySpentEntry`, by its `Amount`, which `CardModel.SpendEnergy`
-    /// records for the player's card whatever plays it.
-    EnergySpent(V::Count),
-    /// A `CardDrawnEntry`, by the card drawn and `FromHandDraw`.
+    /// records for a player's card whatever plays it. `player` is its
+    /// `Actor`, the card's owner.
+    EnergySpent {
+        amount: V::Count,
+        player: crate::CombatId,
+    },
+    /// A `CardDrawnEntry`, by the card drawn and `FromHandDraw`. `player` is
+    /// its `Actor`, the card's owner.
     Drawn {
         card: V::Card,
         hand_draw: bool,
+        player: crate::CombatId,
     },
-    /// A `CreatureAttackedEntry`, by the attacker's `Monster`: nothing for
-    /// the player.
-    Attacked(Option<V::Monster>),
+    /// A `CreatureAttackedEntry`, by the attacker's `Monster`, nothing for a
+    /// player, and the player whose pet it is, as Osty's `PetOwner`.
+    Attacked {
+        monster: Option<V::Monster>,
+        pet_of: Option<crate::CombatId>,
+    },
     BlockGained(BlockGained),
-    /// A `StarsModifiedEntry`, by its `Amount`: the change to the player's
+    /// A `StarsModifiedEntry`, by its `Amount`: the change to `player`'s
     /// stars.
-    StarsModified(V::Number),
-    /// A `CardAfflictedEntry` on one of the player's cards, by the
-    /// affliction. Its `Actor` is the card's owner.
-    Afflicted(V::Affliction),
-    /// A `CardDiscardedEntry`, by the card discarded, which is the player's.
-    Discarded(V::Card),
-    /// A `CardExhaustedEntry`, by the card exhausted, which is the player's.
-    Exhausted(V::Card),
-    /// A `CardGeneratedEntry`, by whether its `Creator` is the player.
+    StarsModified {
+        amount: V::Number,
+        player: crate::CombatId,
+    },
+    /// A `CardAfflictedEntry`, by the affliction. Its `Actor` is the card's
+    /// owner, `player`.
+    Afflicted {
+        affliction: V::Affliction,
+        player: crate::CombatId,
+    },
+    /// A `CardDiscardedEntry`, by the card discarded, of `player`'s.
+    Discarded {
+        card: V::Card,
+        player: crate::CombatId,
+    },
+    /// A `CardExhaustedEntry`, by the card exhausted, of `player`'s.
+    Exhausted {
+        card: V::Card,
+        player: crate::CombatId,
+    },
+    /// A `CardGeneratedEntry`, by its `Creator`'s creature, nothing for a
+    /// card no player made.
     Generated {
-        by_player: bool,
+        creator: Option<crate::CombatId>,
     },
     /// A `DamageReceivedEntry`.
     DamageReceived(DamageReceived<V>),
-    /// An `OrbChanneledEntry`, by the orb, which is the player's.
-    Channelled(V::Orb),
+    /// An `OrbChanneledEntry`, by the orb, of `player`'s.
+    Channelled {
+        orb: V::Orb,
+        player: crate::CombatId,
+    },
     /// A `PowerReceivedEntry`, by the power and who applied it.
     PowerReceived {
         power: V::Power,
@@ -4906,10 +5298,11 @@ pub struct TurnHistory<V: ContentVersion> {
     pub round: V::Count,
     /// `CurrentSide` of that turn.
     pub side: V::CombatSide,
-    /// The player's `TurnNumber` through that turn. It counts up as the
-    /// player's side takes a turn, so the enemies' turn after a player's
+    /// Each player's `TurnNumber` through that turn, by seat, which is what
+    /// `CombatHistoryEntry` keeps for each player. A player's counts up as
+    /// that player takes a turn, so the enemies' turn after a player's
     /// shares its number.
-    pub player_turn: V::Count,
+    pub player_turns: PlayerTurns<V>,
     /// Where its entries end among the fight's. They start where the turn
     /// before it ends them.
     end: u32,
@@ -4923,8 +5316,8 @@ impl<V: ContentVersion> Clone for TurnHistory<V> {
 
 impl<V: ContentVersion> Copy for TurnHistory<V> {}
 
-/// The turns of a fight now over that had entries, and their entries. The
-/// player's entries alone, because a fight here has one player.
+/// The turns of a fight now over that had entries, and their entries, each
+/// player's among them.
 ///
 /// A turn is written onto it as the sides switch. Copies of a fight share
 /// it, and a copy copies it only to end a turn. A fight that runs on alone
@@ -4967,8 +5360,8 @@ impl<V: ContentVersion> Default for PastTurns<V> {
 }
 
 impl<V: ContentVersion> PastTurns<V> {
-    /// The turn at `round` on `side`, in the player's turn `player_turn`, is
-    /// over, with `entries`, oldest first.
+    /// The turn at `round` on `side`, with each player's `TurnNumber` in
+    /// `player_turns`, is over, with `entries`, oldest first.
     ///
     /// # Panics
     ///
@@ -4977,14 +5370,14 @@ impl<V: ContentVersion> PastTurns<V> {
         &mut self,
         round: V::Count,
         side: V::CombatSide,
-        player_turn: V::Count,
+        player_turns: PlayerTurns<V>,
         entries: impl IntoIterator<Item = HistoryEntry<V>>,
     ) {
         self.entries.extend(entries);
         self.turns.push(TurnHistory {
             round,
             side,
-            player_turn,
+            player_turns,
             end: u32::try_from(self.entries.len()).expect("a fight's entries fit a u32"),
         });
     }
@@ -5010,6 +5403,10 @@ impl<V: ContentVersion> PastTurns<V> {
 /// `CombatManager.History`, as far as a listener reads it.
 #[derive(Debug, Clone, Copy)]
 pub struct History<'a, V: ContentVersion> {
+    /// The player whose card plays the reader counts as its owner's, by their
+    /// creature. Each of the game's readers of `CardPlaysStarted` and
+    /// `CardPlaysFinished` keeps its owner's alone, but Gold Axe.
+    pub player: crate::CombatId,
     /// The turn the fight stands in, oldest first.
     pub this_turn: &'a [HistoryEntry<V>],
     /// The turns before it that had entries.
@@ -5017,10 +5414,12 @@ pub struct History<'a, V: ContentVersion> {
 }
 
 impl<V: ContentVersion> History<'_, V> {
-    /// `CardPlaysFinished` where `HappenedThisTurn`.
+    /// `CardPlaysFinished` where `HappenedThisTurn`, of the owner's plays.
     pub fn finished_this_turn(&self) -> impl Iterator<Item = V::Card> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
-            HistoryEntry::Finished(finished) => Some(finished.card),
+            HistoryEntry::Finished(finished) if finished.player == self.player => {
+                Some(finished.card)
+            }
             _ => None,
         })
     }
@@ -5034,21 +5433,35 @@ impl<V: ContentVersion> History<'_, V> {
         turn: V::Count,
     ) -> impl Iterator<Item = PlayFinished<V>> + '_ {
         let last = turn - num_traits::one::<V::Count>();
+        // The players come first among the fight's creatures, so a player's
+        // creature is its seat.
+        let seat = usize::from(self.player.get());
         self.before
             .into_iter()
             .flat_map(PastTurns::latest_first)
-            .take_while(move |(before, _)| before.player_turn >= last)
-            .filter(move |(before, _)| before.player_turn == last)
+            .take_while(move |(before, _)| before.player_turns[seat] >= last)
+            .filter(move |(before, _)| before.player_turns[seat] == last)
             .flat_map(|(_, entries)| entries.iter())
             .filter_map(|entry| match entry {
-                HistoryEntry::Finished(finished) => Some(*finished),
+                HistoryEntry::Finished(finished) if finished.player == self.player => {
+                    Some(*finished)
+                }
                 _ => None,
             })
     }
 
     /// Every `CardPlaysFinished` entry of the fight, the turn it stands in
-    /// first and then the turns before it, latest first.
+    /// first and then the turns before it, latest first, of the owner's
+    /// plays.
     pub fn finished_this_fight(&self) -> impl Iterator<Item = PlayFinished<V>> + '_ {
+        let player = self.player;
+        self.finished_this_fight_by_all()
+            .filter(move |finished| finished.player == player)
+    }
+
+    /// [`History::finished_this_fight`] of every player's plays, which Gold
+    /// Axe counts.
+    pub fn finished_this_fight_by_all(&self) -> impl Iterator<Item = PlayFinished<V>> + '_ {
         let before = self.before.into_iter().flat_map(PastTurns::entries);
         self.this_turn
             .iter()
@@ -5059,37 +5472,43 @@ impl<V: ContentVersion> History<'_, V> {
             })
     }
 
-    /// Each `CreatureAttackedEntry` where `HappenedThisTurn`, by the
-    /// attacker's `Monster`.
-    pub fn attacked_this_turn(&self) -> impl Iterator<Item = Option<V::Monster>> + '_ {
+    /// Each `CreatureAttackedEntry` where `HappenedThisTurn` whose attacker is
+    /// the reader's player's pet, by the attacker's `Monster`.
+    pub fn pet_attacked_this_turn(&self) -> impl Iterator<Item = Option<V::Monster>> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
-            HistoryEntry::Attacked(monster) => Some(*monster),
+            HistoryEntry::Attacked { monster, pet_of } if *pet_of == Some(self.player) => {
+                Some(*monster)
+            }
             _ => None,
         })
     }
 
-    /// `CardPlaysStarted` where `HappenedThisTurn`.
+    /// `CardPlaysStarted` where `HappenedThisTurn`, of the owner's plays.
     pub fn started_this_turn(&self) -> impl Iterator<Item = PlayStarted<V>> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
-            HistoryEntry::Started(started) => Some(*started),
+            HistoryEntry::Started(started) if started.player == self.player => Some(*started),
             _ => None,
         })
     }
 
-    /// Each `CardDrawnEntry` where `HappenedThisTurn`, by the card drawn.
+    /// Each `CardDrawnEntry` where `HappenedThisTurn` of the reader's
+    /// player's, by the card drawn.
     pub fn drawn_this_turn(&self) -> impl Iterator<Item = V::Card> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
-            HistoryEntry::Drawn { card, .. } => Some(*card),
+            HistoryEntry::Drawn { card, player, .. } if *player == self.player => Some(*card),
             _ => None,
         })
     }
 
-    /// `EnergySpentEntry` where `HappenedThisTurn`, summed.
+    /// `EnergySpentEntry` where `HappenedThisTurn` of the reader's player's,
+    /// summed.
     pub fn energy_spent_this_turn(&self) -> V::Count {
         self.this_turn
             .iter()
             .filter_map(|entry| match entry {
-                HistoryEntry::EnergySpent(amount) => Some(*amount),
+                HistoryEntry::EnergySpent { amount, player } if *player == self.player => {
+                    Some(*amount)
+                }
                 _ => None,
             })
             .fold(num_traits::zero(), |spent, amount| spent + amount)
@@ -5106,30 +5525,35 @@ impl<V: ContentVersion> History<'_, V> {
         })
     }
 
-    /// How many `OrbChanneledEntry` of `orb` the fight holds.
+    /// How many `OrbChanneledEntry` of `orb` of the reader's player's the
+    /// fight holds.
     pub fn channelled_this_fight(&self, orb: V::Orb) -> usize {
         let before = self.before.into_iter().flat_map(PastTurns::entries);
         self.this_turn
             .iter()
             .chain(before)
-            .filter(
-                |entry| matches!(entry, HistoryEntry::Channelled(channelled) if *channelled == orb),
-            )
+            .filter(|entry| {
+                matches!(
+                    entry,
+                    HistoryEntry::Channelled { orb: channelled, player }
+                        if *channelled == orb && *player == self.player
+                )
+            })
             .count()
     }
 
-    /// How many `CardDrawnEntry` the fight holds.
+    /// How many `CardDrawnEntry` of the reader's player's the fight holds.
     pub fn drawn_this_fight(&self) -> usize {
         let before = self.before.into_iter().flat_map(PastTurns::entries);
         self.this_turn
             .iter()
             .chain(before)
-            .filter(|entry| matches!(entry, HistoryEntry::Drawn { .. }))
+            .filter(|entry| matches!(entry, HistoryEntry::Drawn { player, .. } if *player == self.player))
             .count()
     }
 
-    /// How many `CardDrawnEntry` where `HappenedThisTurn` are not
-    /// `FromHandDraw`.
+    /// How many `CardDrawnEntry` where `HappenedThisTurn` of the reader's
+    /// player's are not `FromHandDraw`.
     pub fn drawn_outside_hand_draw_this_turn(&self) -> usize {
         self.this_turn
             .iter()
@@ -5138,53 +5562,84 @@ impl<V: ContentVersion> History<'_, V> {
                     entry,
                     HistoryEntry::Drawn {
                         hand_draw: false,
+                        player,
                         ..
-                    }
+                    } if *player == self.player
                 )
             })
             .count()
     }
 
-    /// How many `CardAfflictedEntry` of `affliction` are where
-    /// `HappenedThisTurn`.
+    /// How many `CardAfflictedEntry` of `affliction` on the reader's
+    /// player's cards are where `HappenedThisTurn`.
     pub fn afflicted_this_turn(&self, affliction: V::Affliction) -> usize {
         self.this_turn
             .iter()
-            .filter(|entry| **entry == HistoryEntry::Afflicted(affliction))
+            .filter(|entry| {
+                matches!(
+                    entry,
+                    HistoryEntry::Afflicted { affliction: afflicted, player }
+                        if *afflicted == affliction && *player == self.player
+                )
+            })
             .count()
     }
 
-    /// Each `BlockGainedEntry` where `HappenedThisTurn`.
+    /// Each `BlockGainedEntry` where `HappenedThisTurn` whose `CardPlay` is
+    /// the reader's player's.
     pub fn block_gained_this_turn(&self) -> impl Iterator<Item = BlockGained> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
-            HistoryEntry::BlockGained(gained) => Some(*gained),
+            HistoryEntry::BlockGained(gained)
+                if gained.play.is_some_and(|PlayAt(at)| {
+                    matches!(
+                        self.this_turn.get(at as usize),
+                        Some(HistoryEntry::Started(started)) if started.player == self.player
+                    )
+                }) =>
+            {
+                Some(*gained)
+            }
             _ => None,
         })
     }
 
-    /// How many `CardDiscardedEntry` are where `HappenedThisTurn`.
+    /// How many `CardDiscardedEntry` of the reader's player's are where
+    /// `HappenedThisTurn`.
     pub fn discarded_this_turn(&self) -> usize {
         self.this_turn
             .iter()
-            .filter(|entry| matches!(entry, HistoryEntry::Discarded(_)))
+            .filter(|entry| matches!(entry, HistoryEntry::Discarded { player, .. } if *player == self.player))
             .count()
     }
 
-    /// Whether any `CardExhaustedEntry` is where `HappenedThisTurn`.
+    /// Whether any `CardExhaustedEntry` of the reader's player's is where
+    /// `HappenedThisTurn`.
     pub fn exhausted_this_turn(&self) -> bool {
-        self.this_turn
-            .iter()
-            .any(|entry| matches!(entry, HistoryEntry::Exhausted(_)))
+        self.this_turn.iter().any(|entry| {
+            matches!(entry, HistoryEntry::Exhausted { player, .. } if *player == self.player)
+        })
     }
 
-    /// How many `CardGeneratedEntry` of the fight name the player as their
-    /// `Creator`.
+    /// How many `CardExhaustedEntry` the fight holds, every player's.
+    pub fn exhausted_this_fight(&self) -> usize {
+        let before = self.before.into_iter().flat_map(PastTurns::entries);
+        self.this_turn
+            .iter()
+            .chain(before)
+            .filter(|entry| matches!(entry, HistoryEntry::Exhausted { .. }))
+            .count()
+    }
+
+    /// How many `CardGeneratedEntry` of the fight name the reader's player as
+    /// their `Creator`.
     pub fn generated_by_player(&self) -> usize {
         let before = self.before.into_iter().flat_map(PastTurns::entries);
         self.this_turn
             .iter()
             .chain(before)
-            .filter(|entry| matches!(entry, HistoryEntry::Generated { by_player: true }))
+            .filter(|entry| {
+                matches!(entry, HistoryEntry::Generated { creator } if *creator == Some(self.player))
+            })
             .count()
     }
 
@@ -5209,10 +5664,13 @@ impl<V: ContentVersion> History<'_, V> {
         })
     }
 
-    /// Each `StarsModifiedEntry` where `HappenedThisTurn`, by its `Amount`.
+    /// Each `StarsModifiedEntry` where `HappenedThisTurn` of the reader's
+    /// player's, by its `Amount`.
     pub fn stars_modified_this_turn(&self) -> impl Iterator<Item = V::Number> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
-            HistoryEntry::StarsModified(amount) => Some(*amount),
+            HistoryEntry::StarsModified { amount, player } if *player == self.player => {
+                Some(*amount)
+            }
             _ => None,
         })
     }
@@ -5276,6 +5734,9 @@ pub enum PoolFilter {
 pub enum PilePosition {
     Top,
     Bottom,
+    /// `CardPilePosition.Random`: a place drawn off `Shuffle`, as
+    /// `CardPileCmd.Add` draws one.
+    Random,
 }
 
 /// A card about to leave play, as `ModifyCardPlayResultPileTypeAndPosition`
@@ -5835,6 +6296,14 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the
     /// listener's owner, for a number no power scales.
     DamageOpponents(V::Number),
+    /// `CoveredPower.AfterApplied`: `power`, which is Intercept, onto
+    /// `interceptor` from `covered` unless it carries one, then `covered`
+    /// added to those it covers.
+    Cover {
+        interceptor: crate::CombatId,
+        covered: crate::CombatId,
+        power: V::Power,
+    },
     /// `PowerCmd.Apply<P>(target, amount, applier)`, onto a creature the
     /// listener names, from the creature it names or from nobody.
     ApplyPower {
@@ -6249,6 +6718,12 @@ pub enum HookEffect<V: ContentVersion> {
         card: V::Card,
         amount: V::Number,
     },
+    /// `ForgeCmd.Forge` from a power hook for each living player but the
+    /// power's owner, as `HammerTimePower.AfterForge` forges.
+    ForgeOthers {
+        card: V::Card,
+        amount: V::Number,
+    },
     /// `CreatureCmd.GainBlock` on the listener's owner.
     GainBlock(V::Number),
     /// `CreatureCmd.GainBlock(target, amount, Unpowered)` on a creature the
@@ -6445,6 +6920,14 @@ pub enum HookEffect<V: ContentVersion> {
     /// [`crate::EventBehavior::potion_thrown`] carries out. It is the whole
     /// of the potion's use.
     PotionThrownAtEvent(V::Potion),
+    /// `CreateCloneForPlayer(Owner.Player)` of the card about to be played,
+    /// as it stands, kept outside every pile by the power that asked.
+    /// [`Hooks::power_kept_card`] gives that power the clone's id.
+    KeepCloneOfPlaying,
+    /// `PowerCmd.Decrement(this)`, then `CardCmd.AutoPlay` of the clone the
+    /// power keeps as `kept`, with no target named. The play pile takes the
+    /// clone first, since it stands in no pile.
+    DecrementAndAutoPlayKept(crate::CardId<V>),
 }
 
 /// One build's relic models, which is what a run holds a relic as.
@@ -6636,6 +7119,22 @@ pub trait PowerModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq
     ///
     /// A computed type nobody has ported.
     fn debuff(&self) -> bool;
+
+    /// Whether the effects this power's own hook asked for are being carried
+    /// out, which the fight sets around them. A power that guards against
+    /// hearing itself, as Beacon of Hope's `HasAlreadyBeenGivenBlock` does,
+    /// keeps it. Any other ignores it.
+    fn mark_busy(&mut self, _busy: bool) {}
+
+    /// `InterceptPower.AddCoveredCreature`: `creature` among those it covers,
+    /// once.
+    ///
+    /// # Panics
+    ///
+    /// A power that covers nobody.
+    fn add_covered(&mut self, _creature: crate::CombatId) {
+        unimplemented!("{:?} covering a creature", self.power())
+    }
 }
 
 /// What a card reads off its owner's side of the fight.
@@ -6687,6 +7186,12 @@ pub struct CardOwner<'a, V: ContentVersion> {
     /// How many of the owner's cards in the fight, every pile included, are
     /// tagged `OstyAttack`, this one left out.
     pub osty_attacks_besides: usize,
+    /// `Block` of the creature the card is pointed at, where it is pointed
+    /// at one.
+    pub target_block: Option<V::Number>,
+    /// The creatures on the owner's `Side`, the owner among them, living or
+    /// not.
+    pub allies: &'a [crate::CombatId],
 }
 
 /// What one copy of a card prints, as a rule reads it.
@@ -6725,6 +7230,8 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         holder: crate::CombatId,
         /// `PowerModel.Applier`, the creature whose command put it on.
         applier: Option<crate::CombatId>,
+        /// `PowerModel.Target`, the creature a monster aimed it at.
+        target: Option<crate::CombatId>,
         /// `Owner.Monster`, which is nothing for a power on the player.
         monster: Option<V::Monster>,
         /// `PowerModel.AmountOnTurnStart`: the stack as its holder's side
@@ -6740,8 +7247,12 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         /// its own.
         fight: &'a dyn FightView<V>,
     },
-    /// A potion in the belt, which the fight asks after the relics.
-    Potion(V::Potion),
+    /// A potion in the belt, which the fight asks after the relics. `owner`
+    /// is the creature of the player whose belt holds it.
+    Potion {
+        potion: V::Potion,
+        owner: crate::CombatId,
+    },
     /// A modifier the run was started with. A fight asks the modifiers last,
     /// after every creature's listeners.
     Modifier(V::Modifier),
@@ -6767,6 +7278,8 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         card: V::Card,
         /// Which copy this is.
         id: crate::CardId<V>,
+        /// `Owner.Creature`, the player whose card it is.
+        owner: crate::CombatId,
         printed: &'a P,
         /// `Pile.Type`, and nothing for the play pile.
         pile: Option<crate::Pile>,
@@ -6792,6 +7305,8 @@ pub struct EventPower<'a, V: Hooks> {
     pub holder: crate::CombatId,
     /// `PowerModel.Applier`, the creature whose command put it on.
     pub applier: Option<crate::CombatId>,
+    /// `PowerModel.Target`, the creature a monster aimed it at.
+    pub target: Option<crate::CombatId>,
     /// `Owner.Monster`, which is nothing for a power on the player.
     pub monster: Option<V::Monster>,
     /// `PowerModel.AmountOnTurnStart`.
@@ -6843,6 +7358,17 @@ pub trait Hooks: ContentVersion {
     /// Where a power's model keeps the clone `kept` of a card, which
     /// [`Fight::keep_card_on_power`] hands it.
     fn power_kept_card(state: &mut Self::PowerState, kept: crate::CardId<Self>);
+
+    /// `PowerModel.GetScaledAmountForMultiplayer`: the amount of `power`
+    /// that lands on an enemy in a fight of `players`, where `factor` is the
+    /// act's. `None` for a power whose `ShouldScaleInMultiplayer` is false,
+    /// which the game does not ask.
+    fn power_scaled_for_multiplayer(
+        power: Self::Power,
+        amount: crate::Decimal,
+        players: usize,
+        factor: crate::Decimal,
+    ) -> Option<crate::Decimal>;
 
     fn modify_hook<P: Printed<Self> + ?Sized>(
         listener: Listener<'_, Self, P>,
@@ -6909,7 +7435,7 @@ pub trait Hooks: ContentVersion {
     fn card_result_pile(
         card: Self::Card,
         base: (Option<crate::Pile>, PilePosition),
-    ) -> crate::HookResponse<(Option<crate::Pile>, PilePosition)>;
+    ) -> crate::HookResponse<CardResult>;
 
     /// `write` carried out on the deck card a fight's copy came from.
     fn write_deck_card(card: &mut DeckCard<Self>, write: Self::DeckWrite);
@@ -6993,9 +7519,12 @@ pub trait Hooks: ContentVersion {
     ///
     /// `history` is the fight's, which a card reads the way a power does.
     /// `pile` is where the copy stands, and nothing in the play pile.
+    /// `owner` is `Owner.Creature`, the player whose card it is.
+    #[allow(clippy::too_many_arguments)]
     fn card_event_hook<P: Printed<Self> + ?Sized>(
         card: Self::Card,
         id: crate::CardId<Self>,
+        owner: crate::CombatId,
         pile: Option<crate::Pile>,
         printed: &P,
         history: History<'_, Self>,
@@ -7339,6 +7868,10 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
     /// For a fight of kind `K`: a stopped play holds the rest of itself, and
     /// that rest reaches the fight through `K`'s type.
     type Resume<K: FightKind<Self>>: std::fmt::Debug + Clone + Eq + std::hash::Hash + 'static;
+
+    /// The filter a `CardSelectCmd` lists one pile's cards through, which
+    /// [`Rules::among`] applies.
+    type CardFilter: std::fmt::Debug + Clone + Eq + std::hash::Hash + 'static;
 
     /// Where a card sits in one of a fight's piles.
     ///
@@ -7819,6 +8352,14 @@ pub trait Rules: Hooks + Engine {
     /// `CardModel.OnTurnEnd`, for a card that remains in the hand.
     fn on_card_turn_end<F: Fight<Self>>(card: Self::Card, fight: &mut F);
 
+    /// The cards of `pile` that `filter` lets through, in the pile's order,
+    /// as a `CardSelectCmd` lists them for the fight's player.
+    fn among<F: Fight<Self>>(
+        fight: &F,
+        pile: crate::Pile,
+        filter: &Self::CardFilter,
+    ) -> smallvec::SmallVec<[crate::CardAt<Self>; MAX_CARDS_IN_HAND]>;
+
     /// Continue a card that stopped, with the answer it awaited.
     ///
     /// `at` identifies the card grouping and the point where it stopped.
@@ -7959,11 +8500,14 @@ pub trait Rules: Hooks + Engine {
     ///
     /// `None` is a monster that does not override it, which is nearly all of
     /// them. The rewrite is a `SetMaxAndCurrentHp`, and nothing calls one.
+    /// `scaled` is `Creature.ScaleHpForMultiplayer` for the fight, which a
+    /// rewrite can bound itself by.
     fn monster_health_after_added(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
         rolled: Self::Health,
         teammates: &[Self::Health],
+        scaled: impl Fn(Self::Health) -> crate::Decimal,
     ) -> Option<Self::Health>;
 
     /// `AfterAddedToRoom`'s `SetCurrentHpInternal`, which leaves the maximum
@@ -8070,6 +8614,11 @@ pub trait Rules: Hooks + Engine {
         side: Self::CombatSide,
         model: &Self::MonsterState,
     ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
+
+    /// Whom a monster's `AfterAddedToRoom` aims a starting power at, which
+    /// lands on the monster once for each, with its `Target` set. `None` is
+    /// a power it applies once, aimed at nobody.
+    fn monster_starting_power_aim(monster: Self::Monster, power: Self::Power) -> Option<Aim>;
 
     /// Powers a monster's `AfterAddedToRoom` applies to each of its
     /// opponents, from itself.
@@ -8264,6 +8813,10 @@ pub trait Rules: Hooks + Engine {
         state: &Self::EventState,
         run: &impl crate::EventView<Self>,
     ) -> crate::Room<Self>;
+
+    /// [`crate::EventBehavior::kills`] for the event entered.
+    fn event_kills(state: &Self::EventState, option: u8, run: &impl crate::EventView<Self>)
+    -> bool;
 
     /// Whether the event's `BeforeEventStarted` sets `CanRemovePotions` off,
     /// which its `OnEventFinished` puts back.
