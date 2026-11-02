@@ -40,6 +40,11 @@ impl<V: crate::Build> EventBehavior<V> for UnrestSite {
         )
     }
 
+    /// `WillKillPlayer`, for `Kill`: the maximum it takes.
+    fn kills(&self, _state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 1 && run.max_hp() <= MAX_HP_LOSS
+    }
+
     /// `Rest`: a heal to full, then a Poor Sleep into the deck. `Kill`: its
     /// max HP lost, then the next relic pulled from the front. Each finishes
     /// the event.

@@ -37,6 +37,12 @@ impl<T> BySeat<T> {
         test(&self.host) || (!self.others.is_empty() && self.others.iter().any(test))
     }
 
+    /// Every seat, in order, which leaves `self` free to write on.
+    pub(crate) fn seats(&self) -> impl Iterator<Item = SeatIndex> + use<T> {
+        let len = u8::try_from(self.len()).expect("a run's players fit a u8");
+        (0..len).map(SeatIndex)
+    }
+
     /// Each seat's, beside its seat, in seat order.
     pub(crate) fn seated(&self) -> impl Iterator<Item = (SeatIndex, &T)> {
         (0..)
