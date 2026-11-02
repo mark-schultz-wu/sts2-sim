@@ -7,14 +7,14 @@ use crate::behaviour::relics::Number;
 use crate::ids::PowerIds as _;
 
 /// `ModifyPowerAmountGivenAdditive`: one more of Poison its owner gives.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
         ModifyHook::PowerAmountGivenAdditive {
-            power: __c0,
-            giver,
-            player,
-            ..
-        } if __c0 == V::Power::POISON_POWER && (giver == player) => {
+            power: __c0, giver, ..
+        } if __c0 == V::Power::POISON_POWER && (giver == owner) => {
             Modify::Added(V::Relic::SNECKO_SKULL_POISON_POWER)
         }
         _ => Modify::Nothing,

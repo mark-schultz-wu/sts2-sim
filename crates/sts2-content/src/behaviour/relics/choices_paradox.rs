@@ -4,12 +4,19 @@ use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 /// `AfterPlayerTurnStart` on its owner's first turn: five distinct cards of
-/// the character's pool, each with Retain, and the one chosen into hand. A
-/// relic's owner is the player, and a fight here has one.
+/// the character's pool, each with Retain, and the one chosen into hand.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // `player != Owner`: another player's turn is not its owner's.
+    if let EventHook::PlayerTurnStart { player, .. } = hook
+        && player != owner
+    {
+        return;
+    }
     if let EventHook::PlayerTurnStart { turn: 1, .. } = hook {
         asked.push(HookEffect::ChooseFromPoolIntoHand {
             count: V::Relic::CHOICES_PARADOX_CARDS,

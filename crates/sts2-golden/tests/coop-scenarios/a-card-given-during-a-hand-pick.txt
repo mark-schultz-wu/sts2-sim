@@ -1,0 +1,10 @@
+# The Ironclad picks a card from their hand for Burning Pact, and before they
+# answer, the Regent's Largesse puts a card into that hand.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"REGENT"},{"character":"IRONCLAD"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"LARGESSE","target":1,"seat":0}
+{"cmd":"grant","card":"BURNING_PACT","target":1001,"seat":0}
+{"cmd":"play_card","index":5,"target":null,"seat":1}
+{"cmd":"play_card","index":5,"target":1,"seat":0}
+{"cmd":"answer","pick":0,"seat":1}
+{"cmd":"answer","done":true,"seat":1}

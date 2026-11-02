@@ -25,15 +25,11 @@ pub(crate) struct Entering<'a, V: Rules> {
     /// The floor the fight is fought on, which the run has already stepped up
     /// to. The encounter is rolled against it.
     pub(crate) floor: V::Count,
-    pub(crate) hp: V::Health,
-    pub(crate) max_hp: V::Health,
-    pub(crate) gold: V::Number,
-    /// The player's potions, in slot order.
-    pub(crate) potions: &'a [V::Potion],
+    /// The act the fight is fought in, counted from zero, which scales the
+    /// monsters in a fight of several players.
+    pub(crate) act: usize,
     /// The modifiers the run was started with.
     pub(crate) modifiers: &'a [sts2_core::RunModifier<V>],
-    pub(crate) alive: bool,
-    pub(crate) deck: &'a [sts2_core::DeckCard<V>],
     /// Whether the run reached this room off the map's lines.
     pub(crate) strayed: bool,
     /// The type of the map point the fight stands on. None off the map.
@@ -50,6 +46,18 @@ pub(crate) struct Entering<'a, V: Rules> {
     pub(crate) base: bool,
 }
 
+/// One player as they stand in the door of a fight, in seat order.
+pub(crate) struct EnteringPlayer<'a, V: Rules> {
+    pub(crate) character: V::Character,
+    pub(crate) hp: V::Health,
+    pub(crate) max_hp: V::Health,
+    pub(crate) gold: V::Number,
+    /// The player's potions, in slot order.
+    pub(crate) potions: &'a [V::Potion],
+    pub(crate) alive: bool,
+    pub(crate) deck: &'a [sts2_core::DeckCard<V>],
+}
+
 /// A fight as it opens, with the streams it drew from.
 pub(crate) struct Entered<V: Rules> {
     pub(crate) live: Box<Live<V>>,
@@ -57,8 +65,8 @@ pub(crate) struct Entered<V: Rules> {
     /// How the fight ended before the player took a turn in it, if it did.
     pub(crate) ended: Option<super::Ended>,
     /// What a listener asked of the run as the fight opened, which the run
-    /// carries out once it stands in the fight.
-    pub(crate) arriving: Vec<HookEffect<V>>,
+    /// carries out for its owner once it stands in the fight.
+    pub(crate) arriving: Vec<(sts2_core::SeatIndex, HookEffect<V>)>,
 }
 
 /// The fight this run opens on the encounter it just travelled into.
@@ -69,57 +77,39 @@ pub(crate) struct Entered<V: Rules> {
 #[tracing::instrument(level = "trace", skip_all)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn enter<V: Rules>(
-    seat: sts2_core::SeatIndex,
     raw_seed: u64,
-    character: V::Character,
     ascension: V::AscensionLevel,
     encounter: V::Encounter,
     entering: &Entering<'_, V>,
+    players: &[EnteringPlayer<'_, V>],
     streams: &Streams<V>,
     belts: &mut Belts<V>,
 ) -> Result<Entered<V>, Error> {
     let mut streams = *streams;
-    let energy: V::Count = num_traits::cast(V::max_energy(character))
-        .expect("the starting energy fits the build's count type");
-
     let modifiers = super::live::RunModifiers::holding(entering.modifiers);
-    // Built where it will live, and filled in place.
-    let player = super::live::PlayerCombat {
-        character,
-        phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
-        energy,
-        stars: num_traits::zero(),
-        gold: entering.gold,
-        potions: super::live::PotionBelt::holding(entering.potions, modifiers.hooks),
-        cards: Cards::with_cards(0),
-        removed_from_deck: Vec::new(),
-        ending_turn: false,
-        effect_depth: 0,
-        deck_versions: super::live::DeckVersions::none(),
-        taken_from_deck: Vec::new(),
-        exhaust_next: smallvec::SmallVec::new(),
-        // `PlayerCombatState` opens on `BaseOrbSlotCount` empty slots. Absent
-        // rather than empty for a character with none: the subsystem is inert
-        // until something gives the player a slot.
-        orbs: match V::orb_slots(character) {
-            0 => None,
-            slots => Some(sts2_core::Orbs {
-                capacity: num_traits::cast(slots).expect("a slot count fits the build's count"),
-                queue: Vec::new(),
-            }),
-        },
+    let [first, others @ ..] = players else {
+        unreachable!("a fight has a player");
     };
+    let combat_of = |player: &EnteringPlayer<'_, V>| player_combat::<V>(player, &modifiers);
+    let host_combat = combat_of(first);
+    let others_combat = others.iter().map(combat_of).collect();
+    // What no one player owns acts as the first.
+    let host = sts2_core::SeatIndex(0);
     let mut live = Box::new(Live {
-        players: crate::seats::BySeat::new(player, Vec::new()),
+        players: crate::seats::BySeat::new(host_combat, others_combat),
         ascension,
-        turn: num_traits::one(),
         modifiers,
         round: num_traits::one(),
+        starting: sts2_core::Participants::default(),
+        turns_apart: false,
+        taking: 0,
+        ending: sts2_core::Participants::default(),
         side: <V::CombatSide as SideKinds>::PLAYER,
         history: super::live::CombatHistory::new(),
         kept: Vec::new(),
         encounter,
         encounter_state: sts2_core::EncounterModel::new(encounter),
+        scaling: monster::Scaling::of::<V>(players.len(), encounter, entering.act),
         in_progress: false,
         point: entering.coord,
         extra_rewards: Vec::new(),
@@ -150,29 +140,39 @@ pub(crate) fn enter<V: Rules>(
         asking: None,
         deferred: super::live::Deferrals::new(),
         queues: super::queues::Queues::new(),
+        after_picks: None,
         waited_attack: None,
     });
 
-    // Id zero, and the enemies from one. `CombatId` counts from the player.
-    live.creatures.push(Fighter {
-        id: CombatId::new(nonmax::NonMaxU8::ZERO),
-        model: Some(ModelId::Character(character)),
-        side: <V::CombatSide as SideKinds>::PLAYER,
-        hp: entering.hp,
-        max_hp: entering.max_hp,
-        block: num_traits::zero(),
-        alive: entering.alive,
-        next_move: None,
-        owner: None,
-    });
+    // `AddPlayer` for each player in run order, then the monsters.
+    // `CombatId` counts from the first player.
+    for (at, player) in players.iter().enumerate() {
+        let id = u8::try_from(at)
+            .ok()
+            .and_then(nonmax::NonMaxU8::new)
+            .ok_or(Error::CreatureIdOverflow)?;
+        live.creatures.push(Fighter {
+            id: CombatId::new(id),
+            model: Some(ModelId::Character(player.character)),
+            side: <V::CombatSide as SideKinds>::PLAYER,
+            hp: player.hp,
+            max_hp: player.max_hp,
+            block: num_traits::zero(),
+            alive: player.alive,
+            next_move: None,
+            owner: None,
+        });
+    }
     let monsters = encounter::opening::<V>(raw_seed, entering.floor, encounter, entering.roster)?;
     let Live {
         creatures,
         machines,
+        scaling,
         ..
     } = &mut *live;
     monster::initialize::<V>(
         ascension,
+        *scaling,
         encounter,
         &mut streams,
         monster::Roster {
@@ -189,44 +189,53 @@ pub(crate) fn enter<V: Rules>(
         .max_by_key(|id| id.get())
         .unwrap_or(live.last_creature);
 
-    // The deck's own cards, each becoming a copy the fight can write on, in
-    // the order `PopulateCombatState` shuffles them into the draw pile as the
-    // fight is set up. They are dealt once the first energy is in.
+    // Each player's deck, each card becoming a copy the fight can write on,
+    // in the order `PopulateCombatState` shuffles it into the draw pile as
+    // the fight is set up. One player after another, off the run's one
+    // shuffle stream. They are dealt once the first energy is in.
     // `DeckVersion`, set on each of them.
-    if !entering.deck.is_empty() {
-        let ids = entering.deck.iter().map(|card| card.id).collect();
-        live.players[seat].deck_versions =
-            super::live::DeckVersions::new(live.card_ids.peek(), ids);
+    let mut orders: smallvec::SmallVec<[Vec<CardInstance<V>>; 1]> = smallvec::SmallVec::new();
+    for (at, player) in players.iter().enumerate() {
+        let seat = sts2_core::SeatIndex(u8::try_from(at).expect("a fight's players fit a u8"));
+        if !player.deck.is_empty() {
+            let ids = player.deck.iter().map(|card| card.id).collect();
+            live.players[seat].deck_versions =
+                super::live::DeckVersions::new(live.card_ids.peek(), ids);
+        }
+        let deck: Vec<CardInstance<V>> = player
+            .deck
+            .iter()
+            .map(|card| {
+                let mut copy = CardInstance::new(card.ident, live.card_ids.mint());
+                if let Some(change) = sts2_core::CardModel::written(&card.state) {
+                    copy.face.modify(change, sts2_core::Lasting::ThisFight);
+                }
+                copy
+            })
+            .collect();
+        orders.push(pile::shuffle(streams.combat().shuffle, deck).into_cards());
     }
-    let deck: Vec<CardInstance<V>> = entering
-        .deck
-        .iter()
-        .map(|card| {
-            let mut copy = CardInstance::new(card.ident, live.card_ids.mint());
-            if let Some(change) = sts2_core::CardModel::written(&card.state) {
-                copy.face.modify(change, sts2_core::Lasting::ThisFight);
-            }
-            copy
-        })
-        .collect();
-    let mut order = pile::shuffle(streams.combat().shuffle, deck).into_cards();
-    // `AfterRoomEntered` as the room opens, before anything is drawn.
+    // `AfterRoomEntered` as the room opens, before anything is drawn. A
+    // listener reads its own player's numbers, which the walk fills in.
+    let host_deck = first.deck.len();
     let entered = EventHook::RoomEntered {
         room: live.room(),
         strayed: entering.strayed,
         point: entering.point,
-        deck: entering.deck.len(),
+        deck: host_deck,
         player: sts2_core::PlayerHealth {
-            hp: live.player(seat).hp,
-            max_hp: live.player(seat).max_hp,
+            hp: live.player(host).hp,
+            max_hp: live.player(host).max_hp,
         },
         base: entering.base,
     };
     let mut walking = super::listen::Walking::begin(&live, belts, entered);
-    while let Some((_, effect)) = walking
+    while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, &mut live, belts))
+        .and_then(|walking| walking.next(host, &mut live, belts))
     {
+        let seat = super::listen::owner::<V>(&live, listener).unwrap_or(host);
+        let order = &mut orders[seat.at()];
         match effect {
             // `PlayerCmd.GainStars`.
             HookEffect::GainStars(gained) => {
@@ -397,9 +406,10 @@ pub(crate) fn enter<V: Rules>(
         creatures,
         powers,
         machines,
+        scaling,
         ..
     } = &mut *live;
-    monster::added_to_room::<V>(ascension, creatures, powers, machines);
+    monster::added_to_room::<V>(ascension, *scaling, creatures, powers, machines);
     // `BeforeCombatStart`, after the room and before the fight opens. The
     // player carries no power yet, so block gained here is what was asked for
     // and passes no modifier.
@@ -407,20 +417,23 @@ pub(crate) fn enter<V: Rules>(
     // The game's piles hold the deck by now, and the ones here are dealt
     // below. So an affliction asked for here lands once they are, before
     // anything draws.
-    let mut afflicting: Vec<HookEffect<V>> = Vec::new();
-    let mut shuffled_in: Vec<V::Card> = Vec::new();
-    let mut arriving: Vec<HookEffect<V>> = Vec::new();
+    let mut afflicting: smallvec::SmallVec<[Vec<HookEffect<V>>; 1]> =
+        smallvec::smallvec![Vec::new(); players.len()];
+    let mut shuffled_in: smallvec::SmallVec<[Vec<V::Card>; 1]> =
+        smallvec::smallvec![Vec::new(); players.len()];
+    let mut arriving: Vec<(sts2_core::SeatIndex, HookEffect<V>)> = Vec::new();
     live.in_progress = true;
     let starting = EventHook::CombatStarting {
         room: live.room(),
-        holding_potions: !live.players[seat].potions.is_empty(),
+        holding_potions: !live.players[host].potions.is_empty(),
         point: live.point,
     };
     let mut walking = super::listen::Walking::begin(&live, belts, starting);
     while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, &mut live, belts))
+        .and_then(|walking| walking.next(host, &mut live, belts))
     {
+        let seat = super::listen::owner::<V>(&live, listener).unwrap_or(host);
         match (listener, effect) {
             // On the creature carrying the listener, which for a relic is the
             // player.
@@ -462,7 +475,18 @@ pub(crate) fn enter<V: Rules>(
                     amount,
                 );
             }
-            (_, afflict @ HookEffect::Afflict { .. }) => afflicting.push(afflict),
+            // A monster's power afflicts every player's cards, as Vital Spark
+            // walks `Allies` that are players.
+            (listener, afflict @ HookEffect::Afflict { .. }) => {
+                let monsters = matches!(
+                    listener,
+                    super::listen::Listener::Power { owner, .. } if live.seat_of(owner).is_none()
+                );
+                match monsters {
+                    true => afflicting.iter_mut().for_each(|each| each.push(afflict)),
+                    false => afflicting[seat.at()].push(afflict),
+                }
+            }
             // `CardPileCmd.AddToCombatAndPreview` into the draw pile at random,
             // which the deck is in by now. It lands once the piles are dealt.
             (
@@ -471,11 +495,11 @@ pub(crate) fn enter<V: Rules>(
             ) => {
                 let count: usize = num_traits::cast(count)
                     .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
-                shuffled_in.extend(std::iter::repeat_n(card, count));
+                shuffled_in[seat.at()].extend(std::iter::repeat_n(card, count));
             }
             // The belt is the run's.
             (super::listen::Listener::Relic { .. }, fill @ HookEffect::FillPotionSlots { .. }) => {
-                arriving.push(fill)
+                arriving.push((seat, fill))
             }
             // `CreatureCmd.Heal` on the player who carries the relic.
             (super::listen::Listener::Relic { .. }, HookEffect::Heal(amount)) => {
@@ -525,66 +549,71 @@ pub(crate) fn enter<V: Rules>(
     let mut walking = super::listen::Walking::begin(&live, belts, late);
     while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, &mut live, belts))
+        .and_then(|walking| walking.next(host, &mut live, belts))
     {
+        let seat = super::listen::owner::<V>(&live, listener).unwrap_or(host);
         match (listener, effect) {
             // The belt is the run's.
             (super::listen::Listener::Relic { .. }, potion @ HookEffect::ProcurePotion(_)) => {
-                arriving.push(potion)
+                arriving.push((seat, potion))
             }
             (_, other) => {
                 unimplemented!("a listener asking for {other:?} as a fight is about to start")
             }
         }
     }
-    // The whole deck into the draw pile in the order the shuffle left it.
-    live.players[seat].cards = Cards::dealt(&[], &order);
-    if !afflicting.is_empty() {
-        super::board::Board::for_card(
-            seat,
-            &mut live,
-            streams.combat(),
-            belts,
-            ascension,
-            None,
-            None,
-        )
-        .write_cards(afflicting);
-    }
-    if !shuffled_in.is_empty() {
-        let mut board = super::board::Board::for_card(
-            seat,
-            &mut live,
-            streams.combat(),
-            belts,
-            ascension,
-            None,
-            None,
-        );
-        // A relic's, whose owner is the player.
-        let player = board.live.player(seat).id;
-        for card in shuffled_in {
-            board.add_to_draw_at_random(card, Some(player));
+    // Each whole deck into its draw pile in the order the shuffle left it.
+    for (at, order) in orders.iter().enumerate() {
+        let seat = sts2_core::SeatIndex(u8::try_from(at).expect("a fight's players fit a u8"));
+        live.players[seat].cards = Cards::dealt(&[], order);
+        let afflicting = std::mem::take(&mut afflicting[at]);
+        if !afflicting.is_empty() {
+            super::board::Board::for_card(
+                seat,
+                &mut live,
+                streams.combat(),
+                belts,
+                ascension,
+                None,
+                None,
+            )
+            .write_cards(afflicting);
+        }
+        let shuffled_in = std::mem::take(&mut shuffled_in[at]);
+        if !shuffled_in.is_empty() {
+            let mut board = super::board::Board::for_card(
+                seat,
+                &mut live,
+                streams.combat(),
+                belts,
+                ascension,
+                None,
+                None,
+            );
+            // A relic's, whose owner is the player.
+            let player = board.live.player(seat).id;
+            for card in shuffled_in {
+                board.add_to_draw_at_random(card, Some(player));
+            }
         }
     }
     // `RandomizeOrderInternal` raises `ModifyShuffleOrder` before the innate
     // cards move. No listener answers it.
     let hook = sts2_core::EventHook::ShuffleOrder { initial: true };
-    if let Some((listener, effect)) = super::listen::first_answer::<V>(seat, &mut live, belts, hook)
+    if let Some((listener, effect)) = super::listen::first_answer::<V>(host, &mut live, belts, hook)
     {
         unimplemented!("{listener:?} asking for {effect:?} over the opening shuffle")
     }
     // `StartTurn`, as for every turn. `SetupPlayerTurn` puts the innate cards
     // on top on the first.
     let ended = super::turn_loop::begin(
-        seat,
+        host,
         super::Fighting {
             live: &mut live,
             streams: &mut streams,
             belts: &mut *belts,
         },
         ascension,
-        energy,
         true,
     )?;
     Ok(Entered {
@@ -593,6 +622,44 @@ pub(crate) fn enter<V: Rules>(
         ended,
         arriving,
     })
+}
+
+/// One player's side of the fight as it opens, before anything is dealt.
+fn player_combat<V: Rules>(
+    player: &EnteringPlayer<'_, V>,
+    modifiers: &super::live::RunModifiers<V>,
+) -> super::live::PlayerCombat<V> {
+    let character = player.character;
+    super::live::PlayerCombat {
+        character,
+        turn: num_traits::one(),
+        phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
+        energy: num_traits::cast(V::max_energy(character))
+            .expect("the starting energy fits the build's count type"),
+        stars: num_traits::zero(),
+        gold: player.gold,
+        potions: super::live::PotionBelt::holding(player.potions, modifiers.hooks),
+        cards: Cards::with_cards(0),
+        removed_from_deck: Vec::new(),
+        lost: 0,
+        ending_turn: false,
+        ready: false,
+        deaf: false,
+        effect_depth: 0,
+        deck_versions: super::live::DeckVersions::none(),
+        taken_from_deck: Vec::new(),
+        exhaust_next: smallvec::SmallVec::new(),
+        // `PlayerCombatState` opens on `BaseOrbSlotCount` empty slots. Absent
+        // rather than empty for a character with none: the subsystem is inert
+        // until something gives the player a slot.
+        orbs: match V::orb_slots(character) {
+            0 => None,
+            slots => Some(sts2_core::Orbs {
+                capacity: num_traits::cast(slots).expect("a slot count fits the build's count"),
+                queue: Vec::new(),
+            }),
+        },
+    }
 }
 
 /// `Hook.AfterModifyingHandDraw`, once the turn's hand size is worked out.
@@ -641,11 +708,12 @@ pub(super) fn hand_size<V: Rules>(
 }
 
 /// The health a `Combat`-layout event's monsters roll as it opens, off the
-/// run's `Niche` stream.
+/// run's `Niche` stream, for a fight of `players` in the act `act`.
 pub(crate) fn roll_layout<V: Rules>(
     raw_seed: u64,
     floor: V::Count,
     ascension: V::AscensionLevel,
+    (players, act): (usize, usize),
     encounter: V::Encounter,
     streams: &mut Streams<V>,
 ) -> Result<smallvec::SmallVec<[V::Health; 2]>, Error> {
@@ -653,6 +721,7 @@ pub(crate) fn roll_layout<V: Rules>(
     Ok(monster::roll_layout::<V>(
         &monsters,
         ascension,
+        monster::Scaling::of::<V>(players, encounter, act),
         streams.combat().niche,
     ))
 }
