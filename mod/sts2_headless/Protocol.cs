@@ -624,6 +624,12 @@ internal static class Protocol
                     return;
                 }
 
+                if (Moves.Kills(sync.GetLocalEvent(), options[index]))
+                {
+                    await Error("choose_option", Refusals.OptionWouldKill());
+                    return;
+                }
+
                 // `NEventRoom.OptionButtonClicked` runs a proceed option on
                 // this machine alone, and sends every other through the
                 // synchronizer.

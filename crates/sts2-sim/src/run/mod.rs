@@ -5,6 +5,7 @@ mod relay;
 mod setup;
 mod shop;
 mod state;
+mod sync;
 mod travel;
 mod treasure;
 
