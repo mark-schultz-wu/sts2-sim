@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 mod observed;
-mod pickup;
+pub(super) mod pickup;
 
 use crate::bounded::Bounded;
 use crate::rng::MegaRng;
@@ -62,8 +62,8 @@ pub(crate) struct State<V: Rules> {
     event_votes: MegaRng,
     /// Each player's relics, by seat. Apart from the rest of a player, so
     /// a fight can borrow every belt at once.
-    belts: Belts<V>,
-    streams: Streams<V>,
+    pub(super) belts: Belts<V>,
+    pub(super) streams: Streams<V>,
     /// How many of this act's normal fights the run has walked into.
     ///
     /// The act's list is dealt at the start of the run and met in order, so
@@ -90,12 +90,12 @@ pub(crate) struct State<V: Rules> {
     /// from, in the order it left. A chest deals out of it alone. A pull from
     /// any player's bag, a merchant's stock, an obtain and a modifier's
     /// removal take the relic out of both.
-    shared_dealt: Arc<Vec<V::Relic>>,
+    pub(super) shared_dealt: Arc<Vec<V::Relic>>,
     /// Each time the shared bag refilled a spent rarity, which only it does:
     /// the rarity, and how far `shared_dealt` stood then. What left after
     /// that left the refilled deque.
-    shared_refills: Arc<Vec<(Rarity<V>, usize)>>,
-    phase: Phase<V>,
+    pub(super) shared_refills: Arc<Vec<(Rarity<V>, usize)>>,
+    pub(super) phase: Phase<V>,
     /// The event a fight was entered from, which the rewards' proceed goes
     /// back to: the room under the fight in `RunState`'s room stack. Only a
     /// fight an event entered with `shouldResumeAfterCombat` has one.
@@ -107,6 +107,9 @@ pub(crate) struct State<V: Rules> {
     /// The shop purchases running on one machine, which the others wait on.
     /// Nothing in a run of one player.
     pub(super) relay: Option<Box<super::relay::Relay<V>>>,
+    /// Every machine as it stood before the decision, which a room this
+    /// decision enters syncs from. Nothing outside a table's decision.
+    pub(super) sync: Option<Arc<[State<V>]>>,
 }
 
 /// An event waiting under the fight it entered.
@@ -116,9 +119,9 @@ pub(super) struct Resuming<V: Rules> {
     pub(super) event: Phase<V>,
     /// Whether an enemy escaped the fight, once it is over.
     pub(super) escaped: bool,
-    /// What the fight, won, left in `CombatRoom.ExtraRewards`, where it left
-    /// anything.
-    pub(super) extras: Option<Box<super::fight::Extras<V>>>,
+    /// What the fight, won, left in `CombatRoom.ExtraRewards` for each
+    /// player by seat, where it left them anything.
+    pub(super) extras: SmallVec<[Option<Box<super::fight::Extras<V>>>; 1]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -514,6 +517,25 @@ pub(crate) struct Player<V: Rules> {
     vote: Option<Coord>,
 }
 
+impl<V: Rules> Player<V> {
+    /// `SyncWithSerializedPlayer`: what `ToSerializable` carries of `theirs`,
+    /// their own machine's copy. Health, gold, potion slots, the deck, the
+    /// potions, the odds, the relic bag and `ExtraFields`.
+    pub(super) fn synced_with(&mut self, theirs: &Self) {
+        self.potions = theirs.potions;
+        self.potion_positions = theirs.potion_positions;
+        self.deck = Arc::clone(&theirs.deck);
+        self.minted = theirs.minted;
+        self.hp = theirs.hp;
+        self.max_hp = theirs.max_hp;
+        self.gold = theirs.gold;
+        self.potion_slots = theirs.potion_slots;
+        self.odds = theirs.odds;
+        self.dealt_relics = Arc::clone(&theirs.dealt_relics);
+        self.removals_used = theirs.removals_used;
+    }
+}
+
 impl<V: Rules> Clone for State<V> {
     fn clone(&self) -> Self {
         Self {
@@ -529,6 +551,7 @@ impl<V: Rules> Clone for State<V> {
             phase: self.phase.clone(),
             resuming: self.resuming.clone(),
             relay: self.relay.clone(),
+            sync: self.sync.clone(),
             ..*self
         }
     }
@@ -562,6 +585,7 @@ impl<V: Rules> Clone for State<V> {
             resuming,
             local,
             relay,
+            sync,
         } = self;
         shared.clone_from(&source.shared);
         modifier_states.clone_from(&source.modifier_states);
@@ -585,6 +609,7 @@ impl<V: Rules> Clone for State<V> {
         resuming.clone_from(&source.resuming);
         *local = source.local;
         relay.clone_from(&source.relay);
+        sync.clone_from(&source.sync);
         match (phase, &source.phase) {
             (Phase::Combat(live), Phase::Combat(from)) => live.clone_from(from),
             (
@@ -878,7 +903,7 @@ impl<V: Rules> Player<V> {
     }
 
     /// A new id for a card joining the deck.
-    fn mint(&mut self) -> sts2_core::DeckCardId {
+    pub(super) fn mint(&mut self) -> sts2_core::DeckCardId {
         let id = self.minted;
         self.minted = id.next();
         id
@@ -1220,7 +1245,7 @@ impl<V: Rules> Phase<V> {
     }
 
     /// The question a pickup or an event option parked `seat`'s room on.
-    fn asking(&self, seat: sts2_core::SeatIndex) -> Option<&Asked<V>> {
+    pub(super) fn asking(&self, seat: sts2_core::SeatIndex) -> Option<&Asked<V>> {
         match self {
             Phase::Neow(seats) => seats[seat].asking.as_ref(),
             Phase::Shop { seats } => seats[seat].asking.as_ref(),
@@ -1443,12 +1468,13 @@ impl<V: Rules> State<V> {
     /// `FurCoat.AddMarkedRooms` on `map`: the relic's marks kept where every
     /// one stands on a Monster or Elite point, and `count` new ones otherwise.
     /// The new ones are the map's Monster and Elite points, column by column.
-    /// `UnstableShuffle` orders them off a stream of the run's seed and the
-    /// relic's id.
+    /// `UnstableShuffle` orders them off `new Rng(Owner, Id)`: a stream of
+    /// the run's seed, the owner's slot and the relic's id.
     ///
     /// # Panics
     ///
-    /// A relic that is not on the belt.
+    /// A relic that is not on the belt. Another player's relic of the same
+    /// kind that marked points too, whose quests the game leaves out.
     fn mark_combat_points(
         &mut self,
         seat: sts2_core::SeatIndex,
@@ -1463,6 +1489,13 @@ impl<V: Rules> State<V> {
             kind == <V::MapPointType as sts2_core::MapPointKinds>::MONSTER
                 || kind == <V::MapPointType as sts2_core::MapPointKinds>::ELITE
         };
+        if (self.belts.seated()).any(|(other, belt)| {
+            other != seat
+                && (belt.iter())
+                    .any(|held| held.relic == relic && !held.state.marked_points().is_empty())
+        }) {
+            unimplemented!("two players' {relic:?} marking the map");
+        }
         let held = (self.belts[seat].iter_mut())
             .find(|held| held.relic == relic)
             .expect("a relic marking points is on the belt");
@@ -1480,7 +1513,8 @@ impl<V: Rules> State<V> {
             .collect();
         // `GetAllMapPoints` walks the grid a column at a time.
         points.sort_unstable();
-        let mut rng: MegaRng = sts2_core::rng::named::<V, _>(self.shared.raw_seed, name);
+        let seed = self.shared.raw_seed.wrapping_add(u64::from(seat.0));
+        let mut rng: MegaRng = sts2_core::rng::named::<V, _>(seed, name);
         sts2_core::rng::GameRng::unstable_shuffle(&mut rng, &mut points);
         points.truncate(count);
         held.state.mark_points(&points);
@@ -1675,6 +1709,7 @@ impl<V: Rules> State<V> {
             resuming: None,
             local: sts2_core::SeatIndex(0),
             relay: None,
+            sync: None,
             phase: Phase::Neow(crate::seats::BySeat::new(
                 neow_seat(0),
                 (1..players.len()).map(neow_seat).collect(),
@@ -1939,7 +1974,7 @@ impl<V: Rules> State<V> {
 
     /// Carry `act` out on the deck cards at `taken`, in the order they were
     /// taken.
-    fn act_on_deck(
+    pub(super) fn act_on_deck(
         &mut self,
         seat: sts2_core::SeatIndex,
         act: sts2_core::DeckAct<V>,
@@ -2186,6 +2221,12 @@ impl<V: Rules> State<V> {
                 },
             }));
         }
+        self.discarded(seat, at);
+        Ok(Ok(Decided::Resolved))
+    }
+
+    /// `PotionCmd.Discard` for the potion at `at` on `seat`'s belt.
+    fn discarded(&mut self, seat: sts2_core::SeatIndex, at: usize) {
         self.drank(seat, at);
         self.belt_changed(
             seat,
@@ -2194,7 +2235,40 @@ impl<V: Rules> State<V> {
                 holding_potions: self.holding_potions(seat),
             },
         );
-        Ok(Ok(Decided::Resolved))
+    }
+
+    /// The physical belt slot the potion at `index` on `seat`'s belt
+    /// stands in, which `NetDiscardPotionGameAction` carries to the other
+    /// machines.
+    pub(crate) fn belt_slot(
+        &self,
+        seat: sts2_core::SeatIndex,
+        index: sts2_core::BeltIndex,
+    ) -> Option<u8> {
+        (self.players[seat].potion_positions)
+            .get(usize::from(index.get()))
+            .copied()
+    }
+
+    /// `DiscardPotionGameAction` for `seat`'s player, as another player's
+    /// machine sent it. A slot this machine holds no potion in cancels the
+    /// action, and nothing happens. That is so while the player's own
+    /// machine runs a purchase whose results have not come here yet.
+    ///
+    /// # Panics
+    ///
+    /// A slot past the belt's slots, which the game throws on.
+    pub(crate) fn discard_slot(&mut self, seat: sts2_core::SeatIndex, slot: u8) {
+        let slots: usize = num_traits::cast(self.players[seat].potion_slots)
+            .expect("the belt has an addressable number of slots");
+        if usize::from(slot) >= slots {
+            unimplemented!("another machine discarding slot {slot} of {slots}");
+        }
+        let Some(at) = (self.players[seat].potion_positions.iter()).position(|held| *held == slot)
+        else {
+            return;
+        };
+        self.discarded(seat, at);
     }
 
     /// `Owner.Potions.Any()`.
@@ -2661,9 +2735,43 @@ impl<V: Rules> State<V> {
             let Resuming {
                 event,
                 escaped,
-                extras,
+                mut extras,
             } = *resuming;
             self.phase = event;
+            // `ResumeEvents`: every player's copy, in seat order. This
+            // machine's own player is offered their rewards. Each other
+            // player's are made here too, and that player takes them on
+            // their own machine.
+            let copies: SmallVec<[sts2_core::SeatIndex; 4]> = match self.players.len() {
+                1 => smallvec::smallvec![seat],
+                _ => self.players.seats().collect(),
+            };
+            let mut decided = Decided::Resolved;
+            for each in copies {
+                let theirs = extras.get_mut(each.at()).and_then(Option::take);
+                let resumed = self.resume_copy(each, escaped, theirs);
+                // Another player's screen waits here until their next move
+                // shows it closed, its takes arriving as messages.
+                if each == seat {
+                    decided = resumed;
+                }
+            }
+            return Ok(decided);
+        }
+        // `ActChangeSynchronizer.OnPlayerReady`: the run moves on once every
+        // player has voted to.
+        self.proceed_to_next_act(seat)
+    }
+
+    /// `EventModel.Resume` of `seat`'s copy of the event, after the fight it
+    /// entered, with `extras` what the fight left that player.
+    fn resume_copy(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        escaped: bool,
+        extras: Option<Box<super::fight::Extras<V>>>,
+    ) -> Decided {
+        {
             let Phase::Event { seats } = &mut self.phase else {
                 unreachable!("only an event resumes after its fight")
             };
@@ -2672,7 +2780,7 @@ impl<V: Rules> State<V> {
                 matches!(effect, sts2_core::HookEffect::OfferRewardsWithRoomExtras(_))
             });
             if let (Some(at), Some(extras)) = (offering, extras) {
-                return Ok(self.offer_with_extras(seat, &effects, at, &extras));
+                return self.offer_with_extras(seat, &effects, at, &extras);
             }
             let effects: sts2_core::HookEffects<V> = effects
                 .into_iter()
@@ -2685,11 +2793,15 @@ impl<V: Rules> State<V> {
                     effect => Some(effect),
                 })
                 .collect();
-            return Ok(match self.carry_out(seat, effects) {
+            match self.carry_out(seat, effects) {
                 None => Decided::Resolved,
                 Some(asked) => self.park(seat, asked),
-            });
+            }
         }
+    }
+
+    /// `RunManager.EnterNextAct`, once every player votes to.
+    fn proceed_to_next_act(&mut self, seat: sts2_core::SeatIndex) -> Result<Decided, Error> {
         // `ActChangeSynchronizer.OnPlayerReady`: the run moves on once every
         // player has voted to.
         if let Phase::Rewards { seats, .. } = &mut self.phase {
@@ -2857,6 +2969,9 @@ impl<V: Rules> State<V> {
         asked: Asked<V>,
         answer: &Answer,
     ) -> Decided {
+        // An answer inside an obtain this machine runs alone goes to the
+        // other machines with its results, as `SyncLocalChoice` sends it.
+        self.picked_for_purchase(seat, answer);
         let Asked { mut rest, .. } = asked;
         let lent = pickup::Lent {
             run: self,
@@ -3626,11 +3741,6 @@ impl<V: Rules> State<V> {
                     let mut offered = self.offered(seat, act);
                     let rng = self.streams.run(V::RunRngType::NICHE);
                     sts2_core::rng::GameRng::unstable_shuffle(rng, &mut offered);
-                    // Another player's pick, as their machine sent it.
-                    if let Some(taken) = self.synced_pick(seat) {
-                        self.act_on_deck(seat, act, &taken);
-                        return Stepped::Done;
-                    }
                     if offered.len() <= count {
                         let taken: Vec<usize> = offered.into_iter().map(|(at, _)| at).collect();
                         self.act_on_deck(seat, act, &taken);
@@ -3644,11 +3754,6 @@ impl<V: Rules> State<V> {
                 }
                 HookEffect::SelectFromDeck { act, count } => {
                     let offered = self.offered(seat, act);
-                    // Another player's pick, as their machine sent it.
-                    if let Some(taken) = self.synced_pick(seat) {
-                        self.act_on_deck(seat, act, &taken);
-                        return Stepped::Done;
-                    }
                     if offered.len() <= count {
                         let taken: Vec<usize> = offered.into_iter().map(|(at, _)| at).collect();
                         self.act_on_deck(seat, act, &taken);
@@ -3662,11 +3767,6 @@ impl<V: Rules> State<V> {
                 }
                 HookEffect::SelectFromDeckConfirmed { act, min, max } => {
                     if self.offered(seat, act).is_empty() {
-                        return Stepped::Done;
-                    }
-                    // Another player's pick, as their machine sent it.
-                    if let Some(taken) = self.synced_pick(seat) {
-                        self.act_on_deck(seat, act, &taken);
                         return Stepped::Done;
                     }
                     Pickup::FromDeck {
@@ -3845,7 +3945,7 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// A relic answering one of the hooks in a way nothing here carries out.
-    fn gain_gold(&mut self, seat: sts2_core::SeatIndex, amount: V::Number) {
+    pub(super) fn gain_gold(&mut self, seat: sts2_core::SeatIndex, amount: V::Number) {
         self.gain_gold_exact(seat, crate::combat::exact::<V>(amount));
     }
 
@@ -6974,7 +7074,7 @@ impl<V: Rules> State<V> {
             self.resuming = Some(Box::new(Resuming {
                 event,
                 escaped: false,
-                extras: None,
+                extras: SmallVec::new(),
             }));
         }
         self.arrived(arriving);
@@ -7277,6 +7377,9 @@ impl<V: Rules> State<V> {
             if option.locked {
                 unimplemented!("a locked event option");
             }
+            if self.option_kills(seat, index) {
+                unimplemented!("an event option that kills its player in a run of several");
+            }
             // `ChooseLocalOption` in a shared event is a vote, and a proceed
             // option runs on this machine alone.
             if !option.proceed && shared {
@@ -7534,7 +7637,14 @@ impl<V: Rules> State<V> {
                 let Answer::Confirm(yes) = *answer else {
                     unimplemented!("answering the abandon-run popup with {answer:?}");
                 };
+                // `RunManager.Abandon`. Double Down kills, so a run of several
+                // players never offers it.
                 if yes {
+                    if self.players.len() > 1 {
+                        unimplemented!(
+                            "a run of several players abandoned, which no option can ask"
+                        );
+                    }
                     self.players[seat].hp = num_traits::zero();
                 }
                 Stepped::Done
@@ -7588,7 +7698,6 @@ impl<V: Rules> State<V> {
                         "a deck selection of other than {min} to {count} different cards"
                     );
                 }
-                self.picked_for_purchase(seat, &taken);
                 self.act_on_deck(seat, act, &taken);
                 Stepped::Done
             }
@@ -8348,7 +8457,11 @@ impl<V: Rules> State<V> {
                 Some(Room::Event { options, .. }) => moves.extend(
                     options
                         .iter()
-                        .filter(|option| !option.locked && !option.chosen)
+                        .filter(|option| {
+                            !option.locked
+                                && !option.chosen
+                                && !self.option_kills(seat, option.index)
+                        })
                         .map(|option| Decision::ChooseOption {
                             index: option.index,
                             target: None,
@@ -9026,6 +9139,15 @@ impl<V: Rules> State<V> {
             options.clear();
         }
         Some(room)
+    }
+
+    /// `NEventOptionButton.OnRelease`: in a run of several players, an
+    /// option that kills the player who chooses it does nothing.
+    fn option_kills(&self, seat: sts2_core::SeatIndex, option: u8) -> bool {
+        let Phase::Event { seats } = &self.phase else {
+            return false;
+        };
+        self.players.len() > 1 && V::event_kills(&seats[seat].state, option, &self.seen_by(seat))
     }
 
     /// The room the run is standing in, as its report shows it.

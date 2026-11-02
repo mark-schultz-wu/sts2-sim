@@ -876,10 +876,15 @@ pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
         // `RocketPunch.AfterCardGeneratedForCombat`: free until played once
         // its owner makes a Status.
         __c0 if __c0 == V::Card::ROCKET_PUNCH => match hook {
-            sts2_core::EventHook::CardGeneratedForCombat { card, creator, .. }
-                if creator == Some(owner)
-                    && <V as sts2_core::Rules>::card_kind(card)
-                        == Some(sts2_core::CardKind::Status) =>
+            sts2_core::EventHook::CardGeneratedForCombat {
+                card,
+                player,
+                creator,
+                ..
+            } if creator == Some(owner)
+                && player == owner
+                && <V as sts2_core::Rules>::card_kind(card)
+                    == Some(sts2_core::CardKind::Status) =>
             {
                 asked.push(sts2_core::HookEffect::ModifySelf {
                     change: sts2_core::Change::SetCost(sts2_core::CostPool::Energy, 0),
