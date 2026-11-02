@@ -37,6 +37,11 @@ impl<V: crate::Build> EventBehavior<V> for RoomFullOfCheese {
         )
     }
 
+    /// `WillKillPlayer`, for `Search`: its damage.
+    fn kills(&self, _state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 1 && run.hp() <= DAMAGE
+    }
+
     /// `Gorge`: eight commons from the character's pool at uniform odds, and
     /// two of them into the deck. `Search`: the damage, then Chosen Cheese. Each
     /// finishes the event.

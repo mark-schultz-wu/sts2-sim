@@ -26,13 +26,8 @@ pub(crate) struct Move<V: Rules> {
 
 impl<V: Rules> State<V> {
     /// A treasure room at `to`, entered on the streams the move resolved.
-    fn treasure(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        to: Coord,
-        streams: crate::stream::Streams<V>,
-    ) {
-        self.enter_treasure(seat, Location::MapPoint(to), streams);
+    fn treasure(&mut self, to: Coord, streams: crate::stream::Streams<V>) {
+        self.enter_treasure(Location::MapPoint(to), streams);
     }
 
     /// Validate a move and resolve what it will enter, without changing state.
@@ -95,14 +90,17 @@ impl<V: Rules> State<V> {
         moving: Move<V>,
     ) -> Result<Decided, crate::combat::Error> {
         let Move { to, destination } = moving;
+        // `CombatStateSynchronizer`, once the room is left and before the next
+        // is rolled or built.
+        self.room_synced();
         let point = self.point_type(Location::MapPoint(to));
         // A `?` point picks its room first, and raises this once it has.
         if !matches!(destination, Destination::Other(kind) if kind == V::MapPointType::UNKNOWN) {
-            self.room_entering(seat, point, true);
+            self.room_entering(point, true);
         }
         if let Destination::Other(kind) = destination {
             if kind == V::MapPointType::TREASURE {
-                self.treasure(seat, to, *self.streams());
+                self.treasure(to, *self.streams());
                 return Ok(Decided::Resolved);
             }
             if kind == V::MapPointType::REST_SITE {
@@ -116,8 +114,11 @@ impl<V: Rules> State<V> {
             }
             if kind == V::MapPointType::ANCIENT {
                 // `AncientEventModel.BeforeEventStarted`, which heals before
-                // the ancient says anything.
-                self.ancient_heal(seat);
+                // the ancient says anything. Each player has their own copy
+                // of the event, which heals its owner.
+                for each in self.seats() {
+                    self.ancient_heal(each);
+                }
                 // The act rolled which ancient it opens on when it rolled its
                 // rooms, so nothing is drawn for it here. The question mark
                 // odds and the event queue are the unknown rooms' own, and an
@@ -146,9 +147,9 @@ impl<V: Rules> State<V> {
             let rolled = self.roll_unknown_room(to, &mut streams);
             let (mut events_used, visited, odds) = self.event_state();
             if let Some(room) = rolled {
-                self.room_entering(seat, point, true);
+                self.room_entering(point, true);
                 if room == UnknownRoom::Treasure {
-                    self.treasure(seat, to, streams);
+                    self.treasure(to, streams);
                     return Ok(Decided::Resolved);
                 }
                 self.drew(streams);
@@ -176,12 +177,13 @@ impl<V: Rules> State<V> {
             }
             // `RoomSet.EnsureNextEventIsValid`, which passes over an event
             // that is not allowed or was seen already. The one it stops at
-            // is counted as its room is entered.
+            // is counted as its room is entered. `IsAllowed` asks its rule
+            // of every player, `Players.All`.
             let events = self.event_candidates();
             let event = (0..events.len())
                 .find_map(|_| {
                     let candidate = events[events_used % events.len()];
-                    if V::event_allowed(candidate, &self.seen_by(seat))
+                    if (self.seats()).all(|each| V::event_allowed(candidate, &self.seen_by(each)))
                         && !visited.contains(&candidate)
                     {
                         return Some(candidate);
@@ -197,7 +199,7 @@ impl<V: Rules> State<V> {
             .fold(event, |event, card| {
                 V::deck_card_next_event(card, self.act(), event)
             });
-            self.room_entering(seat, point, true);
+            self.room_entering(point, true);
             let floor = sts2_core::EventView::floor(&self.seen_by(seat)) + num_traits::one();
             let seats = self.opened_event(event, floor, &mut streams)?;
             self.enter_event(

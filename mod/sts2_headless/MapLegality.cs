@@ -92,7 +92,8 @@ public static class MapLegality
     /// <c>NMapRoom</c> and <c>NMerchantRoom</c> do as they open, and so does
     /// <c>NFakeMerchant</c>. <c>NRestSiteRoom</c> does once an option went
     /// through, or at once when it offers none. <c>NTreasureRoom</c> does once
-    /// the relic is taken or skipped, and <c>NEventRoom.Proceed</c> once the
+    /// the relics are awarded, or a single player skips, and
+    /// <c>NEventRoom.Proceed</c> once the
     /// event is finished. A fight's turns it on when its rewards screen
     /// proceeds, which is once no reward is left to answer.
     /// </remarks>
@@ -112,7 +113,7 @@ public static class MapLegality
                 && (model.IsFinished || model is FakeMerchant),
             RestSiteRoom => RestSiteProgress.Rested
                 || RunManager.Instance.RestSiteSynchronizer.GetLocalOptions().Count == 0,
-            TreasureRoom => !Chest.Open(Seat.Me(state)),
+            TreasureRoom => Chest.Done(state, Seat.Me(state)),
             _ => true,
         };
     }
@@ -145,6 +146,10 @@ public static class MapLegality
     /// nothing in the run, so the move it leads to is travel to the second.
     /// Headless, that call opens no map, and a proceed there left the run
     /// standing still for good.
+    ///
+    /// Out of a boss room, proceeding is a vote, and
+    /// <c>ActChangeSynchronizer</c> moves the run on once every player has
+    /// voted. A player who voted waits, and has no proceed until then.
     /// </remarks>
     public static bool CanProceed(RunState state)
     {
@@ -159,8 +164,19 @@ public static class MapLegality
             return false;
         }
 
+        if (ResumesEvent(state))
+        {
+            return true;
+        }
+
+        // A player who voted to move on waits for the others.
+        if (Peers.VotedNextAct(state, Seat.Me(state)))
+        {
+            return false;
+        }
+
         AbstractRoom? room = state.CurrentRoom;
-        return room is { RoomType: RoomType.Boss } || ResumesEvent(state);
+        return room is { RoomType: RoomType.Boss };
     }
 
     /// <summary>

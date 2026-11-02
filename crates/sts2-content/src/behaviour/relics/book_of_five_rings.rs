@@ -14,11 +14,14 @@ pub struct State {
 /// `AfterCardChangedPiles` for a card now in the deck counts it, and each
 /// fifth heals.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    if let EventHook::AddedToDeck { .. } = hook {
+    if let EventHook::AddedToDeck { player, .. } = hook
+        && player == owner
+    {
         state.cards_added += 1;
         if state
             .cards_added

@@ -2,11 +2,15 @@
 
 use sts2_core::{DecisionHook, EventHook, HookResponse};
 
-/// `ShouldPlayerResetEnergy`: only on the first turn. A fight here has one
-/// player, who owns it.
-pub(super) fn decide_hook<V: crate::Build>(hook: DecisionHook<V>) -> HookResponse<bool> {
+/// `ShouldPlayerResetEnergy`: only on the first turn.
+pub(super) fn decide_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: DecisionHook<V>,
+) -> HookResponse<bool> {
     match hook {
-        DecisionHook::ShouldPlayerResetEnergy { turn, .. } => HookResponse::Decision(turn == 1),
+        DecisionHook::ShouldPlayerResetEnergy { player, turn } => {
+            HookResponse::Decision(player != owner || turn == 1)
+        }
         _ => HookResponse::DoesNotImplement,
     }
 }
