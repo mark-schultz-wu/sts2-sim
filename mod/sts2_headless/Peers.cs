@@ -37,7 +37,13 @@ internal static class Peers
     /// A client's goes to the host first, which sends it back, and the queue
     /// can stand empty meanwhile.
     /// </summary>
-    internal static bool InFlight => _sent > 0;
+    internal static bool InFlight => _sent > 0 || _hooks > 0;
+
+    /// <summary>
+    /// How many of the local player's hook actions this client asked the
+    /// host to queue, whose word has not come back yet.
+    /// </summary>
+    private static int _hooks;
 
     /// <summary>
     /// Queues one of the local player's actions, as a screen does: through
@@ -51,6 +57,61 @@ internal static class Peers
             _sent++;
         }
         RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(action);
+    }
+
+    /// <summary>
+    /// The local player's vote to move to the next act, which
+    /// <c>ActChangeSynchronizer.SetLocalPlayerReady</c> queues as
+    /// <see cref="Enqueue"/> does. It builds the action, whose constructor
+    /// differs between builds.
+    /// </summary>
+    internal static void VoteForNextAct()
+    {
+        if (Shared)
+        {
+            _sent++;
+        }
+        RunManager.Instance.ActChangeSynchronizer.SetLocalPlayerReady();
+    }
+
+    private static readonly FieldInfo ReadyPlayers = typeof(ActChangeSynchronizer)
+        .GetField("_readyPlayers", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+    /// <summary>
+    /// Whether <paramref name="player"/> voted to move to the next act, and
+    /// waits for the rest. The flags clear as the run moves on.
+    /// </summary>
+    internal static bool VotedNextAct(RunState state, Player player)
+    {
+        var ready = (List<bool>)ReadyPlayers.GetValue(RunManager.Instance.ActChangeSynchronizer)!;
+        return ready[state.GetPlayerSlotIndex(player)];
+    }
+
+    /// <summary>
+    /// A hook action of the local player's that a client asks the host to
+    /// queue, as a paused hook's choice does. It comes back to the queue here
+    /// only once the host sends it back, and the queue can stand empty
+    /// meanwhile.
+    /// </summary>
+    internal static void HookRequested(GenericHookGameAction action)
+    {
+        if (RunManager.Instance.NetService.Type == NetGameType.Client
+            && action.OwnerId == LocalContext.NetId)
+        {
+            _hooks++;
+        }
+    }
+
+    /// <summary>
+    /// A hook action of the local player's back from the host, queued here
+    /// or turned away, as a queue cancelling its combat actions does.
+    /// </summary>
+    internal static void HookCameBack(GameAction action)
+    {
+        if (_hooks > 0 && action is GenericHookGameAction && action.OwnerId == LocalContext.NetId)
+        {
+            _hooks--;
+        }
     }
 
     /// <summary>One of the local player's actions starting, which is its copy come back.</summary>
@@ -108,9 +169,15 @@ internal static class Peers
 
     /// <summary>
     /// Whether the game here cannot go on until another seat acts: this seat
-    /// has ended its turn or voted, or the game waits on another player's
-    /// choice.
+    /// has ended its turn or voted while another has not, or the game waits
+    /// on another player's choice.
     /// </summary>
+    /// <remarks>
+    /// Once every player has ended the turn, nobody holds the game. It is on
+    /// its way to the enemies' turn, which it runs off a signal the next
+    /// frame takes up, and stands idle until then. Every vote in is the same:
+    /// the host moves the party, and the votes clear as it arrives.
+    /// </remarks>
     internal static bool HeldByOthers(RunState state)
     {
         if (!Shared)
@@ -118,7 +185,9 @@ internal static class Peers
             return false;
         }
         Player me = Seat.Me(state);
-        return EndedTurn(me) || Vote(me) != null || AwaitedChoices().Count > 0;
+        bool waitsOnTurnEnds = EndedTurn(me) && !state.Players.All(EndedTurn);
+        bool waitsOnVotes = Vote(me) != null && !state.Players.All(p => Vote(p) != null);
+        return waitsOnTurnEnds || waitsOnVotes || AwaitedChoices().Count > 0;
     }
 
     /// <summary>The facts above, for the observation.</summary>
@@ -132,5 +201,21 @@ internal static class Peers
         }).ToList(),
         ["awaiting"] = AwaitedChoices(),
         ["inFlight"] = InFlight,
+        ["still"] = Driver.Still(new HashSet<ulong>(), null),
+        ["links"] = Traffic.Report(),
     };
+}
+
+/// <summary>Counts a client's hook action request as in flight, as <see cref="Peers.Enqueue"/> counts an action.</summary>
+[HarmonyLib.HarmonyPatch(typeof(ActionQueueSynchronizer), nameof(ActionQueueSynchronizer.RequestEnqueueHookAction))]
+internal static class HookRequestInFlight
+{
+    private static void Prefix(GenericHookGameAction action) => Peers.HookRequested(action);
+}
+
+/// <summary>Takes a client's hook action request out of flight once it comes back to the queue.</summary>
+[HarmonyLib.HarmonyPatch(typeof(ActionQueueSet), nameof(ActionQueueSet.EnqueueWithoutSynchronizing))]
+internal static class HookRequestBack
+{
+    private static void Postfix(GameAction gameAction) => Peers.HookCameBack(gameAction);
 }

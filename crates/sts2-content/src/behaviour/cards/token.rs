@@ -5,7 +5,8 @@ use sts2_core::{
     Amount, CardVars, CreatureView as _, Effect, Fight, FightKind, Opponents, Scaling,
 };
 
-use crate::behaviour::cards::{Ask, Lent, Number};
+use crate::behaviour::cards::Number;
+use crate::behaviour::paused::{Ask, Lent};
 use crate::generated::cards::TargetType;
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 
@@ -47,28 +48,22 @@ fn parry<V: crate::Build>(powers: &[sts2_core::Stack<V>]) -> Number {
 /// What a card that works its own target out from the fight names.
 pub(super) fn computed_target<V: crate::Build>(
     card: V::Card,
-    powers: &[sts2_core::Stack<V>],
+    carries: impl Fn(V::Power) -> bool,
 ) -> TargetType {
     match card {
         // `SovereignBlade.TargetType`: one enemy, or the lot under Seeking
         // Edge.
-        __c0 if __c0 == V::Card::SOVEREIGN_BLADE => {
-            match powers
-                .iter()
-                .any(|h| h.power == V::Power::SEEKING_EDGE_POWER)
-            {
+        __c0 if __c0 == V::Card::SOVEREIGN_BLADE => match carries(V::Power::SEEKING_EDGE_POWER) {
+            true => TargetType::AllEnemies,
+            false => TargetType::AnyEnemy,
+        },
+        // `Shiv.TargetType`: the same, under Fan of Knives.
+        __c0 if __c0 == <V::Card as crate::ids::CardIds>::SHIV => {
+            match carries(V::Power::FAN_OF_KNIVES_POWER) {
                 true => TargetType::AllEnemies,
                 false => TargetType::AnyEnemy,
             }
         }
-        // `Shiv.TargetType`: the same, under Fan of Knives.
-        __c0 if __c0 == <V::Card as crate::ids::CardIds>::SHIV => match powers
-            .iter()
-            .any(|h| h.power == V::Power::FAN_OF_KNIVES_POWER)
-        {
-            true => TargetType::AllEnemies,
-            false => TargetType::AnyEnemy,
-        },
         card => unimplemented!("what {card:?} points at"),
     }
 }
@@ -165,7 +160,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::cards::paused_play!(Token);
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Token);
 
 /// `SovereignBlade`'s attack: its damage, as many times as it repeats, to
 /// every opponent under Seeking Edge.

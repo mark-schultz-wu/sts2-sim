@@ -26,6 +26,7 @@ pub(crate) fn modify_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             owner,
             holder,
             applier,
+            target,
             monster,
             on_turn_start,
             state,
@@ -36,6 +37,7 @@ pub(crate) fn modify_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
                 owner,
                 holder,
                 applier,
+                target,
                 monster,
                 on_turn_start,
                 history,
@@ -43,9 +45,12 @@ pub(crate) fn modify_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             };
             crate::behaviour::powers::modify_hook::<V>(power, amount, held, state, hook)
         }
-        sts2_core::Listener::Relic { state, fight, .. } => {
-            crate::behaviour::relics::modify_hook(state, fight, hook)
-        }
+        sts2_core::Listener::Relic {
+            state,
+            owner,
+            fight,
+            ..
+        } => crate::behaviour::relics::modify_hook(state, owner, fight, hook),
         // The fight asks only a monster whose class overrides the hook,
         // and no monster this build ports overrides one of these.
         sts2_core::Listener::Monster { monster, .. } => {
@@ -57,7 +62,7 @@ pub(crate) fn modify_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             unimplemented!("what {card:?} does for {hook:?}")
         }
         // No potion in this build overrides a number's hook.
-        sts2_core::Listener::Potion(potion) => {
+        sts2_core::Listener::Potion { potion, .. } => {
             unimplemented!("what {potion:?} does for {hook:?}")
         }
         sts2_core::Listener::Modifier(modifier) => {
@@ -77,6 +82,7 @@ pub(crate) fn decide_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             owner,
             holder,
             applier,
+            target,
             monster,
             on_turn_start,
             state,
@@ -88,6 +94,7 @@ pub(crate) fn decide_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
                 owner,
                 holder,
                 applier,
+                target,
                 monster,
                 on_turn_start,
                 history,
@@ -95,19 +102,22 @@ pub(crate) fn decide_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             };
             crate::behaviour::powers::decide_hook::<V>(power, amount, held, state, hook)
         }
-        sts2_core::Listener::Relic { state, belt, .. } => {
-            crate::behaviour::relics::decide_hook(state, belt, hook)
+        sts2_core::Listener::Relic {
+            state, belt, owner, ..
+        } => crate::behaviour::relics::decide_hook(state, belt, owner, hook),
+        sts2_core::Listener::Potion { potion, owner } => {
+            crate::behaviour::potions::decide_hook(potion, owner, hook)
         }
-        sts2_core::Listener::Potion(potion) => crate::behaviour::potions::decide_hook(potion, hook),
         sts2_core::Listener::Modifier(modifier) => {
             crate::behaviour::modifiers::decide_hook(modifier, hook)
         }
         sts2_core::Listener::Card {
             card,
+            owner,
             pile,
             history,
             ..
-        } => crate::behaviour::cards::decide_hook::<V>(card, pile, history, hook),
+        } => crate::behaviour::cards::decide_hook::<V>(card, owner, pile, history, hook),
         // A raised hook reaches only a listener that overrides it, and no
         // monster this build ports overrides one of these.
         sts2_core::Listener::Monster { .. } => match hook.model_hook() {
@@ -128,6 +138,7 @@ pub(crate) fn power_event_hook<V: crate::Build>(
         owner,
         holder,
         applier,
+        target,
         monster,
         on_turn_start,
         state,
@@ -138,6 +149,7 @@ pub(crate) fn power_event_hook<V: crate::Build>(
         owner,
         holder,
         applier,
+        target,
         monster,
         on_turn_start,
         history,
@@ -170,7 +182,7 @@ pub(crate) fn enchanted_changes<V: crate::Build>(
 pub(crate) fn card_result_pile<V: crate::Build>(
     card: V::Card,
     base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)> {
+) -> sts2_core::HookResponse<sts2_core::CardResult> {
     crate::behaviour::cards::result_pile::<V>(card, base)
 }
 
@@ -234,10 +246,11 @@ pub(crate) fn modifier_ported<V: crate::Build>(modifier: V::Modifier) -> bool {
 pub(crate) fn relic_event_hook<V: crate::Build>(
     state: &mut V::RelicState,
     belt: &[V::Relic],
+    owner: sts2_core::RelicOwner<V>,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    crate::behaviour::relics::event_hook(state, belt, hook, asked)
+    crate::behaviour::relics::event_hook(state, belt, owner, hook, asked)
 }
 
 pub(crate) fn potion_event_hook<V: crate::Build>(
@@ -275,16 +288,20 @@ pub(crate) fn enchantment_event_hook<V: crate::Build>(
     crate::behaviour::enchantments::event_hook(enchanted, id, hook, asked);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn card_event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     card: V::Card,
     id: sts2_core::CardId<V>,
+    owner: sts2_core::CombatId,
     pile: Option<sts2_core::Pile>,
     printed: &P,
     history: sts2_core::History<'_, V>,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    crate::behaviour::cards::event_hook::<V, _>(card, id, pile, printed, history, hook, asked)
+    crate::behaviour::cards::event_hook::<V, _>(
+        card, id, owner, pile, printed, history, hook, asked,
+    )
 }
 
 pub(crate) fn act_layout<V: crate::Build>(act: V::Act) -> sts2_core::Layout {
@@ -377,11 +394,11 @@ pub(crate) fn card_upgrade<V: crate::Build>(card: V::Card) -> &'static [sts2_cor
     crate::behaviour::cards::upgrade::<V>(card)
 }
 
-pub(crate) fn on_use<V: crate::Build, F: sts2_core::Fight<V>>(
+pub(crate) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     potion: V::Potion,
-    fight: &mut F,
-) -> crate::behaviour::Played<V, F::Kind> {
-    crate::behaviour::potions::on_use(potion, fight)
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
+    crate::behaviour::potions::on_use::<V, K>(potion, fight)
 }
 
 pub(crate) fn on_use_on_run<V: crate::Build>(
@@ -411,57 +428,17 @@ pub(crate) fn resume_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     at: crate::behaviour::Resume<V, K>,
     chosen: sts2_core::Taken<V>,
 ) -> crate::behaviour::Played<V, K> {
-    match (at, chosen) {
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Silent(paused)),
-            taken,
-        ) => crate::behaviour::cards::silent::resume::<V, K>(fight, paused, taken),
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Ironclad(paused)),
-            taken,
-        ) => crate::behaviour::cards::ironclad::resume::<V, K>(fight, paused, taken),
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Defect(paused)),
-            taken,
-        ) => crate::behaviour::cards::defect::resume::<V, K>(fight, paused, taken),
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Necrobinder(paused)),
-            taken,
-        ) => crate::behaviour::cards::necrobinder::resume::<V, K>(fight, paused, taken),
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Regent(paused)),
-            taken,
-        ) => crate::behaviour::cards::regent::resume::<V, K>(fight, paused, taken),
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Colorless(paused)),
-            taken,
-        ) => crate::behaviour::cards::colorless::resume::<V, K>(fight, paused, taken),
-        (crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Event(paused)), taken) => {
-            crate::behaviour::cards::event::resume::<V, K>(fight, paused, taken)
+    match at {
+        crate::behaviour::Resume::Card(at) => {
+            crate::behaviour::cards::resume::<V, K>(fight, at, chosen)
         }
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Generated(paused)),
-            taken,
-        ) => V::resume_paused::<K>(fight, paused, taken),
-        (crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Token(paused)), taken) => {
-            crate::behaviour::cards::token::resume::<V, K>(fight, paused, taken)
+        crate::behaviour::Resume::Potion(at) => {
+            crate::behaviour::potions::resume::<V, K>(fight, at, chosen)
         }
-        (crate::behaviour::Resume::Card(at), sts2_core::Taken::Chosen(card)) => {
-            crate::behaviour::cards::resume_chosen::<V, _>(fight, at, card)
+        crate::behaviour::Resume::Monster(at) => {
+            crate::behaviour::monsters::resume::<V, K>(fight, at, chosen)
         }
-        (crate::behaviour::Resume::Card(at), sts2_core::Taken::Waited) => {
-            crate::behaviour::cards::resume_waited::<V, _>(fight, at)
-        }
-        (crate::behaviour::Resume::Card(at), sts2_core::Taken::Drew(drew)) => {
-            crate::behaviour::cards::resume_drew::<V, _>(fight, at, &drew)
-        }
-        (crate::behaviour::Resume::Potion(at), chosen) => {
-            crate::behaviour::potions::resume(fight, at, chosen)
-        }
-        (crate::behaviour::Resume::Monster(at), sts2_core::Taken::Chosen(card)) => {
-            crate::behaviour::monsters::resume(fight, at, card)
-        }
-        (at, chosen) => unimplemented!("{at:?} resumed with {chosen:?}"),
+        crate::behaviour::Resume::Build(paused) => V::resume_paused::<K>(fight, paused, chosen),
     }
 }
 
@@ -563,8 +540,11 @@ pub(crate) fn monster_health_after_added<V: crate::Build>(
     ascension: crate::generated::ascension::AscensionLevel,
     rolled: i32,
     teammates: &[i32],
+    scaled: impl Fn(i32) -> sts2_core::Decimal,
 ) -> Option<i32> {
-    crate::behaviour::monsters::health_after_added::<V>(monster, ascension, rolled, teammates)
+    crate::behaviour::monsters::health_after_added::<V>(
+        monster, ascension, rolled, teammates, scaled,
+    )
 }
 
 pub(crate) fn encounter_gold_proportion<V: crate::Build>(
@@ -793,12 +773,12 @@ pub(crate) fn calculated_card_var<V: crate::Build, P: sts2_core::Printed<V> + ?S
     crate::behaviour::cards::calculated::<V, _>(card, key, printed, owner)
 }
 
-pub(crate) fn perform_move<V: crate::Build, F: sts2_core::Fight<V>>(
+pub(crate) fn perform_move<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     monster: V::Monster,
     move_id: V::MoveId,
-    fight: &mut F,
-) -> crate::behaviour::Played<V, F::Kind> {
-    crate::behaviour::monsters::perform::<V, _>(monster, move_id, fight)
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
+    crate::behaviour::monsters::perform::<V, K>(monster, move_id, fight)
 }
 
 pub(crate) fn intent_repeats_now<V: crate::Build>(
@@ -846,16 +826,23 @@ pub(crate) fn intent_damage_now<V: crate::Build>(
     }
 }
 
-pub(crate) fn resume_move<V: crate::Build, F: sts2_core::Fight<V>>(
-    monster: V::Monster,
-    move_id: V::MoveId,
-    at: crate::behaviour::Resume<V, F::Kind>,
-    fight: &mut F,
-) -> crate::behaviour::Played<V, F::Kind> {
-    let crate::behaviour::Resume::Monster(at) = at else {
-        unreachable!("{at:?} resumes no move")
-    };
-    crate::behaviour::monsters::resume_move::<V, _>(monster, move_id, at, fight)
+/// A move that stood still on a question its attack left, once the question
+/// is answered. The paused move knows which move it is.
+pub(crate) fn resume_move<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
+    _monster: V::Monster,
+    _move_id: V::MoveId,
+    at: crate::behaviour::Resume<V, K>,
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
+    match at {
+        crate::behaviour::Resume::Monster(at) => {
+            crate::behaviour::monsters::resume::<V, K>(fight, at, sts2_core::Taken::Waited)
+        }
+        crate::behaviour::Resume::Build(paused) => {
+            V::resume_paused::<K>(fight, paused, sts2_core::Taken::Waited)
+        }
+        at => unreachable!("{at:?} resumes no move"),
+    }
 }
 
 pub(crate) fn random_encounter_monsters<V: crate::Build, R: sts2_core::rng::GameRng>(
@@ -914,6 +901,14 @@ pub(crate) fn observe_event<V: crate::Build>(
     run: &impl sts2_core::EventView<V>,
 ) -> sts2_core::Room<V> {
     crate::behaviour::events::observe::<V>(state, run)
+}
+
+pub(crate) fn event_kills<V: crate::Build>(
+    state: &V::EventState,
+    option: u8,
+    run: &impl sts2_core::EventView<V>,
+) -> bool {
+    crate::behaviour::events::kills::<V>(state, option, run)
 }
 
 pub(crate) fn choose_event<V: crate::Build, R: sts2_core::rng::GameRng>(

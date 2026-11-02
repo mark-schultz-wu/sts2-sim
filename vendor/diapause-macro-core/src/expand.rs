@@ -21,7 +21,8 @@ use crate::signature::{
 
 pub fn expand(attr: TokenStream, item: syn::ItemFn) -> syn::Result<TokenStream> {
     let prepared = Prepared::parse(attr, item)?;
-    let cfg = prepared.lower()?;
+    let mut cfg = prepared.lower()?;
+    crate::cfg::inline_joins(&mut cfg);
     let analysis = prepared.analyze(&cfg)?;
 
     // Self-check in the spirit of rustc's MIR validation: re-derive the
@@ -95,6 +96,7 @@ fn expand_debug_stages(
     let mut cfg = prepared.lower_unsimplified()?;
     *cfg_unsimplified = Some(cfg.clone());
     crate::cfg::simplify(&mut cfg);
+    crate::cfg::inline_joins(&mut cfg);
     let cfg = &*cfg_out.insert(cfg);
     let analysis = &*analysis_out.insert(prepared.analyze(cfg)?);
     // Unlike `expand`, run the validator unconditionally and surface a
@@ -685,11 +687,15 @@ fn range_inclusive_iter_def(derive_attrs: &[&syn::Attribute]) -> TokenStream {
                 let mut range = self.start.clone()..=self.end.clone();
                 let item = ::core::iter::Iterator::next(&mut range);
                 if item.is_none() || range.is_empty() {
+                    // Where std leaves `start` once the range is spent
+                    // differs between releases, so `start` keeps the
+                    // last element and the saved state stays the same.
                     self.done = true;
+                } else {
+                    // `next` advanced the range's start; carry it over so
+                    // the next call resumes where std's iterator would.
+                    (self.start, _) = range.into_inner();
                 }
-                // `next` advanced the range's start; carry it over so
-                // the next call resumes where std's iterator would.
-                (self.start, _) = range.into_inner();
                 item
             }
         }

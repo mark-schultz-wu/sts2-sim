@@ -323,6 +323,21 @@ pub(crate) fn simplify(cfg: &mut Cfg) {
     remove_unreachable(cfg);
     merge_goto_chains(cfg);
     remove_unreachable(cfg);
+    mark_inline(cfg);
+}
+
+/// Copies the joins on the path a run takes when it does not suspend,
+/// so that path stays plain Rust (see [`duplicate_joins`]), then marks
+/// the copies inline. Expansion runs it after [`simplify`]; the
+/// lowering's own tests see the CFG without it.
+pub(crate) fn inline_joins(cfg: &mut Cfg) {
+    duplicate_joins(cfg);
+    mark_inline(cfg);
+}
+
+/// Marks each block with one predecessor inline, but for the entry,
+/// resume points, and opaque-jump targets.
+fn mark_inline(cfg: &mut Cfg) {
     let preds = pred_edge_counts(cfg);
     let jump_target = jump_targets(cfg);
     let entry = cfg.entry;
@@ -331,7 +346,321 @@ pub(crate) fn simplify(cfg: &mut Cfg) {
     }
 }
 
+/// Clones each join block, together with the tree of blocks it alone
+/// leads to, once for each predecessor edge past the first. Every copy
+/// then has one predecessor and is inlined into it.
+///
+/// A join that stays a block of its own becomes a state variant, and
+/// every run that reaches it, suspending or not, moves the live locals
+/// into the state enum and back out through the dispatch loop. A join
+/// after an `if` or a `match` whose arms can yield is on the common path
+/// of a body that rarely suspends. Duplicating the join keeps that path
+/// in plain Rust: only a yield writes the state.
+///
+/// The join's tree is every block reached from it through blocks with
+/// one predecessor, up to blocks that already have several. It is copied
+/// whole, because a block in it with one more predecessor would become a
+/// variant, and a `match` arm's bindings would leave its scope. A yield in
+/// the tree is copied with its resume point, so each copy is a resume
+/// point of its own whose one predecessor is its own yield: more states,
+/// and no cost at run time.
+///
+/// Each opaque jump has one owning block, so a copied block's
+/// `__diapause_jump!` markers are renumbered to fresh copies of their
+/// jumps. A jump's target is never in the tree, which stops at jump
+/// targets, so the copies jump where the originals do.
+///
+/// A join qualifies only if neither it nor its tree defines a direct
+/// borrow or lies on a cycle. A direct borrow needs a unique defining
+/// block, since its `let` may be removed and rebuilt (see
+/// `analyze_cfg::removed_statements`). A cycle is a loop, whose header
+/// stays a variant.
+///
+/// Only the path that does not suspend needs the copy. A path that
+/// resumed from a yield came through the dispatch loop already, so it can
+/// reach the join as a variant. A block is hot where the entry reaches it
+/// without passing a resume point. Where some edges into a join are hot
+/// and some are not, each hot edge gets a copy and the others keep the
+/// join. Where every edge is hot, the first keeps it and each later one
+/// gets a copy.
+///
+/// The pass repeats to a fixed point, since a copied tree adds
+/// predecessors to the joins below it. A budget of copied statements
+/// bounds the growth. The hot edges come first: since the resumed paths
+/// take no copies then, a chain of joins with a yield before each grows by
+/// one copy of each tree. What the budget has left then goes to every
+/// edge, as fewer variants make a smaller state enum to compile. There a
+/// chain of joins doubles at each step, and past the budget a join stays
+/// a variant.
+fn duplicate_joins(cfg: &mut Cfg) {
+    let total: usize = cfg.blocks.iter().map(|b| b.stmts.len() + 1).sum();
+    let mut budget = (total * JOIN_BUDGET_FACTOR).max(JOIN_BUDGET_FLOOR);
+    // The hot edges first, then every edge with what the budget has left.
+    let mut hot_only = true;
+    loop {
+        let preds = pred_edge_counts(cfg);
+        let jump_target = jump_targets(cfg);
+        let cyclic = on_cycles(cfg);
+        let hot = hot_blocks(cfg);
+        let hot_preds = hot_pred_edge_counts(cfg, &hot);
+        let candidate = (0..cfg.blocks.len()).find_map(|b| {
+            if b == cfg.entry || preds[b] < 2 || cfg.blocks[b].resume_point || jump_target[b] {
+                return None;
+            }
+            if hot_only && hot_preds[b] == 0 {
+                return None;
+            }
+            let tree = join_tree(cfg, &preds, &jump_target, &cyclic, b)?;
+            let size: usize = tree.iter().map(|&t| cfg.blocks[t].stmts.len() + 1).sum();
+            let all_hot = !hot_only || hot_preds[b] == preds[b];
+            let copies = if all_hot { preds[b] - 1 } else { hot_preds[b] };
+            let cost = size * copies;
+            (cost <= budget).then_some((b, tree, cost, all_hot))
+        });
+        let Some((b, tree, cost, all_hot)) = candidate else {
+            if std::mem::replace(&mut hot_only, false) {
+                continue;
+            }
+            break;
+        };
+        budget -= cost;
+        // Where every edge into `b` is hot, keep the first and point each
+        // later one at a copy of the whole tree. Otherwise each hot edge
+        // gets a copy, and the resumed ones keep `b`.
+        let mut seen = false;
+        for p in 0..cfg.blocks.len() {
+            let mut term = std::mem::replace(
+                &mut cfg.blocks[p].terminator,
+                Terminator::Return(syn::parse_quote!(())),
+            );
+            for slot in successor_slots(&mut term) {
+                if *slot != b {
+                    continue;
+                }
+                let copied = match all_hot {
+                    true => std::mem::replace(&mut seen, true),
+                    false => hot[p],
+                };
+                if copied {
+                    *slot = copy_tree(cfg, &tree);
+                }
+            }
+            cfg.blocks[p].terminator = term;
+        }
+    }
+}
+
+/// `b` and every block reached from it through blocks with one
+/// predecessor, or nothing where one of them may not be copied.
+fn join_tree(
+    cfg: &Cfg,
+    preds: &[usize],
+    jump_target: &[bool],
+    cyclic: &[bool],
+    b: BlockId,
+) -> Option<Vec<BlockId>> {
+    let mut tree = Vec::new();
+    let mut stack = vec![b];
+    while let Some(t) = stack.pop() {
+        let blk = &cfg.blocks[t];
+        let copyable = !cyclic[t]
+            && !blk.defs.iter().any(|d| {
+                matches!(cfg.bindings[d.0].borrow, BorrowSource::Direct { .. })
+            });
+        if !copyable {
+            return None;
+        }
+        tree.push(t);
+        stack.extend(
+            cfg.blocks[t]
+                .terminator
+                .successors()
+                .filter(|&s| preds[s] == 1 && !jump_target[s]),
+        );
+    }
+    Some(tree)
+}
+
+/// Appends a copy of `tree`, whose first block is its root, with edges
+/// inside it pointing at the copies. Returns the root's copy.
+fn copy_tree(cfg: &mut Cfg, tree: &[BlockId]) -> BlockId {
+    let base = cfg.blocks.len();
+    let index: std::collections::BTreeMap<BlockId, BlockId> = tree
+        .iter()
+        .enumerate()
+        .map(|(i, &t)| (t, base + i))
+        .collect();
+    for &t in tree {
+        let mut copy = cfg.blocks[t].clone();
+        copy.inline = false;
+        for slot in successor_slots(&mut copy.terminator) {
+            if let Some(&to) = index.get(slot) {
+                *slot = to;
+            }
+        }
+        if !copy.jumps.is_empty() {
+            let mut renumbered = std::collections::BTreeMap::new();
+            for k in &mut copy.jumps {
+                let fresh = cfg.opaque_jumps.len();
+                cfg.opaque_jumps.push(cfg.opaque_jumps[*k].clone());
+                renumbered.insert(*k, fresh);
+                *k = fresh;
+            }
+            let mut renumber = Renumber(&renumbered);
+            for stmt in &mut copy.stmts {
+                syn::visit_mut::VisitMut::visit_stmt_mut(&mut renumber, stmt);
+            }
+        }
+        cfg.blocks.push(copy);
+    }
+    base
+}
+
+/// Renumbers the `__diapause_jump!` markers of a copied block in place, so
+/// each stays the statement or expression it was.
+struct Renumber<'a>(&'a std::collections::BTreeMap<usize, usize>);
+
+impl syn::visit_mut::VisitMut for Renumber<'_> {
+    fn visit_macro_mut(&mut self, mac: &mut syn::Macro) {
+        let tokens = std::mem::take(&mut mac.tokens);
+        mac.tokens = match mac.path.is_ident("__diapause_jump") {
+            true => renumber_marker_body(tokens, self.0),
+            false => renumber_markers(tokens, self.0),
+        };
+    }
+}
+
+/// A marker's own tokens, `k [, value]`, with `k` renumbered and any
+/// marker in the value too.
+fn renumber_marker_body(
+    tokens: proc_macro2::TokenStream,
+    renumbered: &std::collections::BTreeMap<usize, usize>,
+) -> proc_macro2::TokenStream {
+    use proc_macro2::{Literal, TokenTree};
+
+    let mut inner: Vec<TokenTree> = tokens.into_iter().collect();
+    if let Some(TokenTree::Literal(lit)) = inner.first()
+        && let Ok(k) = lit.to_string().parse::<usize>()
+        && let Some(&to) = renumbered.get(&k)
+    {
+        let mut fresh = Literal::usize_unsuffixed(to);
+        fresh.set_span(lit.span());
+        inner[0] = TokenTree::Literal(fresh);
+    }
+    renumber_markers(inner.into_iter().collect(), renumbered)
+}
+
+/// `tokens` with each `__diapause_jump!(k ..)` marker's `k` replaced by
+/// its entry in `renumbered`, markers nested in another's value included.
+fn renumber_markers(
+    tokens: proc_macro2::TokenStream,
+    renumbered: &std::collections::BTreeMap<usize, usize>,
+) -> proc_macro2::TokenStream {
+    use proc_macro2::{Group, TokenTree};
+
+    let mut out = Vec::new();
+    let mut marker = 0u8;
+    for tt in tokens {
+        let tt = match tt {
+            TokenTree::Ident(ref ident) if ident == "__diapause_jump" => {
+                marker = 1;
+                tt
+            }
+            TokenTree::Punct(ref p) if marker == 1 && p.as_char() == '!' => {
+                marker = 2;
+                tt
+            }
+            TokenTree::Group(group) => {
+                let stream = match std::mem::take(&mut marker) == 2 {
+                    true => renumber_marker_body(group.stream(), renumbered),
+                    false => renumber_markers(group.stream(), renumbered),
+                };
+                let mut fresh = Group::new(group.delimiter(), stream);
+                fresh.set_span(group.span());
+                TokenTree::Group(fresh)
+            }
+            tt => {
+                marker = 0;
+                tt
+            }
+        };
+        out.push(tt);
+    }
+    out.into_iter().collect()
+}
+
+/// How many times its own size a body may grow by copied joins.
+const JOIN_BUDGET_FACTOR: usize = 1;
+
+/// The least number of statements [`duplicate_joins`] may copy, for a
+/// small body whose own size would leave too little room.
+const JOIN_BUDGET_FLOOR: usize = 128;
+
+/// The terminator's successor slots, for retargeting one edge at a time.
+fn successor_slots(t: &mut Terminator) -> Vec<&mut BlockId> {
+    match t {
+        Terminator::Goto(b) => vec![b],
+        Terminator::Branch { then_, else_, .. } => vec![then_, else_],
+        Terminator::Match { arms, .. } => arms.iter_mut().map(|a| &mut a.body).collect(),
+        Terminator::Yield { next, .. } => vec![next],
+        Terminator::IterNext { body, exit, .. } => vec![body, exit],
+        Terminator::Return(_) | Terminator::Unreachable(_) => Vec::new(),
+    }
+}
+
+/// Whether each block lies on a cycle (reaches itself), over terminator
+/// and opaque-jump edges.
+fn on_cycles(cfg: &Cfg) -> Vec<bool> {
+    let n = cfg.blocks.len();
+    (0..n)
+        .map(|start| {
+            let mut seen = vec![false; n];
+            let mut stack: Vec<BlockId> = cfg.successors(start).collect();
+            while let Some(b) = stack.pop() {
+                if b == start {
+                    return true;
+                }
+                if !std::mem::replace(&mut seen[b], true) {
+                    stack.extend(cfg.successors(b));
+                }
+            }
+            false
+        })
+        .collect()
+}
+
 /// Predecessor edge counts, opaque-jump edges included.
+/// The blocks the entry reaches without passing a resume point: the path
+/// that does not suspend.
+fn hot_blocks(cfg: &Cfg) -> Vec<bool> {
+    let mut hot = vec![false; cfg.blocks.len()];
+    let mut stack = vec![cfg.entry];
+    while let Some(b) = stack.pop() {
+        if std::mem::replace(&mut hot[b], true) {
+            continue;
+        }
+        for s in cfg.successors(b) {
+            if !hot[s] && !cfg.blocks[s].resume_point {
+                stack.push(s);
+            }
+        }
+    }
+    hot
+}
+
+/// How many edges into each block come from `hot` blocks.
+fn hot_pred_edge_counts(cfg: &Cfg, hot: &[bool]) -> Vec<usize> {
+    let mut counts = vec![0; cfg.blocks.len()];
+    for (b, &is_hot) in hot.iter().enumerate() {
+        if is_hot {
+            for s in cfg.successors(b) {
+                counts[s] += 1;
+            }
+        }
+    }
+    counts
+}
+
 fn pred_edge_counts(cfg: &Cfg) -> Vec<usize> {
     let mut counts = vec![0usize; cfg.blocks.len()];
     for b in 0..cfg.blocks.len() {

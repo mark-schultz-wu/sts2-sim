@@ -1,7 +1,7 @@
 //! The Ironclad's cards the generator leaves to a hand port.
 
 use crate::behaviour::Played;
-use crate::behaviour::cards::{Ask, Lent};
+use crate::behaviour::paused::{Ask, Lent};
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 use sts2_core::{
     Amount, CardKind, Change, CostPool, CreatureView as _, Effect, EventHook, Fight, FightKind,
@@ -158,6 +158,7 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
             || __c0 == V::Card::ANGER
             || __c0 == V::Card::HEADBUTT
             || __c0 == V::Card::BLOODLETTING
+            || __c0 == V::Card::DEMONIC_SHIELD
             || __c0 == V::Card::OFFERING
             || __c0 == V::Card::UPPERCUT
             || __c0 == V::Card::MOLTEN_FIST
@@ -295,7 +296,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             fight.act_on(
                 PileAct::Exhaust,
-                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
             );
             let cards = fight.var(V::CardVar::CARDS);
             fight.draw(cards);
@@ -335,7 +336,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             fight.act_on(
                 PileAct::OntoDrawTop,
-                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
             );
         }
         // `Bloodletting`: its `HpLoss` off its owner, unblockable, then its
@@ -347,6 +348,21 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             }
             let fight = &mut *resumed!().fight;
             fight.modify_energy(fight.var(V::CardVar::ENERGY));
+        }
+        // `DemonicShield`: its `HpLoss` off its owner, unblockable, then its
+        // calculated block on the ally it is pointed at.
+        __c0 if __c0 == V::Card::DEMONIC_SHIELD => {
+            lose_hp::<V, _>(resumed!().fight);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.target(),
+                amount: Amount::Var(V::CardVar::CALCULATED_BLOCK),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
         }
         // `Offering`: its `HpLoss` off its owner, unblockable, then its
         // energy and its cards drawn.
@@ -429,7 +445,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 let Lent { fight, taken } = resumed!();
                 fight.act_on(
                     PileAct::Exhaust,
-                    crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                    crate::behaviour::paused::selected::<V>(taken).as_slice(),
                 );
             } else {
                 exhaust_random_in_hand::<V, _>(resumed!().fight);
@@ -446,7 +462,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             fight.act_on(
                 PileAct::Exhaust,
-                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
             );
             let strength = fight.var(V::CardVar::STRENGTH_POWER);
             fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(strength));
@@ -487,24 +503,29 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             if resumed!().fight.waiting() {
                 yield_!(Ask::Waiting);
             }
-            let upgradable: Hand<V> = upgradable_in_hand::<V, _>(resumed!().fight);
             if resumed!().fight.upgraded() {
-                upgrade::<V, _>(resumed!().fight, &upgradable);
+                let fight = &mut *resumed!().fight;
+                let upgradable: Hand<V> = crate::behaviour::filter::among::<V, _>(
+                    fight,
+                    Pile::Hand,
+                    &crate::behaviour::CardFilter::Upgradable,
+                );
+                upgrade::<V, _>(fight, &upgradable);
             } else {
                 yield_!(Ask::AskingAmong {
-                    cards: upgradable,
+                    pile: Pile::Hand,
+                    filter: crate::behaviour::CardFilter::Upgradable,
                     selection: ONE,
                 });
                 let Lent { fight, taken } = resumed!();
                 upgrade::<V, _>(
                     &mut **fight,
-                    crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                    crate::behaviour::paused::selected::<V>(taken).as_slice(),
                 );
             }
         }
         // `EvilEye`: its block, and again where its owner exhausted a card
-        // this turn. A fight here has one player, whose cards are all its
-        // owner's.
+        // this turn.
         __c0 if __c0 == V::Card::EVIL_EYE => {
             let twice: bool = resumed!().fight.history().exhausted_this_turn();
             block::<V, _>(resumed!().fight);
@@ -533,7 +554,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::cards::paused_play!(Ironclad);
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Ironclad);
 
 /// `Dismantle`: its damage to the target, twice where the target carries
 /// Vulnerable.
@@ -602,20 +623,6 @@ fn not_attacks_in_hand<V: crate::Build, F: Fight<V>>(fight: &F) -> Hand<V> {
         .cards_in(Pile::Hand)
         .into_iter()
         .filter(|&card| V::card_kind(fight.card_ident(card).card) != Some(CardKind::Attack))
-        .collect()
-}
-
-/// The cards in hand that can be upgraded, in order.
-fn upgradable_in_hand<V: crate::Build, F: Fight<V>>(fight: &F) -> Hand<V> {
-    use sts2_core::CardTable as _;
-
-    fight
-        .cards_in(Pile::Hand)
-        .into_iter()
-        .filter(|&card| {
-            let ident = fight.card_ident(card);
-            ident.upgrade < ident.card.max_upgrade()
-        })
         .collect()
 }
 
@@ -843,6 +850,7 @@ fn whirlwind<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> 
 pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     card: V::Card,
     id: sts2_core::CardId<V>,
+    owner: sts2_core::CombatId,
     printed: &P,
     history: sts2_core::History<'_, V>,
     hook: EventHook<V>,
@@ -850,10 +858,9 @@ pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 ) {
     match (card, hook) {
         // `Stomp.BeforeCardPlayed`: one off its cost this turn for each
-        // Attack its owner plays, itself included. A fight here has one
-        // player.
-        (__c0, EventHook::CardPlaying { card, .. }) if __c0 == V::Card::STOMP => {
-            if V::card_kind(card) == Some(CardKind::Attack) {
+        // Attack its owner plays, itself included.
+        (__c0, EventHook::CardPlaying { card, player, .. }) if __c0 == V::Card::STOMP => {
+            if player == owner && V::card_kind(card) == Some(CardKind::Attack) {
                 asked.push(HookEffect::ModifySelf {
                     change: Change::ChangeCost(CostPool::Energy, -1),
                     lasting: Lasting::ThisTurn,

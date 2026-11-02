@@ -1,12 +1,9 @@
 //! The Defect's cards the generator leaves to a hand port.
 
 use crate::behaviour::Played;
-use crate::behaviour::cards::{Ask, Lent};
+use crate::behaviour::paused::{Ask, Lent};
 use crate::ids::{CardIds as _, CardVarIds as _, OrbIds as _, PowerIds as _};
 use sts2_core::{Amount, Effect, Fight, FightKind, Pile, PileAct, PowerAmount, Scaling};
-
-/// The statuses `FlakCannon` goes through, which a wait keeps.
-type Statuses<V> = smallvec::SmallVec<[sts2_core::CardAt<V>; crate::behaviour::cards::LEFT]>;
 
 /// One card, as a pick asks for it.
 const ONE: sts2_core::Selection = sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE);
@@ -132,7 +129,7 @@ fn hit_all<V: crate::Build, F: Fight<V>>(fight: &mut F) {
 /// `FlakCannon`'s statuses: every one its owner holds outside the exhaust
 /// pile, as `AllCards` lists them, the hand, then the draw and discard
 /// piles.
-fn statuses<V: crate::Build, F: Fight<V>>(fight: &F) -> Statuses<V> {
+fn statuses<V: crate::Build, F: Fight<V>>(fight: &F) -> crate::behaviour::cards::Listed<V> {
     [Pile::Hand, Pile::Draw, Pile::Discard]
         .into_iter()
         .flat_map(|pile| fight.cards_in(pile))
@@ -235,6 +232,20 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
                 sts2_core::Lasting::ThisFight,
             );
             fight.write_deck_version(crate::behaviour::cards::DeckWrite::BuffFromPlay(increase));
+            Played::Done
+        }
+        // `EnergySurge`: its energy to each living player, its owner too.
+        __c0 if __c0 == V::Card::ENERGY_SURGE => {
+            let energy = fight.var(V::CardVar::ENERGY);
+            for player in crate::behaviour::cards::teammates::<V, _>(fight) {
+                fight.for_player(player, |fight| fight.modify_energy(energy));
+            }
+            Played::Done
+        }
+        // `Ignition`: a Plasma orb channelled for the ally it is pointed at.
+        __c0 if __c0 == V::Card::IGNITION => {
+            let target = fight.target();
+            fight.for_player(target, |fight| fight.channel(V::Orb::PLASMA_ORB));
             Played::Done
         }
         // `HelixDrill`: its damage to the target, once for each hit it works
@@ -486,7 +497,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
         __c0 if __c0 == V::Card::FLAK_CANNON => {
             let hits: u8 = u8::try_from(resumed!().fight.var(V::CardVar::CALCULATED_HITS))
                 .expect("a count of statuses fits a u8");
-            let cards: Statuses<V> = statuses::<V, _>(resumed!().fight);
+            let cards: crate::behaviour::cards::Listed<V> = statuses::<V, _>(resumed!().fight);
             let count: usize = cards.len();
             for at in 0..count {
                 resumed!().fight.act_on(PileAct::Exhaust, &[cards[at]]);
@@ -594,7 +605,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             fight.act_on(
                 PileAct::Exhaust,
-                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
             );
             let energy = PowerAmount::Counted(fight.var(V::CardVar::ENERGY));
             fight.apply_to_actor(V::Power::ENERGY_NEXT_TURN_POWER, energy);
@@ -650,7 +661,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             fight.act_on(
                 PileAct::IntoHand,
-                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
             );
         }
         // `Scrape`: its damage to the target, then its `Cards` drawn, and
@@ -691,7 +702,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::cards::paused_play!(Defect);
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Defect);
 
 /// Its damage to the target, `hits` times, as one attack.
 fn hit_target<V: crate::Build, F: Fight<V>>(fight: &mut F, hits: crate::behaviour::cards::Number) {

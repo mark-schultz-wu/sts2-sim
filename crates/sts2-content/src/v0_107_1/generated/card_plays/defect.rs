@@ -6,7 +6,7 @@
 use super::super::cards::{CardKeyword, CardVar, DefectCard};
 use super::super::orbs::Orb;
 use super::super::powers::Power;
-use crate::behaviour::cards::{Ask, Lent};
+use crate::behaviour::paused::{Ask, Lent};
 use sts2_core::{Amount, Change, CostPool, Effect, Fight, FightKind, PowerAmount, Scaling};
 
 type V = super::super::super::V0_107_1;

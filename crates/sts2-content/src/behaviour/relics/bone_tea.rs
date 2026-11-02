@@ -3,7 +3,6 @@
 use sts2_core::{EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
-use crate::generated::runstate::CombatSide;
 
 /// `_combatsLeft`, which the relic is picked up with.
 const COMBATS: Number = 1;
@@ -37,16 +36,24 @@ impl State {
 /// for a turn that is not its owner's. Each of those is an arm this does not
 /// match.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // `player != Owner`: another player's turn is not its owner's.
+    if let EventHook::PlayerTurnStart { player, .. } = hook
+        && player != owner
+    {
+        return;
+    }
     match hook {
         EventHook::SideTurnStart {
-            side: CombatSide::Player,
+            participants,
             turn: 1,
             ..
-        } if !state.used_up() => {
+        } if participants.contains(owner) && !state.used_up() => {
             state.combats_left -= 1;
             asked.push(HookEffect::UpgradeHand)
         }

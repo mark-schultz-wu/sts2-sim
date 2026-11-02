@@ -43,7 +43,7 @@ pub fn play<'a, K: sts2_core::FightKind<V>>(
             Some(()) => crate::behaviour::Played::Done,
             None => {
                 let mut play = ironclad::paused::<K>(card);
-                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
                 settle(Paused::Ironclad(play), state)
             }
         },
@@ -51,7 +51,7 @@ pub fn play<'a, K: sts2_core::FightKind<V>>(
             Some(()) => crate::behaviour::Played::Done,
             None => {
                 let mut play = silent::paused::<K>(card);
-                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
                 settle(Paused::Silent(play), state)
             }
         },
@@ -59,7 +59,7 @@ pub fn play<'a, K: sts2_core::FightKind<V>>(
             Some(()) => crate::behaviour::Played::Done,
             None => {
                 let mut play = regent::paused::<K>(card);
-                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
                 settle(Paused::Regent(play), state)
             }
         },
@@ -67,7 +67,7 @@ pub fn play<'a, K: sts2_core::FightKind<V>>(
             Some(()) => crate::behaviour::Played::Done,
             None => {
                 let mut play = necrobinder::paused::<K>(card);
-                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
                 settle(Paused::Necrobinder(play), state)
             }
         },
@@ -75,7 +75,7 @@ pub fn play<'a, K: sts2_core::FightKind<V>>(
             Some(()) => crate::behaviour::Played::Done,
             None => {
                 let mut play = defect::paused::<K>(card);
-                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
                 settle(Paused::Defect(play), state)
             }
         },
@@ -83,7 +83,7 @@ pub fn play<'a, K: sts2_core::FightKind<V>>(
             Some(()) => crate::behaviour::Played::Done,
             None => {
                 let mut play = colorless::paused::<K>(card);
-                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
                 settle(Paused::Colorless(play), state)
             }
         },
@@ -95,7 +95,7 @@ pub fn play<'a, K: sts2_core::FightKind<V>>(
             Some(()) => crate::behaviour::Played::Done,
             None => {
                 let mut play = event::paused::<K>(card);
-                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
                 settle(Paused::Event(play), state)
             }
         },
@@ -111,7 +111,7 @@ pub fn play<'a, K: sts2_core::FightKind<V>>(
             Some(()) => crate::behaviour::Played::Done,
             None => {
                 let mut play = token::paused::<K>(card);
-                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
                 settle(Paused::Token(play), state)
             }
         },
@@ -128,7 +128,7 @@ pub fn resume<'a, K: sts2_core::FightKind<V>>(
     paused: Paused<K>,
     taken: sts2_core::Taken<V>,
 ) -> crate::behaviour::Played<V, K> {
-    let lent = crate::behaviour::cards::Lent {
+    let lent = crate::behaviour::paused::Lent {
         fight,
         taken: Some(taken),
     };
@@ -171,12 +171,12 @@ pub fn resume<'a, K: sts2_core::FightKind<V>>(
 /// How far a step of `play` got.
 fn settle<K: sts2_core::FightKind<V>>(
     play: Paused<K>,
-    state: diapause::CoroutineState<crate::behaviour::cards::Ask<V>, ()>,
+    state: diapause::CoroutineState<crate::behaviour::paused::Ask<V>, ()>,
 ) -> crate::behaviour::Played<V, K> {
     match state {
         diapause::CoroutineState::Complete(()) => crate::behaviour::Played::Done,
         diapause::CoroutineState::Yielded(ask) => {
-            ask.at(crate::behaviour::cards::Resume::Generated(play).into())
+            ask.at(crate::behaviour::Resume::Build(play.into()))
         }
     }
 }
