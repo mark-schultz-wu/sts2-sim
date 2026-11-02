@@ -11,9 +11,17 @@ use crate::ids::CardIds as _;
 /// `AddGeneratedCardsToCombat` of three Dazed into the draw pile, each at
 /// `CardPilePosition.Random`.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // `player != Owner`: another player's turn is not its owner's.
+    if let EventHook::BeforeHandDraw { player, .. } = hook
+        && player != owner
+    {
+        return;
+    }
     match hook {
         EventHook::BeforeHandDraw { turn: 1, .. } => asked.push(HookEffect::AddToDrawAtRandom {
             card: V::Card::DAZED,
@@ -26,8 +34,13 @@ pub(super) fn event_hook<V: crate::Build>(
 }
 
 /// `ModifyMaxEnergy`: its energy, for its owner.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
+        // `player != base.Owner`: another player's number is left as it is.
+        ModifyHook::MaxEnergy { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::MaxEnergy { .. } => Modify::Added(V::Relic::BLESSED_ANTLER_ENERGY),
         hook => unimplemented!("what BlessedAntler does for {hook:?}"),
     }
