@@ -1,7 +1,7 @@
 //! `ArtOfWar`: energy on a turn after one its owner played no Attack in.
 
 use crate::vars::RelicVars as _;
-use sts2_core::{CardKind, EventHook, HookEffect, SideKinds as _};
+use sts2_core::{CardKind, EventHook, HookEffect};
 
 /// `AnyAttacksPlayedLastTurn` and `AnyAttacksPlayedThisTurn`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -15,9 +15,6 @@ pub struct State {
 /// turn's note to last turn's. `AfterEnergyReset` past the first turn gives
 /// its energy where last turn had no Attack, then clears both.
 /// `AfterCombatEnd` clears both.
-///
-/// A relic's owner is the player, and a fight here has one, so every card
-/// played is its owner's.
 pub(super) fn event_hook<V: crate::Build>(
     owner: sts2_core::CombatId,
 
@@ -32,14 +29,14 @@ pub(super) fn event_hook<V: crate::Build>(
         return;
     }
     match hook {
-        EventHook::CardPlayed { card, .. }
-            if V::card_kind(card) == Some(CardKind::Attack) && !state.last_turn =>
+        EventHook::CardPlayed { card, player, .. }
+            if player == owner
+                && V::card_kind(card) == Some(CardKind::Attack)
+                && !state.last_turn =>
         {
             state.this_turn = true;
         }
-        EventHook::SideTurnEnd { side, .. }
-            if side == <V as sts2_core::ContentVersion>::CombatSide::PLAYER =>
-        {
+        EventHook::SideTurnEnd { participants, .. } if participants.contains(owner) => {
             state.last_turn = state.this_turn;
             state.this_turn = false;
         }
