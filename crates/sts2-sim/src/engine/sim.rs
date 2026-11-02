@@ -1,6 +1,4 @@
-use sts2_core::{
-    Answered, Construct, Decision, Play, Reason, Refusal, Rules, Setup, Snapshot, Start, Step,
-};
+use sts2_core::{Answered, Decision, Reason, Refusal, Rules, Setup, Snapshot, Start, Step};
 
 use crate::run::{Settled, State};
 
@@ -32,30 +30,48 @@ impl<V: Rules> Clone for Sim<V> {
 /// The one seat of a solo run, which is every seat `Sim` plays.
 const SOLO: sts2_core::SeatIndex = sts2_core::SeatIndex(0);
 
-impl<V: Rules> Play<V> for Sim<V> {
-    type Error = Error;
-    type Host = ();
-
-    fn begin(_: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
+impl<V: Rules> Sim<V> {
+    /// The solo run `start` names, as it opens.
+    ///
+    /// # Panics
+    ///
+    /// On a run of several players, which a [`crate::SimTable`] holds.
+    pub fn begin(start: &Start<V>) -> Result<Self, Error> {
         start.alone();
         Ok(Self {
             state: started(start),
         })
     }
 
-    fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
+    /// Plays one decision and reports where it left the run.
+    pub fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Error> {
         Ok(self.decide(decision)?.map(|decided| self.reported(decided)))
     }
 
-    fn observe(&mut self) -> Result<Snapshot<V>, Self::Error> {
+    /// Where the run stands, built in full.
+    pub fn observe(&mut self) -> Result<Snapshot<V>, Error> {
         Ok(self.state.report(SOLO))
     }
-}
 
-impl<V: Rules> Sim<V> {
+    /// Puts the run into a position, and reports where that left it. Every
+    /// one of these is a debug command the game itself has, so a state reached
+    /// through them is a state the game reaches.
+    pub fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Error> {
+        Ok(self.construct(step)?.map(|decided| self.reported(decided)))
+    }
+
+    /// Plays one line of a recording, whichever half it is, and reports where
+    /// it left the run.
+    pub fn step(&mut self, step: &Step<V>) -> Result<Answered<V>, Error> {
+        match step {
+            Step::Decision(decision) => self.play(decision),
+            Step::Setup(setup) => self.setup(setup),
+        }
+    }
+
     /// The run's facts, lent to a comparison.
     ///
-    /// What [`Play::observe`] reports, read off the run instead of built. A
+    /// What [`Sim::observe`] reports, read off the run instead of built. A
     /// digest of this is the digest of that report, and costs no allocation.
     pub fn observed(&self) -> impl sts2_core::Observed<V> + Copy + '_ {
         self.state.seen_by(SOLO)
@@ -91,25 +107,12 @@ impl<V: Rules> Sim<V> {
     ///
     /// [`Sim::decide`], for the debug commands rather than the decisions.
     pub fn construct(&mut self, step: &Setup<V>) -> Result<Settled<V>, Error> {
-        match step {
-            Setup::Fight { encounter } => self.state.fight_here(SOLO, *encounter).map(Ok),
-            Setup::Grant(gift) => self.state.grant(SOLO, gift).map(Ok),
-            Setup::Power { at, power, amount } => {
-                self.state.apply_power(SOLO, *at, *power, *amount).map(Ok)
-            }
-            Setup::Enchant {
-                enchantment,
-                amount,
-                index,
-            } => self.state.enchant(SOLO, *enchantment, *amount, *index),
-            Setup::Event { event } => self.state.event_here(*event).map(Ok),
-            Setup::Hp { at, hp } => self.state.set_hp(SOLO, *at, *hp).map(Ok),
-        }
+        constructed(&mut self.state, SOLO, step)
     }
 
     /// Plays one line of a recording and reports what it decided.
     ///
-    /// [`Construct::step`], without the observation. A search that replays a
+    /// [`Sim::step`], without the observation. A search that replays a
     /// recording to reach its position steps through here.
     pub fn advance(&mut self, step: &Step<V>) -> Result<Settled<V>, Error> {
         match step {
@@ -125,17 +128,6 @@ impl<V: Rules> Sim<V> {
     /// that asked to see where it landed.
     fn reported(&self, decided: sts2_core::Decided) -> sts2_core::Applied<V> {
         self.state.report(SOLO).applied(decided)
-    }
-}
-
-impl<V: Rules> Construct<V> for Sim<V> {
-    /// Reaching a position without playing to it.
-    ///
-    /// Every one of these is a debug command the game itself has, so a state
-    /// reached through them is a state the game reaches. That is what makes a
-    /// constructed scenario worth holding the simulator to.
-    fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Self::Error> {
-        Ok(self.construct(step)?.map(|decided| self.reported(decided)))
     }
 }
 
@@ -166,6 +158,11 @@ pub(super) fn decide<V: Rules>(
     seat: sts2_core::SeatIndex,
     decision: &Decision<V>,
 ) -> Result<Settled<V>, Error> {
+    // What another player does on a screen of their own machine, which
+    // this one never shows. Its results reach this machine as messages.
+    if state.answers_elsewhere(seat, decision) {
+        return Ok(Ok(sts2_core::Decided::Resolved));
+    }
     let pending = state.pending(seat);
     // A reward screen leaves the belt open, so a discard is the one
     // other decision it takes.
@@ -236,5 +233,27 @@ pub(super) fn name<V: Rules>(decision: &Decision<V>) -> &'static str {
         Decision::Buy { .. } => "buy",
         Decision::Answer(_) => "answer",
         Decision::DiscardPotion { .. } => "discard_potion",
+    }
+}
+
+/// `step`, on the machine of the player in `me`, whose own player a setup
+/// that names none is for.
+pub(super) fn constructed<V: Rules>(
+    state: &mut State<V>,
+    me: sts2_core::SeatIndex,
+    step: &Setup<V>,
+) -> Result<Settled<V>, Error> {
+    match step {
+        Setup::Fight { encounter } => state.fight_here(me, *encounter).map(Ok),
+        Setup::Grant(gift) => state.grant(me, gift).map(Ok),
+        Setup::GrantTo { seat, gift } => state.grant(*seat, gift).map(Ok),
+        Setup::Power { at, power, amount } => state.apply_power(me, *at, *power, *amount).map(Ok),
+        Setup::Enchant {
+            enchantment,
+            amount,
+            index,
+        } => state.enchant(me, *enchantment, *amount, *index),
+        Setup::Event { event } => state.event_here(*event).map(Ok),
+        Setup::Hp { at, hp } => state.set_hp(me, *at, *hp).map(Ok),
     }
 }

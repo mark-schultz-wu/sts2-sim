@@ -36,7 +36,7 @@ use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::Digested;
-use sts2_core::{Construct, Play, Step};
+use sts2_core::Step;
 use sts2_golden::bench::{kind, reached, upto};
 use sts2_golden::{every_run, recording};
 use sts2_sim::Sim;
@@ -48,7 +48,7 @@ fn decisions(c: &mut Criterion) {
         let recorded = recording::<V>(&name).expect("a recorded run reads");
         let start = recorded.start().clone();
         let steps: Vec<Step<V>> = recorded.steps().to_vec();
-        let supported = reached::<V, Sim<V>>(&start, &steps);
+        let supported = reached::<V>(&start, &steps);
 
         for at in last_of_each_kind(&steps[..supported]) {
             let step = &steps[at];

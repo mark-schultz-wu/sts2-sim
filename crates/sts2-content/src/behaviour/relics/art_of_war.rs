@@ -1,7 +1,7 @@
 //! `ArtOfWar`: energy on a turn after one its owner played no Attack in.
 
 use crate::vars::RelicVars as _;
-use sts2_core::{CardKind, EventHook, HookEffect, SideKinds as _};
+use sts2_core::{CardKind, EventHook, HookEffect};
 
 /// `AnyAttacksPlayedLastTurn` and `AnyAttacksPlayedThisTurn`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -36,9 +36,7 @@ pub(super) fn event_hook<V: crate::Build>(
         {
             state.this_turn = true;
         }
-        EventHook::SideTurnEnd { side, .. }
-            if side == <V as sts2_core::ContentVersion>::CombatSide::PLAYER =>
-        {
+        EventHook::SideTurnEnd { participants, .. } if participants.contains(owner) => {
             state.last_turn = state.this_turn;
             state.this_turn = false;
         }
