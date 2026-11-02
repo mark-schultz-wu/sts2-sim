@@ -16,10 +16,18 @@ pub struct State {
 /// `Stars`, it gains its `Block` for each whole `Stars`, unpowered, and
 /// keeps the rest.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // `player != Owner`: another player's turn is not its owner's.
+    if let EventHook::StarsSpent { player, .. } = hook
+        && player != owner
+    {
+        return;
+    }
     if let EventHook::StarsSpent { amount, .. } = hook {
         state.stars_spent += amount;
         if state.stars_spent >= V::Relic::GALACTIC_DUST_STARS {

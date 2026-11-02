@@ -24,8 +24,8 @@ impl RestKinds<V0_107_1> for RestSiteOption {
     const MEND: RestSiteOption = RestSiteOption::Mend;
     const SMITH: RestSiteOption = RestSiteOption::Smith;
 
-    fn offered(added: &[RestSiteOption]) -> Vec<RestSiteOption> {
-        crate::behaviour::restsite::offered::<V0_107_1>(added)
+    fn offered(players: usize, added: &[RestSiteOption]) -> Vec<RestSiteOption> {
+        crate::behaviour::restsite::offered::<V0_107_1>(players, added)
     }
 
     fn selected(self) -> Vec<sts2_core::HookEffect<V0_107_1>> {

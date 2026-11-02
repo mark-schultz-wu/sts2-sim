@@ -7,10 +7,16 @@ use crate::behaviour::relics::Number;
 
 /// `ModifyMaxEnergy`: one more. `ModifyGoldGained`: nothing, whatever the
 /// gain was.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
+        // `player != base.Owner`: another player's number is left as it is.
+        ModifyHook::MaxEnergy { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::MaxEnergy { .. } => Modify::Added(V::Relic::ECTOPLASM_ENERGY),
-        ModifyHook::GoldGained => Modify::Replaced(0),
+        ModifyHook::GoldGained { player } if player != owner => Modify::Nothing,
+        ModifyHook::GoldGained { .. } => Modify::Replaced(0),
         hook => unimplemented!("what Ectoplasm does for {hook:?}"),
     }
 }

@@ -4,41 +4,31 @@
 //! Source: `dumps/card_plays.txt`, build v0.111.0 (41cef1ea), assembly 1579942752.
 
 use super::super::cards::{CardVar, StatusCard};
-use crate::behaviour::Played;
 use sts2_core::{Change, Fight};
 
 type V = super::super::super::V0_111_0;
 
-/// `OnPlay` from the command at `from` on, for every card whose
-/// statements the dump matched. A command that leaves a question
-/// waiting stands the rest still, as the game's `await` does, and
-/// the play comes back as `Err` with the command to go on from.
+/// `OnPlay`, for every card whose statements the dump matched. Each
+/// is one command, which never stands still on a question.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn play_from<F: Fight<V>>(
-    card: StatusCard,
-    fight: &mut F,
-    from: u8,
-) -> Result<Played<V, F::Kind>, u8> {
+pub fn play<F: Fight<V>>(card: StatusCard, fight: &mut F) {
     match card {
-        StatusCard::Beckon => Ok(Played::Done),
-        StatusCard::Burn => Ok(Played::Done),
-        StatusCard::Dazed => Ok(Played::Done),
-        StatusCard::Debris => Ok(Played::Done),
         // `call GetSandpitEnemy`
         StatusCard::FranticEscape => unimplemented!("what {card:?} does when it is played"),
-        StatusCard::Infection => Ok(Played::Done),
+        StatusCard::Beckon => {}
+        StatusCard::Burn => {}
+        StatusCard::Dazed => {}
+        StatusCard::Debris => {}
+        StatusCard::Infection => {}
         StatusCard::Slimed => {
-            if from == 0 {
-                fight.draw(fight.var(CardVar::Cards));
-            }
-            Ok(Played::Done)
+            fight.draw(fight.var(CardVar::Cards));
         }
-        StatusCard::Soot => Ok(Played::Done),
-        StatusCard::Toxic => Ok(Played::Done),
-        StatusCard::Void => Ok(Played::Done),
-        StatusCard::Wither => Ok(Played::Done),
-        StatusCard::Wound => Ok(Played::Done),
+        StatusCard::Soot => {}
+        StatusCard::Toxic => {}
+        StatusCard::Void => {}
+        StatusCard::Wither => {}
+        StatusCard::Wound => {}
     }
 }
 

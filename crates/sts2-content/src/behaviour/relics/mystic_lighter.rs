@@ -7,13 +7,18 @@ use crate::behaviour::relics::Number;
 
 /// `ModifyDamageAdditive`: its damage on a powered hit from a card with an
 /// enchantment. A fight here has one player, so every card is its owner's.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
         ModifyHook::DamageAdditive {
             card: Some(source),
             powered: true,
             ..
-        } if source.enchanted => Modify::Added(V::Relic::MYSTIC_LIGHTER_DAMAGE),
+        } if source.enchanted && source.owner == owner => {
+            Modify::Added(V::Relic::MYSTIC_LIGHTER_DAMAGE)
+        }
         ModifyHook::DamageAdditive { .. } => Modify::Nothing,
         hook => unimplemented!("what MysticLighter does for {hook:?}"),
     }

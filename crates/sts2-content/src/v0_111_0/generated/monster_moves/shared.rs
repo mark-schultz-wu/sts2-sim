@@ -5,22 +5,17 @@
 
 use super::super::monsters::{Monster, MoveId};
 use super::super::powers::Power;
-use sts2_core::{Amount, Effect, Fight, PowerAmount, Scaling};
+use crate::behaviour::paused::{Ask, Lent};
+use sts2_core::{Amount, Effect, Fight, FightKind, PowerAmount, Scaling};
 
 type V = super::super::super::V0_111_0;
 
-/// A move of a monster in this file, for every move whose statements
-/// the dump matched.
+/// A move of a monster in this file that never stands still, for
+/// every move whose statements the dump matched. `None` for a move
+/// with more to do after an attack, which [`paused`] performs.
 ///
-/// Any other move panics, and `behaviour/` ports it by hand. It
-/// starts at `step`, and hands back the step to go on from where a
-/// command made the player answer something.
-pub fn perform<F: Fight<V>>(
-    monster: Monster,
-    move_id: MoveId,
-    step: u8,
-    fight: &mut F,
-) -> Option<u8> {
+/// Any other move panics, and `behaviour/` ports it by hand.
+pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) -> Option<()> {
     match (monster, move_id) {
         // `statement`
         (Monster::CubexConstruct, MoveId::ChargeUpMove) => {
@@ -28,39 +23,6 @@ pub fn perform<F: Fight<V>>(
         }
         (Monster::CubexConstruct, MoveId::ExpelMove) => {
             fight.attack_opponents();
-        }
-        (Monster::CubexConstruct, MoveId::RepeaterBlastMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-                if fight.waiting() {
-                    return Some(1);
-                }
-            }
-            if step <= 1 {
-                fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(2));
-            }
-        }
-        (Monster::CubexConstruct, MoveId::RepeaterBlastMove2) => {
-            if step == 0 {
-                fight.attack_opponents();
-                if fight.waiting() {
-                    return Some(1);
-                }
-            }
-            if step <= 1 {
-                fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(2));
-            }
-        }
-        (Monster::PunchConstruct, MoveId::FastPunchMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-                if fight.waiting() {
-                    return Some(1);
-                }
-            }
-            if step <= 1 {
-                fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(1));
-            }
         }
         (Monster::PunchConstruct, MoveId::ReadyMove) => {
             let amount = 10;
@@ -74,7 +36,61 @@ pub fn perform<F: Fight<V>>(
         (Monster::PunchConstruct, MoveId::StrongPunchMove) => {
             fight.attack_opponents();
         }
+        (Monster::CubexConstruct, MoveId::RepeaterBlastMove)
+        | (Monster::CubexConstruct, MoveId::RepeaterBlastMove2)
+        | (Monster::PunchConstruct, MoveId::FastPunchMove) => return None,
         (monster, move_id) => unimplemented!("{monster:?} has no {move_id:?} in the table"),
     }
-    None
+    Some(())
+}
+
+/// A move of a monster in this file with more to do after an attack,
+/// from its start to its end. An attack that leaves a question waiting
+/// stands the rest still, as the game's `await` does. Each step is lent
+/// the fight, and after a question the answer.
+#[diapause::coroutine(yield = Ask<V>, resume = for<'f, 'a> Lent<'f, 'a, V, K>)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<K: FightKind<V>>(item: (Monster, MoveId)) {
+    match item {
+        (Monster::CubexConstruct, MoveId::RepeaterBlastMove) => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.attack_opponents();
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(2));
+            }
+        }
+        (Monster::CubexConstruct, MoveId::RepeaterBlastMove2) => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.attack_opponents();
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(2));
+            }
+        }
+        (Monster::PunchConstruct, MoveId::FastPunchMove) => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.attack_opponents();
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(1));
+            }
+        }
+        other => unreachable!("{other:?} has nothing to do after an attack"),
+    }
 }

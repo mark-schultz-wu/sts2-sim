@@ -1,3 +1,4 @@
+using HarmonyLib;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Commands;
@@ -32,14 +33,9 @@ namespace Sts2Headless;
 public static class Chest
 {
     /// <summary>
-    /// Votes for a relic — or, one past the last, for none — and awards it.
+    /// Votes for a relic, or, one past the last, for none. The relics are
+    /// awarded by <see cref="Award"/> once every player has voted.
     /// </summary>
-    /// <remarks>
-    /// Subscribed around the vote rather than once at startup because the
-    /// synchronizer belongs to the run, not the process: a second `start` builds
-    /// a new one, and a handler left on the first would be listening to a run
-    /// that no longer exists.
-    /// </remarks>
     public static async Task Pick(RunState state, int index)
     {
         // `NTreasureRoom.OpenChest` gives the chest's gold, and pays the Spoils
@@ -52,31 +48,37 @@ public static class Chest
             await room.DoNormalRewards();
         }
         TreasureRoomRelicSynchronizer sync = RunManager.Instance.TreasureRoomRelicSynchronizer;
-        List<RelicPickingResult> awarded = new List<RelicPickingResult>();
-        void Collect(List<RelicPickingResult> results) => awarded.AddRange(results);
-
-        sync.RelicsAwarded += Collect;
-        try
+        int relics = sync.CurrentRelics?.Count ?? 0;
+        if (index == relics)
         {
-            int relics = sync.CurrentRelics?.Count ?? 0;
-            if (index == relics)
-            {
-                sync.SkipRelicLocally();
-            }
-            else
-            {
-                sync.PickRelicLocally(index);
-            }
-            await Driver.WaitForDecisionPoint();
+            sync.SkipRelicLocally();
         }
-        finally
+        else
         {
-            sync.RelicsAwarded -= Collect;
+            sync.PickRelicLocally(index);
         }
+        await Driver.WaitForDecisionPoint();
+    }
 
-        // The screen's own loop, minus the animation: obtain what was won, and
-        // put what nobody won back where the other players' grab bags reach it.
-        foreach (RelicPickingResult result in awarded)
+    /// <summary>
+    /// <c>NTreasureRoomRelicCollection.AnimateRelicAwards</c>, minus the
+    /// animation: the results sorted by type, each one won obtained, and each
+    /// relic moved to the fallback of every other player's bag.
+    /// </summary>
+    /// <remarks>
+    /// The awards come when the last vote does, which in a run of several
+    /// players can be another player's. So this hears them for the whole room,
+    /// from <c>BeginRelicPicking</c>, rather than around the local pick.
+    /// </remarks>
+    internal static void Award(List<RelicPickingResult> results)
+    {
+        RunState? state = RunManager.Instance.DebugOnlyGetState();
+        if (state == null)
+        {
+            return;
+        }
+        results.Sort((r1, r2) => r1.type.CompareTo(r2.type));
+        foreach (RelicPickingResult result in results)
         {
             if (result.type != RelicPickingResultType.Skipped && result.player != null)
             {
@@ -87,11 +89,6 @@ public static class Chest
                 // it is blocked here. The caller's WaitForDecisionPoint covers
                 // both cases, so a relic that asks nothing still lands before
                 // the observation.
-                //
-                // Not covered by a live test: reaching this needs a chest that
-                // offers one of the ten relics whose AfterObtained enchants,
-                // which is seed hunting. `grant` reaches the same hook directly
-                // and is tested there.
                 BackgroundWork.Track(RelicCmd.Obtain(result.relic.ToMutable(), result.player));
             }
             foreach (Player other in state.Players)
@@ -116,5 +113,41 @@ public static class Chest
     {
         TreasureRoomRelicSynchronizer sync = RunManager.Instance.TreasureRoomRelicSynchronizer;
         return sync.CurrentRelics != null && !sync.GetPlayerVote(me).voteReceived;
+    }
+
+    /// <summary>
+    /// Whether the chest offers its skip, which <c>NTreasureRoom</c> puts on
+    /// its proceed button for a single player alone. Several players only
+    /// vote for a relic.
+    /// </summary>
+    public static bool Skippable(RunState state) => state.Players.Count == 1;
+
+    /// <summary>
+    /// Whether <c>NTreasureRoom</c> has turned travel on. A single player's
+    /// skip does at once. Otherwise the room waits for
+    /// <c>RelicPickingFinished</c>, once every player voted and the relics
+    /// are awarded, which clears <c>CurrentRelics</c>.
+    /// </summary>
+    public static bool Done(RunState state, Player me) =>
+        !Open(me)
+        && (Skippable(state) || RunManager.Instance.TreasureRoomRelicSynchronizer.CurrentRelics == null);
+}
+
+/// <summary>
+/// <see cref="Chest.Award"/> heard for each chest, from the moment the picking
+/// opens.
+/// </summary>
+/// <remarks>
+/// Unhooked and hooked again each time, as the synchronizer belongs to the run
+/// and a second run builds a new one.
+/// </remarks>
+[HarmonyPatch(typeof(TreasureRoomRelicSynchronizer), nameof(TreasureRoomRelicSynchronizer.BeginRelicPicking))]
+internal static class HearChestAwards
+{
+    [HarmonyPrefix]
+    private static void Hear(TreasureRoomRelicSynchronizer __instance)
+    {
+        __instance.RelicsAwarded -= Chest.Award;
+        __instance.RelicsAwarded += Chest.Award;
     }
 }

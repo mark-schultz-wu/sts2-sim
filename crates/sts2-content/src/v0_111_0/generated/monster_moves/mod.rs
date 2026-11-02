@@ -148,3 +148,127 @@ pub fn filed(monster: super::monsters::Monster) -> Filed {
         | Monster::WaterfallGiant => Filed::Underdocks,
     }
 }
+
+type V = super::super::V0_111_0;
+
+/// A generated move standing still on a question, by its file.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Paused<K: sts2_core::FightKind<V>> {
+    Glory(glory::paused::State<K>),
+    Hive(hive::paused::State<K>),
+    Overgrowth(overgrowth::paused::State<K>),
+    Shared(shared::paused::State<K>),
+    Summoned(summoned::paused::State<K>),
+    Underdocks(underdocks::paused::State<K>),
+}
+
+/// A move, for every move whose statements the dump matched.
+///
+/// Any other move panics, and `behaviour/` ports it by hand.
+pub fn perform<'a, K: sts2_core::FightKind<V>>(
+    monster: super::monsters::Monster,
+    move_id: super::monsters::MoveId,
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
+    match filed(monster) {
+        Filed::Glory => match glory::perform(monster, move_id, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = glory::paused::<K>((monster, move_id));
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
+                settle(Paused::Glory(play), state)
+            }
+        },
+        Filed::Hive => match hive::perform(monster, move_id, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = hive::paused::<K>((monster, move_id));
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
+                settle(Paused::Hive(play), state)
+            }
+        },
+        Filed::Overgrowth => match overgrowth::perform(monster, move_id, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = overgrowth::paused::<K>((monster, move_id));
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
+                settle(Paused::Overgrowth(play), state)
+            }
+        },
+        Filed::Shared => match shared::perform(monster, move_id, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = shared::paused::<K>((monster, move_id));
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
+                settle(Paused::Shared(play), state)
+            }
+        },
+        Filed::Summoned => match summoned::perform(monster, move_id, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = summoned::paused::<K>((monster, move_id));
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
+                settle(Paused::Summoned(play), state)
+            }
+        },
+        Filed::Underdocks => match underdocks::perform(monster, move_id, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = underdocks::paused::<K>((monster, move_id));
+                let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
+                settle(Paused::Underdocks(play), state)
+            }
+        },
+    }
+}
+
+/// A generated move that stood still, with the answer it waited for.
+pub fn resume<'a, K: sts2_core::FightKind<V>>(
+    fight: &mut K::Fight<'a>,
+    paused: Paused<K>,
+    taken: sts2_core::Taken<V>,
+) -> crate::behaviour::Played<V, K> {
+    let lent = crate::behaviour::paused::Lent {
+        fight,
+        taken: Some(taken),
+    };
+    match paused {
+        Paused::Glory(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Glory(play), state)
+        }
+        Paused::Hive(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Hive(play), state)
+        }
+        Paused::Overgrowth(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Overgrowth(play), state)
+        }
+        Paused::Shared(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Shared(play), state)
+        }
+        Paused::Summoned(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Summoned(play), state)
+        }
+        Paused::Underdocks(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Underdocks(play), state)
+        }
+    }
+}
+
+/// How far a step of a move got.
+fn settle<K: sts2_core::FightKind<V>>(
+    play: Paused<K>,
+    state: diapause::CoroutineState<crate::behaviour::paused::Ask<V>, ()>,
+) -> crate::behaviour::Played<V, K> {
+    match state {
+        diapause::CoroutineState::Complete(()) => crate::behaviour::Played::Done,
+        diapause::CoroutineState::Yielded(ask) => {
+            ask.at(crate::behaviour::Resume::Build(play.into()))
+        }
+    }
+}

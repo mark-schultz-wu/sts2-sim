@@ -26,8 +26,13 @@ pub(super) fn event_hook<V: crate::Build>(
 }
 
 /// `ModifyHandDraw`: two more cards on every turn.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
+        // `player != base.Owner`: another player's number is left as it is.
+        ModifyHook::HandDraw { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::HandDraw { .. } => Modify::Added(V::Relic::SNECKO_EYE_CARDS),
         hook => unimplemented!("what SneckoEye does for {hook:?}"),
     }
