@@ -4,8 +4,8 @@
 //! the thin envelope around it. It lets a short-lived process reach a game it
 //! did not launch: one JSON line each way over a unix socket.
 //!
-//! Private, and meant to stay private. A caller drives a held game through
-//! [`Play`](sts2_core::Play) like any other, and asks after the session itself
+//! Private, and meant to stay private. A caller drives a held game like any
+//! other, and asks after the session itself
 //! through [`Session`](crate::Session)'s own methods. Nothing outside this crate
 //! has to know a socket is involved, which is the whole reason the daemon moved
 //! in here.

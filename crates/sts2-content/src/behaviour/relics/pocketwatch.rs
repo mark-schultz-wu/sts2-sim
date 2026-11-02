@@ -4,7 +4,6 @@ use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-use crate::generated::runstate::CombatSide;
 
 /// `_cardsPlayedThisTurn` and `_cardsPlayedLastTurn`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -19,13 +18,14 @@ pub struct State {
 /// last turn's before anything is drawn, and `AfterCombatEnd` forgets both.
 /// `AfterSideTurnStart` only refreshes the counter on screen, so nothing here
 /// answers it.
-pub(super) fn event_hook<V: crate::Build>(state: &mut State, hook: EventHook<V>) {
+pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &mut State,
+    hook: EventHook<V>,
+) {
     match hook {
-        EventHook::CardPlayed { .. } => state.played_this_turn += 1,
-        EventHook::BeforeSideTurnStart {
-            side: CombatSide::Player,
-            ..
-        } => {
+        EventHook::CardPlayed { player, .. } if player == owner => state.played_this_turn += 1,
+        EventHook::BeforeSideTurnStart { participants, .. } if participants.contains(owner) => {
             state.played_last_turn = state.played_this_turn;
             state.played_this_turn = 0;
         }

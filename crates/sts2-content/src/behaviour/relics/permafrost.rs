@@ -19,6 +19,7 @@ pub struct State {
 /// A card that works its own type out from the fight, which no card played
 /// under this relic does yet.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
@@ -27,7 +28,9 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::RoomEntered { room, .. } if crate::behaviour::relics::combat_room(room) => {
             state.activated_this_combat = false;
         }
-        EventHook::CardPlayed { card, .. } if !state.activated_this_combat => {
+        EventHook::CardPlayed { card, player, .. }
+            if player == owner && !state.activated_this_combat =>
+        {
             let power = card
                 .power()
                 .unwrap_or_else(|| unimplemented!("a card that works its own type out"));

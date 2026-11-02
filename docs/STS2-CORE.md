@@ -80,6 +80,13 @@ brought its own observation type, comparison means nothing.
 
 ## The traits
 
+**Superseded** on 2026-10-29 by `RunTable`, one trait for every table: the
+simulator's, the game's, a lobby of games and the daemon's.
+[RUNNERS.md](RUNNERS.md) says why. `Play`, `Construct`, `Seat`, `Coop` and
+`Recorder` are gone. Each implementation keeps `begin`, `play`, `observe` and
+`setup` as its own methods, and a run table over it is what generic code takes.
+What follows is the reasoning for the split at the time.
+
 Split so the real game cannot pick up methods that are not reflective of a real
 game. The simulator, in turn, cannot be forced to fake ones it has not earned.
 
@@ -357,14 +364,14 @@ this crate calls them the same is an observation missing a field.
 **Done.**
 
 ```
-Oracle<V>     implements Play<V> + Construct<V>; owns a child process
-Session<V>    implements Play<V> + Construct<V>; reaches one a daemon holds
+Oracle<V>     plays, observes and sets up; owns a child process; OracleTable
+Session<V>    the same; reaches one a daemon holds; HeldTable
 session/      process, handshake, build check, mod-identity check, the daemon
 stamp.rs      build identity
 wire/         the mod's JSON forms, and reading them into sts2-core types
 ```
 
-One sentence: *launch the real game and make it implement `Play<V>`.*
+One sentence: *launch the real game and make it a run table.*
 
 Two implementations of it, because a run has to outlive one `sts2 act play-card 0`.
 That is a fact about *this* implementation and not about playing. The game boots
