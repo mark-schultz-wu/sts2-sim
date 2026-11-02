@@ -659,6 +659,9 @@ mod tests {
                 to: Coord::new(1, 1),
             },
         );
+        // An answer reads its fields itself, so this checks it reads past
+        // the seat.
+        r.push_by(SeatIndex(1), Decision::Answer(sts2_core::Answer::Done));
         r
     }
 
@@ -774,7 +777,7 @@ mod tests {
         drop(out);
 
         let mut carried = Writer::<V>::resume(&path).expect("it carries on");
-        assert_eq!(carried.steps(), 2);
+        assert_eq!(carried.steps(), 3);
         carried
             .record_by(SeatIndex(1), &Decision::Proceed.into())
             .expect("a step is written");
