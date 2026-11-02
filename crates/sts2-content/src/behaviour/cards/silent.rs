@@ -352,16 +352,9 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 scaling: Scaling::Dynamic,
             });
             fight.apply(block);
-            let cards = fight
-                .cards_in(Pile::Hand)
-                .into_iter()
-                .filter(|&held| {
-                    V::card_kind(fight.card_ident(held).card) == Some(CardKind::Skill)
-                        && !fight.card_keyword_this_turn(held, CardKeyword::Sly)
-                })
-                .collect();
             yield_!(crate::behaviour::paused::Ask::AskingAmong {
-                cards,
+                pile: Pile::Hand,
+                filter: crate::behaviour::CardFilter::SkillNotSlyThisTurn,
                 selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
             });
             // `CardCmd.ApplySingleTurnSly` on the one taken.
@@ -497,7 +490,7 @@ fn discard_taken<V: crate::Build, K: FightKind<V>>(
     );
 }
 
-crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Silent);
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Silent);
 
 /// `Malaise`: its X, one more once upgraded, off the target's Strength, then
 /// as Weak on it.
@@ -724,6 +717,7 @@ fn echoing_slash<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Ki
 pub(super) fn event_hook<V: crate::Build>(
     card: V::Card,
     id: sts2_core::CardId<V>,
+    owner: sts2_core::CombatId,
     history: sts2_core::History<'_, V>,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
@@ -731,9 +725,9 @@ pub(super) fn event_hook<V: crate::Build>(
     let skill = |card: V::Card| V::card_kind(card) == Some(CardKind::Skill);
     match (card, hook) {
         // `Pinpoint.AfterCardPlayed`: one off its cost this turn for each
-        // Skill its owner plays. A fight here has one player.
-        (__c0, EventHook::CardPlayed { card, .. }) if __c0 == V::Card::PINPOINT => {
-            if skill(card) {
+        // Skill its owner plays.
+        (__c0, EventHook::CardPlayed { card, player, .. }) if __c0 == V::Card::PINPOINT => {
+            if player == owner && skill(card) {
                 asked.push(HookEffect::ModifySelf {
                     change: Change::ChangeCost(CostPool::Energy, -1),
                     lasting: Lasting::ThisTurn,

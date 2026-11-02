@@ -90,7 +90,7 @@ impl<V: Rules> Point<V> {
 /// accessors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActMap<V: Rules> {
-    /// In the observation's order, which is what lets [`ActMap::at`] search.
+    /// In the observation's order, which is what lets [`sts2_core::ActMap::at`] search.
     nodes: Arc<[Node<V>]>,
     /// The nodes' digest, which a comparison asks for after every decision.
     digest: Digest,

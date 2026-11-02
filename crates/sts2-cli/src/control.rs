@@ -8,7 +8,7 @@
 //! implementation, and printing. Pointing it at a second implementation copies
 //! no orchestration, because the orchestration is here and generic.
 
-use sts2_core::{Answered, Applied, Construct, Decided, Play, Refusal, Snapshot, Step};
+use sts2_core::{Decided, Refusal, RunTable, SeatIndex, Snapshot, Step};
 
 use crate::cli::{Taking, choose};
 
@@ -96,7 +96,7 @@ pub enum Sent<V: sts2_content_wire::WireContentVersion> {
 pub fn perform<V, G>(game: &mut G, command: &Command) -> Result<Outcome<V>, Error<V>>
 where
     V: sts2_content_wire::WireContentVersion,
-    G: Construct<V>,
+    G: RunTable<V>,
     G::Error: Fault,
 {
     match command {
@@ -144,15 +144,23 @@ where
 ///
 /// # Errors
 ///
-/// A refusal, or a fault. See [`accepted`] for why a refusal is one here.
+/// A refusal, or a fault. A shell wants a non-zero exit status for a move that
+/// did not happen, so a refusal is an error here.
 pub fn send<V, G>(game: &mut G, step: &Step<V>) -> Result<(Decided, Snapshot<V>), Sent<V>>
 where
     V: sts2_content_wire::WireContentVersion,
-    G: Construct<V>,
+    G: RunTable<V>,
     G::Error: Fault,
 {
-    let answered = game.step(step).map_err(|e| Sent::Fault(Box::new(e)))?;
-    Ok(accepted(answered)?.split())
+    let fault = |e: G::Error| Sent::Fault(Box::new(e));
+    let settled = match step {
+        Step::Decision(decision) => game.play(SeatIndex(0), decision),
+        Step::Setup(setup) => game.construct(SeatIndex(0), setup),
+    }
+    .map_err(fault)?;
+    let decided = settled.map_err(Sent::Refused)?;
+    let snapshot = game.snapshot(SeatIndex(0)).map_err(fault)?;
+    Ok((decided, snapshot))
 }
 
 /// Asks where the run is standing, without moving it.
@@ -167,27 +175,11 @@ where
 pub fn look<V, G>(game: &mut G) -> Result<Snapshot<V>, Error<V>>
 where
     V: sts2_content_wire::WireContentVersion,
-    G: Play<V>,
+    G: RunTable<V>,
     G::Error: Fault,
 {
-    game.observe().map_err(|e| Error::Looking(Box::new(e)))
-}
-
-/// A refusal, turned into an error.
-///
-/// It is the game answering rather than this failing, which is why it is a
-/// value at the trait. A shell wants a non-zero exit status for a move that did
-/// not happen, and that is what an `Err` is here. A front end that keeps
-/// playing takes the refusal as a value and words it with
-/// [`crate::render::refusal`] instead.
-///
-/// # Errors
-///
-/// The refusal, worded by this crate when it is displayed.
-pub fn accepted<V: sts2_content_wire::WireContentVersion>(
-    answered: Answered<V>,
-) -> Result<Applied<V>, Sent<V>> {
-    answered.map_err(Sent::Refused)
+    game.snapshot(SeatIndex(0))
+        .map_err(|e| Error::Looking(Box::new(e)))
 }
 
 /// Folds a recording's steps into a game with nothing in it.
@@ -205,7 +197,7 @@ pub fn replay<V, G>(
 ) -> Result<Option<(Decided, Snapshot<V>)>, Error<V>>
 where
     V: sts2_content_wire::WireContentVersion,
-    G: Construct<V>,
+    G: RunTable<V>,
     G::Error: Fault,
 {
     let total = steps.len();

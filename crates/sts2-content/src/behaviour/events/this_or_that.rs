@@ -48,6 +48,11 @@ impl<V: crate::Build> EventBehavior<V> for ThisOrThat {
         )
     }
 
+    /// `WillKillPlayer`, for `Plain`: its hit point loss.
+    fn kills(&self, _state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 0 && run.hp() <= HP_LOSS
+    }
+
     /// `Plain`: the damage, then the gold. `Ornate`: the next relic from the
     /// front of the bag, then Clumsy. Each finishes the event.
     fn choose<R: sts2_core::rng::GameRng>(

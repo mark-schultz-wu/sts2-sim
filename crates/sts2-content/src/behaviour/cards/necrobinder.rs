@@ -313,6 +313,30 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
     fight: &mut K::Fight<'a>,
 ) -> Played<V, K> {
     match card {
+        // `LegionOfBone`: its `Summon` of Osty for each living player, its
+        // owner too.
+        __c0 if __c0 == V::Card::LEGION_OF_BONE => {
+            let summon = fight.var(V::CardVar::SUMMON);
+            for player in crate::behaviour::cards::teammates::<V, _>(fight) {
+                fight.for_player(player, |fight| fight.summon_osty(summon));
+            }
+            Played::Done
+        }
+        // `GlimpseBeyond`: its `Cards` of Souls into each living player's draw
+        // pile at random, its owner's too, made by its owner.
+        __c0 if __c0 == V::Card::GLIMPSE_BEYOND => {
+            let cards = fight.var(V::CardVar::CARDS);
+            for player in crate::behaviour::cards::teammates::<V, _>(fight) {
+                fight.for_player(player, |fight| {
+                    for _ in 0..cards {
+                        if fight.add_at_random(V::Card::SOUL, Pile::Draw).is_none() {
+                            break;
+                        }
+                    }
+                });
+            }
+            Played::Done
+        }
         // `DeathsDoor`: its block, and its `Repeat` times more where its owner
         // applied Doom this turn.
         __c0 if __c0 == V::Card::DEATHS_DOOR => {
@@ -636,10 +660,12 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             if resumed!().fight.waiting() {
                 yield_!(Ask::Waiting);
             }
-            let cards: Hand<V> =
-                without_keyword::<V, _>(resumed!().fight, CardKeyword::Ethereal, true);
             yield_!(Ask::AskingAmong {
-                cards,
+                pile: Pile::Hand,
+                filter: crate::behaviour::CardFilter::WithoutKeyword {
+                    keyword: CardKeyword::Ethereal,
+                    local: true,
+                },
                 selection: ONE,
             });
             add_keyword::<V, K>(resumed!(), CardKeyword::Ethereal);
@@ -649,10 +675,12 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
         // `CardCmd.ApplyKeyword(cardModel, CardKeyword.Retain)`.
         __c0 if __c0 == V::Card::SNAP => {
             osty_hit::<V, _>(resumed!().fight, V::CardVar::OSTY_DAMAGE);
-            let cards: Hand<V> =
-                without_keyword::<V, _>(resumed!().fight, CardKeyword::Retain, false);
             yield_!(Ask::AskingAmong {
-                cards,
+                pile: Pile::Hand,
+                filter: crate::behaviour::CardFilter::WithoutKeyword {
+                    keyword: CardKeyword::Retain,
+                    local: false,
+                },
                 selection: ONE,
             });
             add_keyword::<V, K>(resumed!(), CardKeyword::Retain);
@@ -746,26 +774,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Necrobinder);
-
-/// The cards in hand without `keyword`, read locally where `local` says.
-fn without_keyword<V: crate::Build, F: Fight<V>>(
-    fight: &F,
-    keyword: CardKeyword,
-    local: bool,
-) -> Hand<V> {
-    fight
-        .cards_in(Pile::Hand)
-        .into_iter()
-        .filter(|&card| {
-            !if local {
-                fight.card_local_keyword(card, keyword)
-            } else {
-                fight.card_keyword(card, keyword)
-            }
-        })
-        .collect()
-}
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Necrobinder);
 
 /// `CardCmd.ApplyKeyword` of `keyword` to each card a pick took.
 fn add_keyword<V: crate::Build, K: FightKind<V>>(
@@ -892,6 +901,7 @@ const HANG_MOST: crate::behaviour::cards::Number = 999_999_999;
 pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     card: V::Card,
     id: sts2_core::CardId<V>,
+    owner: sts2_core::CombatId,
     printed: &P,
     history: sts2_core::History<'_, V>,
     hook: EventHook<V>,
@@ -899,24 +909,29 @@ pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 ) {
     match (card, hook) {
         // `RightHandHand.AfterCardPlayedLate`: back into hand from the discard
-        // pile after a play of its owner's that spent its `Energy` or more. A
-        // fight here has one player.
-        (__c0, EventHook::CardPlayedLate { energy, .. }) if __c0 == V::Card::RIGHT_HAND_HAND => {
-            if i64::from(energy) >= i64::from(printed.face(V::CardVar::ENERGY)) {
+        // pile after a play of its owner's that spent its `Energy` or more.
+        (__c0, EventHook::CardPlayedLate { energy, player, .. })
+            if __c0 == V::Card::RIGHT_HAND_HAND =>
+        {
+            if player == owner && i64::from(energy) >= i64::from(printed.face(V::CardVar::ENERGY)) {
                 asked.push(HookEffect::AddSelfToHand {
                     only_from: Some(Pile::Discard),
                 });
             }
         }
         // `Flatten.AfterAttack`, which answers an attack by its owner's Osty
-        // alone. A fight here has one player, so any Osty is theirs.
+        // alone.
         (
             __c0,
             EventHook::AfterAttack {
                 monster: Some(__c1),
+                pet_of: Some(pet_of),
                 ..
             },
-        ) if (__c0 == V::Card::FLATTEN && __c1 == <V::Monster as crate::ids::MonsterIds>::OSTY) => {
+        ) if (__c0 == V::Card::FLATTEN
+            && __c1 == <V::Monster as crate::ids::MonsterIds>::OSTY
+            && pet_of == owner) =>
+        {
             asked.push(HookEffect::ModifySelf {
                 change: Change::SetCost(CostPool::Energy, 0),
                 lasting: Lasting::ThisTurn,
@@ -924,12 +939,11 @@ pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
         }
         (__c0, EventHook::AfterAttack { .. }) if __c0 == V::Card::FLATTEN => {}
         // `Flatten.AfterCardEnteredCombat`, which answers its own entry
-        // alone, and then only once Osty has attacked this turn. A fight here
-        // has one player, so any Osty is theirs.
+        // alone, and then only once its owner's Osty has attacked this turn.
         (__c0, EventHook::CardEnteredCombat { at, .. }) if __c0 == V::Card::FLATTEN => {
             if at.id() == id
                 && history
-                    .attacked_this_turn()
+                    .pet_attacked_this_turn()
                     .any(|monster| monster == Some(<V::Monster as crate::ids::MonsterIds>::OSTY))
             {
                 asked.push(HookEffect::ModifySelf {
@@ -953,9 +967,15 @@ pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
         }),
         (__c0, EventHook::AfterDeath { .. }) if __c0 == V::Card::MELANCHOLY => {}
         // `BansheesCry.AfterCardPlayed`: its `Energy` off its cost for the
-        // rest of the fight for each Ethereal card its owner plays. A fight
-        // here has one player.
-        (__c0, EventHook::CardPlayed { ethereal: true, .. }) if __c0 == V::Card::BANSHEES_CRY => {
+        // rest of the fight for each Ethereal card its owner plays.
+        (
+            __c0,
+            EventHook::CardPlayed {
+                ethereal: true,
+                player,
+                ..
+            },
+        ) if __c0 == V::Card::BANSHEES_CRY && player == owner => {
             asked.push(HookEffect::ModifySelf {
                 change: Change::ChangeCost(CostPool::Energy, -printed.face(V::CardVar::ENERGY)),
                 lasting: Lasting::ThisFight,

@@ -7,58 +7,18 @@ use super::super::ascension::AscensionLevel;
 use super::super::cards::{Cards, StatusCard};
 use super::super::monsters::{Monster, MoveId};
 use super::super::powers::Power;
-use sts2_core::{Amount, Effect, Fight, PowerAmount, Scaling};
+use crate::behaviour::paused::{Ask, Lent};
+use sts2_core::{Amount, Effect, Fight, FightKind, PowerAmount, Scaling};
 
 type V = super::super::super::V0_111_0;
 
-/// A move of a monster in this file, for every move whose statements
-/// the dump matched.
+/// A move of a monster in this file that never stands still, for
+/// every move whose statements the dump matched. `None` for a move
+/// with more to do after an attack, which [`paused`] performs.
 ///
-/// Any other move panics, and `behaviour/` ports it by hand. It
-/// starts at `step`, and hands back the step to go on from where a
-/// command made the player answer something.
-pub fn perform<F: Fight<V>>(
-    monster: Monster,
-    move_id: MoveId,
-    step: u8,
-    fight: &mut F,
-) -> Option<u8> {
+/// Any other move panics, and `behaviour/` ports it by hand.
+pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) -> Option<()> {
     match (monster, move_id) {
-        (Monster::BowlbugEgg, MoveId::BiteMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-                if fight.waiting() {
-                    return Some(1);
-                }
-            }
-            if step <= 1 {
-                let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                    true => 8,
-                    false => 7,
-                };
-                let block = fight.resolve(Effect::GainBlock {
-                    recipient: fight.actor(),
-                    amount: Amount::Number(amount),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(block);
-            }
-        }
-        (Monster::BowlbugNectar, MoveId::BuffMove) => {
-            fight.apply_to_actor(
-                Power::StrengthPower,
-                PowerAmount::Counted(match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                    true => 16,
-                    false => 15,
-                }),
-            );
-        }
-        (Monster::BowlbugNectar, MoveId::Thrash2Move) => {
-            fight.attack_opponents();
-        }
-        (Monster::BowlbugNectar, MoveId::ThrashMove) => {
-            fight.attack_opponents();
-        }
         // `statement`
         (Monster::BowlbugRock, MoveId::DizzyMove) => {
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
@@ -66,18 +26,6 @@ pub fn perform<F: Fight<V>>(
         // `if`
         (Monster::BowlbugRock, MoveId::HeadbuttMove) => {
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        (Monster::BowlbugSilk, MoveId::ThrashMove) => {
-            fight.attack_opponents();
-        }
-        (Monster::BowlbugSilk, MoveId::ToxicSpitMove) => {
-            fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(1));
-        }
-        (Monster::Chomper, MoveId::ClampMove) => {
-            fight.attack_opponents();
-        }
-        (Monster::Chomper, MoveId::ScreechMove) => {
-            fight.give_cards(Cards::Status(StatusCard::Dazed), 3);
         }
         // `call await`
         (Monster::Crusher, MoveId::AdaptMove) => {
@@ -107,7 +55,6 @@ pub fn perform<F: Fight<V>>(
         (Monster::DecimillipedeSegmentBack, MoveId::ConstrictMove) => {
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
-        (Monster::DecimillipedeSegmentBack, MoveId::DeadMove) => {}
         // `if`
         (Monster::DecimillipedeSegmentBack, MoveId::ReattachMove) => {
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
@@ -124,7 +71,6 @@ pub fn perform<F: Fight<V>>(
         (Monster::DecimillipedeSegmentFront, MoveId::ConstrictMove) => {
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
-        (Monster::DecimillipedeSegmentFront, MoveId::DeadMove) => {}
         // `if`
         (Monster::DecimillipedeSegmentFront, MoveId::ReattachMove) => {
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
@@ -141,7 +87,6 @@ pub fn perform<F: Fight<V>>(
         (Monster::DecimillipedeSegmentMiddle, MoveId::ConstrictMove) => {
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
-        (Monster::DecimillipedeSegmentMiddle, MoveId::DeadMove) => {}
         // `if`
         (Monster::DecimillipedeSegmentMiddle, MoveId::ReattachMove) => {
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
@@ -150,12 +95,130 @@ pub fn perform<F: Fight<V>>(
         (Monster::DecimillipedeSegmentMiddle, MoveId::WritheMove) => {
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
-        (Monster::Entomancer, MoveId::BeesMove) => {
-            fight.attack_opponents();
-        }
         // `call Creature.Powers.OfType`
         (Monster::Entomancer, MoveId::PheromoneSpitMove) => {
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `if`
+        (Monster::KnowledgeDemon, MoveId::CurseOfKnowledgeMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `statement`
+        (Monster::KnowledgeDemon, MoveId::KnowledgeOverwhelmingMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `statement`
+        (Monster::KnowledgeDemon, MoveId::PonderMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `statement`
+        (Monster::LouseProgenitor, MoveId::CurlAndGrowMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `if`
+        (Monster::LouseProgenitor, MoveId::PounceMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `if`
+        (Monster::LouseProgenitor, MoveId::WebCannonMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `if`
+        (Monster::Myte, MoveId::ToxicMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `for`
+        (Monster::Ovicopter, MoveId::LayEggsMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `call await`
+        (Monster::Rocket, MoveId::ChargeUpMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `call await`
+        (Monster::Rocket, MoveId::LaserMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `call await`
+        (Monster::Rocket, MoveId::PrecisionBeamMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `call await`
+        (Monster::Rocket, MoveId::RechargeMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `call await`
+        (Monster::Rocket, MoveId::TargetingReticleMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `statement`
+        (Monster::SpinyToad, MoveId::ProtrudingSpikesMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `statement`
+        (Monster::SpinyToad, MoveId::SpikeExplosionMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `foreach`
+        (Monster::TheInsatiable, MoveId::LiquifyGroundMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `if`
+        (Monster::TheObscura, MoveId::IllusionMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `call PowerCmd.Apply`
+        (Monster::TheObscura, MoveId::SailMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `if`
+        (Monster::ThievingHopper, MoveId::EscapeMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `statement`
+        (Monster::ThievingHopper, MoveId::FlutterMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `if`
+        (Monster::ThievingHopper, MoveId::ThieveryMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        // `statement`
+        (Monster::ToughEgg, MoveId::HatchMove) => {
+            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+        }
+        (Monster::BowlbugNectar, MoveId::BuffMove) => {
+            fight.apply_to_actor(
+                Power::StrengthPower,
+                PowerAmount::Counted(match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                    true => 16,
+                    false => 15,
+                }),
+            );
+        }
+        (Monster::BowlbugNectar, MoveId::Thrash2Move) => {
+            fight.attack_opponents();
+        }
+        (Monster::BowlbugNectar, MoveId::ThrashMove) => {
+            fight.attack_opponents();
+        }
+        (Monster::BowlbugSilk, MoveId::ThrashMove) => {
+            fight.attack_opponents();
+        }
+        (Monster::BowlbugSilk, MoveId::ToxicSpitMove) => {
+            fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(1));
+        }
+        (Monster::Chomper, MoveId::ClampMove) => {
+            fight.attack_opponents();
+        }
+        (Monster::Chomper, MoveId::ScreechMove) => {
+            fight.give_cards(Cards::Status(StatusCard::Dazed), 3);
+        }
+        (Monster::DecimillipedeSegmentBack, MoveId::DeadMove) => {}
+        (Monster::DecimillipedeSegmentFront, MoveId::DeadMove) => {}
+        (Monster::DecimillipedeSegmentMiddle, MoveId::DeadMove) => {}
+        (Monster::Entomancer, MoveId::BeesMove) => {
+            fight.attack_opponents();
         }
         (Monster::Entomancer, MoveId::SpearMove) => {
             fight.attack_opponents();
@@ -181,114 +244,14 @@ pub fn perform<F: Fight<V>>(
         (Monster::InfestedPrism, MoveId::JabMove) => {
             fight.attack_opponents();
         }
-        (Monster::InfestedPrism, MoveId::PulsateMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-                if fight.waiting() {
-                    return Some(1);
-                }
-            }
-            if step <= 1 {
-                let amount = match fight.ascension().has(AscensionLevel::ToughEnemies) {
-                    true => 22,
-                    false => 20,
-                };
-                let block = fight.resolve(Effect::GainBlock {
-                    recipient: fight.actor(),
-                    amount: Amount::Number(amount),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(block);
-                fight.apply_to_actor(
-                    Power::VitalSparkPower,
-                    PowerAmount::Counted(
-                        match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                            true => 3,
-                            false => 2,
-                        },
-                    ),
-                );
-            }
-        }
-        (Monster::InfestedPrism, MoveId::RadiateMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-                if fight.waiting() {
-                    return Some(1);
-                }
-            }
-            if step <= 1 {
-                let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                    true => 13,
-                    false => 11,
-                };
-                let block = fight.resolve(Effect::GainBlock {
-                    recipient: fight.actor(),
-                    amount: Amount::Number(amount),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(block);
-            }
-        }
         (Monster::InfestedPrism, MoveId::WhirlwindMove) => {
             fight.attack_opponents();
-        }
-        // `if`
-        (Monster::KnowledgeDemon, MoveId::CurseOfKnowledgeMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        // `statement`
-        (Monster::KnowledgeDemon, MoveId::KnowledgeOverwhelmingMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        // `statement`
-        (Monster::KnowledgeDemon, MoveId::PonderMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
         (Monster::KnowledgeDemon, MoveId::SlapMove) => {
             fight.attack_opponents();
         }
-        // `statement`
-        (Monster::LouseProgenitor, MoveId::CurlAndGrowMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        // `if`
-        (Monster::LouseProgenitor, MoveId::PounceMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        // `if`
-        (Monster::LouseProgenitor, MoveId::WebCannonMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
         (Monster::Myte, MoveId::BiteMove) => {
             fight.attack_opponents();
-        }
-        (Monster::Myte, MoveId::SuckMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-                if fight.waiting() {
-                    return Some(1);
-                }
-            }
-            if step <= 1 {
-                fight.apply_to_actor(
-                    Power::StrengthPower,
-                    PowerAmount::Counted(
-                        match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                            true => 3,
-                            false => 2,
-                        },
-                    ),
-                );
-            }
-        }
-        // `if`
-        (Monster::Myte, MoveId::ToxicMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        // `for`
-        (Monster::Ovicopter, MoveId::LayEggsMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
         (Monster::Ovicopter, MoveId::NutritionalPasteMove) => {
             fight.apply_to_actor(
@@ -302,66 +265,12 @@ pub fn perform<F: Fight<V>>(
         (Monster::Ovicopter, MoveId::SmashMove) => {
             fight.attack_opponents();
         }
-        (Monster::Ovicopter, MoveId::TenderizerMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-                if fight.waiting() {
-                    return Some(1);
-                }
-            }
-            if step <= 1 {
-                fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(2));
-            }
-        }
         (Monster::Parafright, MoveId::SlamMove) => {
             fight.attack_opponents();
         }
-        // `call await`
-        (Monster::Rocket, MoveId::ChargeUpMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        // `call await`
-        (Monster::Rocket, MoveId::LaserMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        // `call await`
-        (Monster::Rocket, MoveId::PrecisionBeamMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        // `call await`
-        (Monster::Rocket, MoveId::RechargeMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        // `call await`
-        (Monster::Rocket, MoveId::TargetingReticleMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        (Monster::SlumberingBeetle, MoveId::RollOutMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-                if fight.waiting() {
-                    return Some(1);
-                }
-            }
-            if step <= 1 {
-                fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(2));
-            }
-        }
         (Monster::SlumberingBeetle, MoveId::SnoreMove) => {}
-        // `statement`
-        (Monster::SpinyToad, MoveId::ProtrudingSpikesMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        // `statement`
-        (Monster::SpinyToad, MoveId::SpikeExplosionMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
         (Monster::SpinyToad, MoveId::TongueLashMove) => {
             fight.attack_opponents();
-        }
-        // `foreach`
-        (Monster::TheInsatiable, MoveId::LiquifyGroundMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
         (Monster::TheInsatiable, MoveId::LungingBiteMove) => {
             fight.attack_opponents();
@@ -381,58 +290,14 @@ pub fn perform<F: Fight<V>>(
         (Monster::TheInsatiable, MoveId::ThrashMove2) => {
             fight.attack_opponents();
         }
-        (Monster::TheObscura, MoveId::HardeningStrikeMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-                if fight.waiting() {
-                    return Some(1);
-                }
-            }
-            if step <= 1 {
-                let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                    true => 7,
-                    false => 6,
-                };
-                let block = fight.resolve(Effect::GainBlock {
-                    recipient: fight.actor(),
-                    amount: Amount::Number(amount),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(block);
-            }
-        }
-        // `if`
-        (Monster::TheObscura, MoveId::IllusionMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
         (Monster::TheObscura, MoveId::PiercingGazeMove) => {
             fight.attack_opponents();
-        }
-        // `call PowerCmd.Apply`
-        (Monster::TheObscura, MoveId::SailMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        // `if`
-        (Monster::ThievingHopper, MoveId::EscapeMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        // `statement`
-        (Monster::ThievingHopper, MoveId::FlutterMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
         (Monster::ThievingHopper, MoveId::HatTrickMove) => {
             fight.attack_opponents();
         }
         (Monster::ThievingHopper, MoveId::NabMove) => {
             fight.attack_opponents();
-        }
-        // `if`
-        (Monster::ThievingHopper, MoveId::ThieveryMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
-        // `statement`
-        (Monster::ToughEgg, MoveId::HatchMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
         (Monster::ToughEgg, MoveId::NibbleMove) => {
             fight.attack_opponents();
@@ -457,7 +322,173 @@ pub fn perform<F: Fight<V>>(
             fight.apply(block);
         }
         (Monster::Tunneler, MoveId::DizzyMove) => {}
+        (Monster::BowlbugEgg, MoveId::BiteMove)
+        | (Monster::InfestedPrism, MoveId::PulsateMove)
+        | (Monster::InfestedPrism, MoveId::RadiateMove)
+        | (Monster::Myte, MoveId::SuckMove)
+        | (Monster::Ovicopter, MoveId::TenderizerMove)
+        | (Monster::SlumberingBeetle, MoveId::RollOutMove)
+        | (Monster::TheObscura, MoveId::HardeningStrikeMove) => return None,
         (monster, move_id) => unimplemented!("{monster:?} has no {move_id:?} in the table"),
     }
-    None
+    Some(())
+}
+
+/// A move of a monster in this file with more to do after an attack,
+/// from its start to its end. An attack that leaves a question waiting
+/// stands the rest still, as the game's `await` does. Each step is lent
+/// the fight, and after a question the answer.
+#[diapause::coroutine(yield = Ask<V>, resume = for<'f, 'a> Lent<'f, 'a, V, K>)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<K: FightKind<V>>(item: (Monster, MoveId)) {
+    match item {
+        (Monster::BowlbugEgg, MoveId::BiteMove) => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.attack_opponents();
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                    true => 8,
+                    false => 7,
+                };
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Number(amount),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+        }
+        (Monster::InfestedPrism, MoveId::PulsateMove) => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.attack_opponents();
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                let amount = match fight.ascension().has(AscensionLevel::ToughEnemies) {
+                    true => 22,
+                    false => 20,
+                };
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Number(amount),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_actor(
+                    Power::VitalSparkPower,
+                    PowerAmount::Counted(
+                        match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                            true => 3,
+                            false => 2,
+                        },
+                    ),
+                );
+            }
+        }
+        (Monster::InfestedPrism, MoveId::RadiateMove) => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.attack_opponents();
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                    true => 13,
+                    false => 11,
+                };
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Number(amount),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+        }
+        (Monster::Myte, MoveId::SuckMove) => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.attack_opponents();
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_actor(
+                    Power::StrengthPower,
+                    PowerAmount::Counted(
+                        match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                            true => 3,
+                            false => 2,
+                        },
+                    ),
+                );
+            }
+        }
+        (Monster::Ovicopter, MoveId::TenderizerMove) => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.attack_opponents();
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(2));
+            }
+        }
+        (Monster::SlumberingBeetle, MoveId::RollOutMove) => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.attack_opponents();
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(2));
+            }
+        }
+        (Monster::TheObscura, MoveId::HardeningStrikeMove) => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.attack_opponents();
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                    true => 7,
+                    false => 6,
+                };
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Number(amount),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+        }
+        other => unreachable!("{other:?} has nothing to do after an attack"),
+    }
 }

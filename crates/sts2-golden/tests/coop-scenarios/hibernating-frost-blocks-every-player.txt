@@ -1,0 +1,8 @@
+# While the Defect has Hibernate, each Frost orb's block lands on every
+# player. The passives land as the turn ends.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"DEFECT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"HIBERNATE","target":1001,"seat":0}
+{"cmd":"play_card","index":5,"target":null,"seat":1}
+{"cmd":"end_turn","seat":0}
+{"cmd":"end_turn","seat":1}

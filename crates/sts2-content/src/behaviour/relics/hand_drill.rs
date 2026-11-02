@@ -8,6 +8,8 @@ use crate::ids::PowerIds as _;
 /// `AfterDamageGiven`: a hit from its owner, or its owner's pet, that breaks
 /// an enemy's block gives that enemy Vulnerable.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -16,15 +18,14 @@ pub(super) fn event_hook<V: crate::Build>(
             dealer,
             pet_of,
             target,
-            player,
             block_broken: true,
             ..
-        } if (dealer == Some(player) || pet_of == Some(player)) && target != player => {
+        } if (dealer == Some(owner) || pet_of == Some(owner)) && target != owner => {
             asked.push(HookEffect::ApplyPower {
                 target,
                 power: V::Power::VULNERABLE_POWER,
                 amount: PowerAmount::Counted(V::Relic::HAND_DRILL_VULNERABLE_POWER),
-                applier: Some(player),
+                applier: Some(owner),
             });
         }
         EventHook::DamageGiven { .. } | EventHook::Obtained { .. } => {}

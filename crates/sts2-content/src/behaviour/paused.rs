@@ -14,9 +14,17 @@ pub(crate) enum Ask<V: crate::Build> {
         pile: sts2_core::Pile,
         selection: sts2_core::Selection,
     },
-    /// A `CardSelectCmd` over the cards a filter lets through.
+    /// A `CardSelectCmd` over another player's pile, which that player
+    /// picks from.
+    AskingOf {
+        player: sts2_core::CombatId,
+        pile: sts2_core::Pile,
+        selection: sts2_core::Selection,
+    },
+    /// A `CardSelectCmd` over the cards of `pile` a filter lets through.
     AskingAmong {
-        cards: smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>,
+        pile: sts2_core::Pile,
+        filter: crate::behaviour::CardFilter<V>,
         selection: sts2_core::Selection,
     },
     /// A choose-a-card screen over `offered`.
@@ -36,12 +44,28 @@ impl<V: crate::Build> Ask<V> {
     ) -> Played<V, K> {
         match self {
             Ask::Asking { pile, selection } => Played::Asking {
+                of: None,
                 pile,
                 selection,
                 at,
             },
-            Ask::AskingAmong { cards, selection } => Played::AskingAmong {
-                cards,
+            Ask::AskingOf {
+                player,
+                pile,
+                selection,
+            } => Played::Asking {
+                of: Some(player),
+                pile,
+                selection,
+                at,
+            },
+            Ask::AskingAmong {
+                pile,
+                filter,
+                selection,
+            } => Played::AskingAmong {
+                pile,
+                filter,
                 selection,
                 at,
             },
@@ -91,12 +115,12 @@ pub(crate) fn chosen<V: crate::Build>(
 }
 
 /// `start`, `resume` and `settle` for a module's `paused` coroutine over
-/// `V::$item`, whose paused plays wait in the variant `$wrap`.
+/// `$item`, whose paused plays wait in the variant `$wrap`.
 macro_rules! paused_play {
-    ($item:ident, $wrap:path) => {
+    ($item:ty, $wrap:path) => {
         /// A play of [`paused`], from its start.
         fn start<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
-            item: V::$item,
+            item: $item,
             fight: &mut K::Fight<'a>,
         ) -> crate::behaviour::Played<V, K> {
             let mut play = paused::<V, K>(item);

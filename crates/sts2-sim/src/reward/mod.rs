@@ -156,7 +156,7 @@ pub(crate) fn sort<V: Rules>(offered: &mut [Offer<V>]) {
 ///
 /// `AbstractOdds.CurrentValue`, which no observation reports. Both move on
 /// every roll, so a run that has seen one reward screen rolls the next one
-/// differently. See [`card::encounter`] and [`combat::potion`].
+/// differently. See [`card::encounter`] and `combat::potion`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Odds {
     /// `CardRarityOdds`, added to the odds of a rare.

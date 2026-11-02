@@ -73,12 +73,11 @@ fn wriggler_opens<V: crate::Build>(
 
 /// Perform one of an Overgrowth monster's moves, where the generator left
 /// it to a hand port.
-pub(super) fn perform<V: crate::Build, F: Fight<V>>(
+pub(super) fn perform<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     monster: V::Monster,
     move_id: V::MoveId,
-    step: u8,
-    fight: &mut F,
-) -> Option<u8> {
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
     match (monster, move_id) {
         (__c0, __c1)
             if (__c0 == V::Monster::SHRINKER_BEETLE && __c1 == V::MoveId::SHRINKER_MOVE) =>
@@ -105,13 +104,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         (__c0, __c1)
             if (__c0 == V::Monster::SNAPPING_JAXFRUIT && __c1 == V::MoveId::ENERGY_ORB_MOVE) =>
         {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            fight.apply_to_actor(
-                V::Power::STRENGTH_POWER,
-                PowerAmount::Counted(ENERGY_ORB_STRENGTH),
-            );
+            return start::<V, K>((monster, move_id), fight);
         }
         // `IsCrossbowReloaded`, which each of these two sets last, picks its
         // animation.
@@ -132,26 +125,13 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         }
         // The Ceremonial Beast's moves set flags that pick its animation.
         (__c0, __c1) if (__c0 == V::Monster::CEREMONIAL_BEAST && __c1 == V::MoveId::PLOW_MOVE) => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            fight.apply_to_actor(
-                V::Power::STRENGTH_POWER,
-                PowerAmount::Counted(PLOW_STRENGTH),
-            );
+            return start::<V, K>((monster, move_id), fight);
         }
         (__c0, __c1) if (__c0 == V::Monster::CEREMONIAL_BEAST && __c1 == V::MoveId::STOMP_MOVE) => {
             fight.attack_opponents()
         }
         (__c0, __c1) if (__c0 == V::Monster::CEREMONIAL_BEAST && __c1 == V::MoveId::CRUSH_MOVE) => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                true => CRUSH_STRENGTH_DEADLY,
-                false => CRUSH_STRENGTH,
-            };
-            fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(strength));
+            return start::<V, K>((monster, move_id), fight);
         }
         (__c0, __c1) if (__c0 == V::Monster::CEREMONIAL_BEAST && __c1 == V::MoveId::STUN_MOVE) => {}
         // Three hits, which the builder the generator stops on only animates.
@@ -172,17 +152,86 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
             fight.apply_to_opponents(V::Power::VULNERABLE_POWER, PowerAmount::Counted(SPORES));
         }
         (__c0, __c1) if (__c0 == V::Monster::FLYCONID && __c1 == V::MoveId::FRAIL_SPORES_MOVE) => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            fight.apply_to_opponents(V::Power::FRAIL_POWER, PowerAmount::Counted(SPORES));
+            return start::<V, K>((monster, move_id), fight);
         }
         (monster, move_id) => {
-            return V::generated_move(monster, move_id, step, fight);
+            return V::generated_move::<K>(monster, move_id, fight);
         }
     }
-    None
+    crate::behaviour::Played::Done
 }
+
+/// A move of a monster in this file that can stop on a question. It attacks,
+/// and does the rest once any question the attack left is answered. Each
+/// step is lent the fight, and after a question the answer.
+///
+/// The attack is the one command a move can stand still on. Every other
+/// command takes a `ThrowingPlayerChoiceContext`, which throws on a
+/// question.
+#[diapause::coroutine(
+    yield = crate::behaviour::paused::Ask<V>,
+    resume = for<'f, 'a> crate::behaviour::paused::Lent<'f, 'a, V, K>
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<V: crate::Build, K: sts2_core::FightKind<V>>(item: (V::Monster, V::MoveId)) {
+    let monster: V::Monster = item.0;
+    let move_id: V::MoveId = item.1;
+    match (monster, move_id) {
+        // The `TestMode.IsOff` block these open with only finds the creature
+        // node.
+        (__c0, __c1)
+            if (__c0 == V::Monster::SNAPPING_JAXFRUIT && __c1 == V::MoveId::ENERGY_ORB_MOVE) =>
+        {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.apply_to_actor(
+                V::Power::STRENGTH_POWER,
+                PowerAmount::Counted(ENERGY_ORB_STRENGTH),
+            );
+        }
+        // The Ceremonial Beast's moves set flags that pick its animation.
+        (__c0, __c1) if (__c0 == V::Monster::CEREMONIAL_BEAST && __c1 == V::MoveId::PLOW_MOVE) => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.apply_to_actor(
+                V::Power::STRENGTH_POWER,
+                PowerAmount::Counted(PLOW_STRENGTH),
+            );
+        }
+        (__c0, __c1) if (__c0 == V::Monster::CEREMONIAL_BEAST && __c1 == V::MoveId::CRUSH_MOVE) => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                true => CRUSH_STRENGTH_DEADLY,
+                false => CRUSH_STRENGTH,
+            };
+            fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(strength));
+        }
+        (__c0, __c1) if (__c0 == V::Monster::FLYCONID && __c1 == V::MoveId::FRAIL_SPORES_MOVE) => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.apply_to_opponents(V::Power::FRAIL_POWER, PowerAmount::Counted(SPORES));
+        }
+        other => unreachable!("{other:?} never stops on a question"),
+    }
+}
+
+crate::behaviour::paused::paused_play!(
+    (V::Monster, V::MoveId),
+    crate::behaviour::monsters::Resume::Overgrowth
+);
 
 /// The block the Crossbow Ruby Raider's Reload gives it, a constant in the
 /// move.
