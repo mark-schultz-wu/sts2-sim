@@ -115,14 +115,18 @@ pub(super) fn starting_powers<V: crate::Build>(
 /// What a Hive monster's `AfterAddedToRoom` writes over its rolled health.
 ///
 /// `DecimillipedeSegment` is the one that does. A segment carries an even
-/// number of points, and no two in the row carry the same number. The player
-/// can then tell them apart by the bar alone. It walks up in twos from the
-/// rolled number, and wraps round its own range rather than leave it.
+/// number of points, and no two in the row carry the same number. It walks
+/// up in twos from the rolled number, and wraps round its own range, scaled
+/// for the players.
+///
+/// The game walks a decimal, which a wrap can leave fractional, and
+/// `SetMaxAndCurrentHp` truncates it.
 pub(super) fn health_after_added<V: crate::Build>(
     monster: V::Monster,
     ascension: AscensionLevel,
     rolled: Health,
     teammates: &[Health],
+    scaled: impl Fn(Health) -> sts2_core::Decimal,
 ) -> Option<Health> {
     if !(monster == V::Monster::DECIMILLIPEDE_SEGMENT_FRONT
         || monster == V::Monster::DECIMILLIPEDE_SEGMENT_MIDDLE
@@ -133,21 +137,24 @@ pub(super) fn health_after_added<V: crate::Build>(
     // `MaxInitialHp` and `MinInitialHp`, which are the same two numbers the
     // health was rolled between.
     let (min_hp, max_hp) = V::monster_hp(monster);
-    let (lowest, highest): (Health, Health) = (
-        min_hp.at(ascension as u8).into(),
-        max_hp.at(ascension as u8).into(),
+    let (lowest, highest) = (
+        scaled(min_hp.at(ascension as u8).into()),
+        scaled(max_hp.at(ascension as u8).into()),
     );
-    let mut health = rolled;
-    if health % 2 == 1 {
-        health += 1;
-    }
-    while teammates.contains(&health) {
-        health += 2;
+    let mut health = sts2_core::Decimal::from(rolled + rolled % 2);
+    let two = sts2_core::Decimal::from(2);
+    while teammates
+        .iter()
+        .any(|&teammate| sts2_core::Decimal::from(teammate) == health)
+    {
+        health += two;
         if health > highest {
             health = lowest;
         }
     }
-    Some(health)
+    Some(
+        num_traits::ToPrimitive::to_i32(&health.trunc()).expect("a segment's health fits its type"),
+    )
 }
 
 /// Which move a Hive monster selects from a conditional state.
@@ -306,24 +313,47 @@ pub(super) fn perform<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
             fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(strength));
         }
         (__c0, __c1) if (__c0 == V::Monster::ROCKET && __c1 == V::MoveId::RECHARGE_MOVE) => {}
-        // `LiquifyMove`: Sandpit at four on itself, aimed at the player, then
-        // six Frantic Escapes at random places: three into the draw pile and
-        // three into the discard pile. `HasLiquified` picks its animations
-        // alone. A fight here has one player.
+        // `LiquifyMove`: Sandpit at four on itself, aimed at each player,
+        // then six Frantic Escapes for each player at random places: three
+        // into their draw pile and three into their discard pile.
+        // `HasLiquified` picks its animations alone.
         (__c0, __c1)
             if (__c0 == V::Monster::THE_INSATIABLE && __c1 == V::MoveId::LIQUIFY_GROUND_MOVE) =>
         {
-            fight.apply_to_actor(V::Power::SANDPIT_POWER, PowerAmount::Counted(SANDPIT));
-            for escape in 0..ESCAPES {
-                let pile = match escape < ESCAPES / 2 {
-                    true => Pile::Draw,
-                    false => Pile::Discard,
-                };
-                fight.add_at_random(V::Card::FRANTIC_ESCAPE, pile);
+            let insatiable = fight.actor();
+            let players = fight.players();
+            for &player in &players {
+                fight.apply_aimed(
+                    insatiable,
+                    V::Power::SANDPIT_POWER,
+                    PowerAmount::Counted(SANDPIT),
+                    Some(insatiable),
+                    player,
+                );
+            }
+            for &player in &players {
+                fight.for_player(player, |fight| {
+                    for escape in 0..ESCAPES {
+                        let pile = match escape < ESCAPES / 2 {
+                            true => Pile::Draw,
+                            false => Pile::Discard,
+                        };
+                        fight.add_at_random(V::Card::FRANTIC_ESCAPE, pile);
+                    }
+                });
             }
         }
+        // `ToxicMove`: two Toxics into each player's hand.
         (__c0, __c1) if (__c0 == V::Monster::MYTE && __c1 == V::MoveId::TOXIC_MOVE) => {
-            fight.add_generated_cards(sts2_core::CardIdent::new(V::Card::TOXIC), Pile::Hand, 2);
+            for player in fight.players() {
+                fight.for_player(player, |fight| {
+                    fight.add_generated_cards(
+                        sts2_core::CardIdent::new(V::Card::TOXIC),
+                        Pile::Hand,
+                        2,
+                    );
+                });
+            }
         }
         // `SpikesMove`: Thorns at five on itself. `IsSpiny` picks its
         // animations alone.
@@ -652,8 +682,46 @@ fn curl_block(ascension: crate::generated::ascension::AscensionLevel) -> Number 
     }
 }
 
-/// Take the highest-priority deck card still in combat, then attack.
+/// `ThievingHopper.ThieveryMove`: from each living player, the
+/// highest-priority deck card in their draw and discard piles, at random.
+/// Then a Swipe on the Hopper for each card, aimed at its owner, and the
+/// attack.
 fn thievery<V: crate::Build, F: Fight<V>>(fight: &mut F) {
+    use sts2_core::CreatureView as _;
+
+    let hopper = fight.actor();
+    let mut stolen: Vec<(sts2_core::CombatId, sts2_core::DeckCardId)> = Vec::new();
+    for player in fight.players() {
+        let standing = fight
+            .creatures()
+            .any(|creature| creature.id() == player && creature.alive());
+        if !standing {
+            continue;
+        }
+        fight.for_player(player, |fight| {
+            if let Some(card) = steal_one::<V, F>(fight) {
+                stolen.push((player, card));
+            }
+        });
+    }
+    // `SwipePower.Steal`, then `PowerCmd.Apply`. A Swipe the fight refuses
+    // takes the card with nobody to give it back.
+    for (owner, card) in stolen {
+        fight.apply_aimed(
+            hopper,
+            V::Power::SWIPE_POWER,
+            PowerAmount::Counted(1),
+            Some(hopper),
+            owner,
+        );
+        fight.write_power(hopper, V::Power::SWIPE_POWER, |state| state.steal(card));
+    }
+    fight.attack_opponents();
+}
+
+/// One player's theft: the highest-priority deck card in their draw and
+/// discard piles, at random, out of the fight. The deck card it was.
+fn steal_one<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Option<sts2_core::DeckCardId> {
     let cards: Vec<CardAt<V>> = [Pile::Draw, Pile::Discard]
         .into_iter()
         .flat_map(|pile| fight.cards_in(pile))
@@ -683,21 +751,15 @@ fn thievery<V: crate::Build, F: Fight<V>>(fight: &mut F) {
             (!matching.is_empty()).then_some(matching)
         })
         .unwrap_or(cards);
-    if let Some(card) = fight.random_card(
+    let card = fight.random_card(
         &candidates,
         <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,
-    ) {
-        // `SwipePower.Steal`, then `PowerCmd.Apply`. A Swipe the fight refuses
-        // takes the card with nobody to give it back.
-        let stolen = fight
-            .deck_version(card.id())
-            .unwrap_or_else(|| unreachable!("the candidates are deck copies"));
-        fight.remove_card(card);
-        fight.apply_to_actor(V::Power::SWIPE_POWER, PowerAmount::Counted(1));
-        let actor = fight.actor();
-        fight.write_power(actor, V::Power::SWIPE_POWER, |state| state.steal(stolen));
-    }
-    fight.attack_opponents();
+    )?;
+    let stolen = fight
+        .deck_version(card.id())
+        .unwrap_or_else(|| unreachable!("the candidates are deck copies"));
+    fight.remove_card(card);
+    Some(stolen)
 }
 
 /// `CurseOfKnowledgeBranch`: a curse while any set is left, a slap once the
@@ -801,11 +863,12 @@ fn ponder<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     // `ThrowingPlayerChoiceContext`'s `PowerCmd.Apply<StrengthPower>`.
     const PONDER_STRENGTH: Number = 2;
     const DEADLY_PONDER_STRENGTH: Number = 3;
-    // `30 * Players.Count`, and a fight here has one player.
+    // `30 * Players.Count`.
     const PONDER_HEAL: Number = 30;
 
     let actor = fight.actor();
-    fight.heal(actor, PONDER_HEAL);
+    let players = Number::try_from(fight.players().len()).expect("a fight's players fit a number");
+    fight.heal(actor, PONDER_HEAL * players);
     let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
         true => DEADLY_PONDER_STRENGTH,
         false => PONDER_STRENGTH,
@@ -848,7 +911,8 @@ pub(crate) fn hatch<V: crate::Build, F: Fight<V>>(
         true => (20, 23),
         false => (19, 22),
     };
-    let hp = draw(fight, min, max);
+    let drawn = draw(fight, min, max);
+    let hp = fight.scaled_for_players(drawn);
     fight.set_max_and_current_hp(egg, num_traits::cast(hp).expect("a hatchling's health"));
 }
 

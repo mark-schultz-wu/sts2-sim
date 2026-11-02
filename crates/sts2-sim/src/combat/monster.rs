@@ -63,10 +63,11 @@ fn monster_hps<V: Rules>(creatures: &[Fighter<V>]) -> SmallVec<[V::Health; CREAT
 /// `GenerateInternalCombatState`: the health each of an encounter's
 /// monsters rolls as a `Combat`-layout event builds its fight, in the order
 /// they stand. `CombatState.CreateCreature` rolls it off `Niche` against the
-/// ones before.
+/// ones before, then scales it for the players the fight already holds.
 pub(crate) fn roll_layout<V: Rules>(
     monsters: &[sts2_core::Spawned<V>],
     ascension: V::AscensionLevel,
+    scaling: Scaling,
     niche: &mut MegaRng,
 ) -> SmallVec<[V::Health; 2]> {
     let mut rolled: SmallVec<[V::Health; 2]> = SmallVec::new();
@@ -78,7 +79,7 @@ pub(crate) fn roll_layout<V: Rules>(
             &rolled,
             niche,
         );
-        rolled.push(hp);
+        rolled.push(scaling.health::<V>(hp));
     }
     rolled
 }
@@ -182,14 +183,23 @@ impl Scaling {
         if self.players <= 1 {
             return hp;
         }
-        let whole: sts2_core::Decimal = num_traits::cast::<_, i64>(hp)
-            .expect("a monster's health fits an i64")
-            .into();
-        let scaled = whole * sts2_core::Decimal::from(self.players) * self.factor;
+        let scaled = self.exact::<V>(hp);
         num_traits::cast(
             num_traits::ToPrimitive::to_i64(&scaled.trunc()).expect("a scaled health fits an i64"),
         )
         .expect("a scaled health fits the build's health type")
+    }
+
+    /// `Creature.ScaleHpForMultiplayer` of `hp`, before anything truncates
+    /// it.
+    pub(crate) fn exact<V: Rules>(self, hp: V::Health) -> sts2_core::Decimal {
+        let whole: sts2_core::Decimal = num_traits::cast::<_, i64>(hp)
+            .expect("a monster's health fits an i64")
+            .into();
+        match self.players {
+            0 | 1 => whole,
+            players => whole * sts2_core::Decimal::from(players) * self.factor,
+        }
     }
 }
 
@@ -227,11 +237,9 @@ pub(crate) fn initialize<V: Rules>(
     ) in monsters.iter().enumerate()
     {
         let state = spawned_model(&monsters[index]);
-        // A fight an event built as it opened rolled its health then.
+        // A fight an event built as it opened rolled its health then, scaled
+        // already.
         let hp = match rolled.get(index) {
-            Some(_) if scaling.players > 1 => {
-                unimplemented!("health an event rolled in a fight of several players")
-            }
             Some(&hp) => hp,
             // `SetUniqueMonsterHpValue`, against the health of those standing
             // already, then `ScaleMonsterHpForMultiplayer`.
@@ -328,24 +336,50 @@ pub(crate) fn added_to_room<V: Rules>(
         let (id, monster) = (held.creature, held.monster);
         // A fight opens on the player's side.
         let side = <V::CombatSide as SideKinds>::PLAYER;
-        // Each lands on the monster, an enemy, and scales.
-        for (power, amount) in V::monster_starting_powers(monster, ascension, side, &held.state) {
-            let amount = match amount {
-                sts2_core::PowerAmount::Counted(amount) => {
-                    sts2_core::PowerAmount::Counted(scaling.power::<V>(power, amount))
-                }
-                endless => endless,
-            };
-            starting::<V>(powers, id, power, Stacked::from(amount), Some(id));
-        }
         let opponents: SmallVec<[CombatId; 2]> = creatures
             .iter()
             .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
             .map(|creature| creature.id)
             .collect();
+        let players: SmallVec<[CombatId; 2]> = creatures
+            .iter()
+            .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
+            .filter(|creature| creature.owner.is_none())
+            .map(|creature| creature.id)
+            .collect();
+        // Each lands on the monster, an enemy, and scales: once, or once for
+        // each creature it is aimed at.
+        let scaled = |power, amount| match amount {
+            sts2_core::PowerAmount::Counted(amount) => {
+                sts2_core::PowerAmount::Counted(scaling.power::<V>(power, amount))
+            }
+            endless => endless,
+        };
+        for (power, amount) in V::monster_starting_powers(monster, ascension, side, &held.state) {
+            let amount = Stacked::from(scaled(power, amount));
+            match V::monster_starting_power_aim(monster, power) {
+                None => starting::<V>(powers, id, power, amount, Some(id), None),
+                Some(aim) => {
+                    let aimed = match aim {
+                        sts2_core::Aim::EachOpponent => &opponents,
+                        sts2_core::Aim::EachPlayer => &players,
+                    };
+                    for &target in aimed {
+                        starting::<V>(powers, id, power, amount, Some(id), Some(target));
+                    }
+                }
+            }
+        }
         for (power, amount) in V::monster_starting_opponent_powers(monster, ascension) {
             for &opponent in &opponents {
-                starting::<V>(powers, opponent, power, Stacked::from(amount), Some(id));
+                starting::<V>(
+                    powers,
+                    opponent,
+                    power,
+                    Stacked::from(amount),
+                    Some(id),
+                    None,
+                );
             }
         }
     }
@@ -360,9 +394,13 @@ pub(crate) fn added_to_room<V: Rules>(
             .filter(|(other, creature)| *other != at && creature.side == side)
             .map(|(_, creature)| creature.max_hp)
             .collect();
-        let Some(health) =
-            V::monster_health_after_added(monster, ascension, creatures[at].max_hp, &teammates)
-        else {
+        let Some(health) = V::monster_health_after_added(
+            monster,
+            ascension,
+            creatures[at].max_hp,
+            &teammates,
+            |hp| scaling.exact::<V>(hp),
+        ) else {
             continue;
         };
         // `SetMaxAndCurrentHp`, which is both numbers at once.
@@ -391,6 +429,7 @@ fn starting<V: Rules>(
     power: V::Power,
     amount: Stacked,
     applier: Option<CombatId>,
+    target: Option<CombatId>,
 ) {
     let per_applier = sts2_core::PowerTable::per_applier(power);
     let fresh = sts2_core::PowerTable::instanced(power) && !per_applier;
@@ -403,7 +442,7 @@ fn starting<V: Rules>(
         held.amount = Stacked::counted(had + more);
         return;
     }
-    powers.push(creature, HeldPower::new(power, amount, applier));
+    powers.push(creature, HeldPower::new(power, amount, applier, target));
 }
 
 /// Add a monster during a fight, before the enemy side prepares its next

@@ -24,13 +24,15 @@ pub(super) fn modify_hook<V: crate::Build>(
 /// reward's own. The run asks only for a `CardReward` whose options take a
 /// change to their pools, and whose pool is not colorless alone.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::CardRewardCreationOptions { .. } => {
+        EventHook::CardRewardCreationOptions { player, .. } if player == owner => {
             asked.push(HookEffect::AddCharacterPools(V::ALL_CHARACTERS));
         }
+        EventHook::CardRewardCreationOptions { .. } => {}
         EventHook::Obtained { .. } => {}
         hook => unimplemented!("what PrismaticGem does for {hook:?}"),
     }

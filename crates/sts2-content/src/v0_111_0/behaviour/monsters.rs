@@ -37,19 +37,24 @@ pub(crate) fn own_move<'a, K: FightKind<V>>(
 pub fn paused<K: FightKind<V>>(move_id: MoveId) {
     match move_id {
         // The Mecha Knight's `FlamethrowerMove`: its hit, then four Burns
-        // into the hand of the one player. v0.107.1's added the Burns alone.
+        // into each player's hand. v0.107.1's added the Burns alone.
         MoveId::FlamethrowerMove => {
             resumed!().fight.attack_opponents();
             if resumed!().fight.waiting() {
                 yield_!(crate::behaviour::paused::Ask::Waiting);
             }
-            resumed!().fight.add_generated_cards(
-                sts2_core::CardIdent::new(crate::v0_111_0::cards::Cards::Status(
-                    crate::v0_111_0::cards::StatusCard::Burn,
-                )),
-                sts2_core::Pile::Hand,
-                4,
-            );
+            let fight = &mut *resumed!().fight;
+            for player in fight.players() {
+                fight.for_player(player, |fight| {
+                    fight.add_generated_cards(
+                        sts2_core::CardIdent::new(crate::v0_111_0::cards::Cards::Status(
+                            crate::v0_111_0::cards::StatusCard::Burn,
+                        )),
+                        sts2_core::Pile::Hand,
+                        4,
+                    );
+                });
+            }
         }
         other => unreachable!("{other:?} never stops on a question"),
     }

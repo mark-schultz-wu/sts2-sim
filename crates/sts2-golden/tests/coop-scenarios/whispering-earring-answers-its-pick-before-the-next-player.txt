@@ -1,0 +1,24 @@
+# The Silent holds Whispering Earring, and a deck of Survivors. On the
+# first turn Vakuu plays Survivor, whose discard the pushed selector
+# answers with the hand's first card. The game's selector stack is the
+# same for every player, so the pick never reaches the Silent. Their
+# pre-play phase goes on, and is over before the Ironclad's.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"SILENT"},{"character":"IRONCLAD"}]}
+{"cmd":"grant","relic":"WHISPERING_EARRING","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"end_turn","seat":1}

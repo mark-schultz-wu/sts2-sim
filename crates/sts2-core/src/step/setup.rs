@@ -59,6 +59,15 @@ pub enum Setup<V: ContentVersion> {
     /// waking every relic that counts hits. `None` is the player, and the
     /// only creature there is outside a fight.
     Hp { at: Option<CombatId>, hp: V::Health },
+    /// [`Setup::Grant`] to the player in `seat`, in a co-op run.
+    ///
+    /// The grant is a local change, with no action sent to the other games.
+    /// So every game makes it, for every player, at the same point in the
+    /// run, and the games stay in step.
+    GrantTo {
+        seat: crate::SeatIndex,
+        gift: Gift<V>,
+    },
 }
 
 /// What a [`Setup::Grant`] puts into the run.

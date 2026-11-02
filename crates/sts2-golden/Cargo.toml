@@ -8,6 +8,10 @@ edition = "2024"
 
 [dependencies]
 sts2-core = { workspace = true }
+# How a run is spelled: its modifiers by the ids the game uses.
+sts2-run = { workspace = true }
+# The simulator the benches' helpers replay a recording on.
+sts2-sim = { workspace = true }
 sts2-content-wire = { workspace = true }
 sts2-headless = { workspace = true }
 # The reviewable files spell an id by its game name, which is the serde rename.
