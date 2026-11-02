@@ -271,7 +271,10 @@ run as its own machine sees it. The work goes in this order:
    its owner's pick branches onto the owner's queue. A lobby's clients
    join in seat order, so a run of three players seats them the same way
    every time. Fur Coat seeds its marks with its owner's slot, as
-   `new Rng(Owner, Id)` does.
+   `new Rng(Owner, Id)` does. A card made for a dead player goes into no
+   pile, and every listener still hears it made. A card auto-played at
+   any ally draws its target from the other living players alone, never
+   from a pet.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
@@ -282,7 +285,12 @@ run as its own machine sees it. The work goes in this order:
    of seeds 0 to 15 for each of the four pairs agreed on 63 of the 64
    seeds. The last, Silent and Defect seed 2, needed the room-entry sync,
    and agrees too. A hunt of seeds 16 to 31 for the four pairs agreed on 55
-   of the 64 seeds, and all 64 agree now. What is still open is listed below, worked by
+   of the 64 seeds, and all 64 agree now. A hunt of seeds 32 to 47 agreed
+   on 60 of the 64. Defect and Necrobinder seeds 33 and 39 agree now. The
+   harness lost Regent and Ironclad seed 43 to a game that exited as it
+   started, and the seed agrees when it plays again. Ironclad and Silent
+   seed 34 hangs at the same step each time, listed below.
+   What is still open is listed below, worked by
    class, with the seeds that show it.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. A lobby moves only once every game stands still and
@@ -293,9 +301,8 @@ run as its own machine sees it. The work goes in this order:
    2026-10-30 came out the same, byte for byte. The narrower ally
    targets changed the moves the hunted runs chose from. So
    `coop-v0.111.0.bin` holds the sixteen Ironclad and Silent seeds hunted
-   again. It holds Ironclad and Silent seeds 37 and 39, Defect and
-   Necrobinder seeds 3, 10 and 14, and Silent and Defect seed 2, too. The
-   simulator follows 36,822 of their 36,823 positions. Each machine logs the shared actions in the
+   again, and 17 runs the hunts since found a split in. The simulator
+   follows 58,855 of their 58,856 positions. Each machine logs the shared actions in the
    order it took them in, in `order.jsonl` under its profile. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. A rule no hunted run reaches gets
@@ -335,6 +342,10 @@ run as its own machine sees it. The work goes in this order:
    - Two players who each hold Fur Coat. The game leaves out of each
      coat's marks the points another coat marked, which the simulator's
      map does not record, so it is `unimplemented!`.
+   - Ironclad and Silent seed 34 hangs at step 1292. After an event's
+     option, both players take rewards, and the host skips the last. Its
+     game then waits with an empty queue and never replies, until the
+     harness times out. The mod's reward screen is the place to look.
    - The splits the hunt of 2026-10-30 found, by where they show:
      - A co-op scenario's `enter_room` setup hangs: the host leaves its
        room and enters none, and the reply never comes. The mod's

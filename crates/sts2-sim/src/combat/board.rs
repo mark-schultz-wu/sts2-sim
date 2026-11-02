@@ -1858,7 +1858,7 @@ impl<'a, V: Rules> Board<'a, V> {
         let seat = self.seat();
         use sts2_core::rng::GameRng as _;
 
-        if self.stopped() || self.generated_for_the_dead(creator) {
+        if self.stopped() || self.generated_for_the_dead(card, creator) {
             return None;
         }
         let places: i32 = num_traits::cast(self.live.players[seat].cards.len(pile) + 1)
@@ -1874,7 +1874,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
         let at = CardAt::new(id, pile, index);
         self.card_entered_combat(at, card, false);
-        self.card_generated(at, card, creator);
+        self.card_generated(Some(at), card, creator);
         Some(at)
     }
 
@@ -1912,32 +1912,23 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
-    /// `Hook.AfterCardGeneratedForCombat`, once a card made in the fight has
-    /// landed at `at`, and what it asked for. `CardPileCmd.Add` has raised
-    /// `AfterCardEnteredCombat` for it first.
     /// Whether the player the fight acts for is dead, for a card generated
-    /// for them. `AddGeneratedCardsToCombat` still counts it in the history.
-    /// `CardPileCmd.Add` puts it nowhere, so no place is drawn and it enters
-    /// no pile.
-    ///
-    /// # Panics
-    ///
-    /// Where a listener hears `AfterCardGeneratedForCombat`, which the game
-    /// raises for that card all the same.
-    fn generated_for_the_dead(&mut self, creator: Option<CombatId>) -> bool {
-        let seat = self.seat();
-        if self.live.player(seat).alive {
+    /// for them. `AddGeneratedCardsToCombat` still counts it in the history
+    /// and raises `AfterCardGeneratedForCombat` for it. `CardPileCmd.Add`
+    /// puts it nowhere, so no place is drawn and it enters no pile.
+    fn generated_for_the_dead(&mut self, card: V::Card, creator: Option<CombatId>) -> bool {
+        if self.live.player(self.seat()).alive {
             return false;
         }
-        self.live.history.generated(creator);
-        let hook = sts2_core::ModelHook::AfterCardGeneratedForCombat;
-        if !self.over() && super::listen::heard::<V>(self.live, self.belts, hook) {
-            unimplemented!("a card generated for a dead player, which a listener hears");
-        }
+        self.card_generated(None, card, creator);
         true
     }
 
-    fn card_generated(&mut self, at: CardAt<V>, card: V::Card, creator: Option<CombatId>) {
+    /// `Hook.AfterCardGeneratedForCombat`, once a card made in the fight has
+    /// landed at `at`, and what it asked for. `CardPileCmd.Add` has raised
+    /// `AfterCardEnteredCombat` for it first. A card made for a dead player
+    /// lands nowhere.
+    fn card_generated(&mut self, at: Option<CardAt<V>>, card: V::Card, creator: Option<CombatId>) {
         let seat = self.seat();
         self.live.history.generated(creator);
         // `IterateCombatHookListeners` hands a fight that is ending no
@@ -1948,7 +1939,12 @@ impl<'a, V: Rules> Board<'a, V> {
         let mut walking = super::listen::Walking::begin(
             self.live,
             self.belts,
-            sts2_core::EventHook::CardGeneratedForCombat { at, card, creator },
+            sts2_core::EventHook::CardGeneratedForCombat {
+                at,
+                card,
+                player: seat.creature(),
+                creator,
+            },
         );
         let mut rest: SmallVec<[(Listener<V>, HookEffect<V>); 4]> = SmallVec::new();
         while let Some((listener, effect)) =
@@ -2027,12 +2023,12 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let mut added = Vec::with_capacity(count);
         for _ in 0..count {
-            if self.generated_for_the_dead(creator) {
+            if self.generated_for_the_dead(card.card, creator) {
                 continue;
             }
             let at = self.put(card, pile);
             added.push(at);
-            self.card_generated(at, card.card, creator);
+            self.card_generated(Some(at), card.card, creator);
         }
         added
     }
@@ -2055,9 +2051,12 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let mut added = Vec::with_capacity(count);
         for _ in 0..count {
+            if self.generated_for_the_dead(card.card, creator) {
+                continue;
+            }
             let at = self.put_written(card, pile, writes);
             added.push(at);
-            self.card_generated(at, card.card, creator);
+            self.card_generated(Some(at), card.card, creator);
         }
         added
     }
@@ -4567,7 +4566,7 @@ impl<V: Rules> Board<'_, V> {
         if let Some(at) = created {
             self.card_entered_combat(at, card, false);
             let player = self.live.player(seat).id;
-            self.card_generated(at, card, Some(player));
+            self.card_generated(Some(at), card, Some(player));
         }
         // `Hook.AfterForge`.
         if !super::listen::heard::<V>(self.live, self.belts, sts2_core::ModelHook::AfterForge) {
@@ -4738,7 +4737,7 @@ impl<V: Rules> Board<'_, V> {
         self.live.players[seat].cards.push(pile, face.named(id));
         let at = CardAt::new(id, pile, index);
         self.card_entered_combat(at, face.ident.card, true);
-        self.card_generated(at, face.ident.card, creator);
+        self.card_generated(Some(at), face.ident.card, creator);
         Some(at)
     }
 
@@ -5702,7 +5701,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // by the card's owner.
         let player = self.live.player(seat).id;
         self.card_generated(
-            CardAt::new(id, card.pile(), card.index()),
+            Some(CardAt::new(id, card.pile(), card.index())),
             into.card,
             Some(player),
         );
@@ -5752,7 +5751,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let player = self.live.player(seat).id;
         for (pile, at, into, id) in left {
             let index = num_traits::NumCast::from(at).expect("a pile's index fits a hand index");
-            self.card_generated(CardAt::new(id, pile, index), into.card, Some(player));
+            self.card_generated(Some(CardAt::new(id, pile, index)), into.card, Some(player));
         }
     }
 
