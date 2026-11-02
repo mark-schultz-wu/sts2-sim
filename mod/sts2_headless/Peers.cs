@@ -46,15 +46,6 @@ internal static class Peers
     private static int _hooks;
 
     /// <summary>
-    /// How many shared actions this machine has taken in, in order: what
-    /// <c>ActionQueueSynchronizer</c> enqueues or resumes, which the host does
-    /// on request and every client does on the host's word. Every seat comes
-    /// to the same count once it has caught up, so a client can tell it has
-    /// not yet taken in a move another seat made.
-    /// </summary>
-    internal static ulong Synced;
-
-    /// <summary>
     /// Queues one of the local player's actions, as a screen does: through
     /// <c>ActionQueueSynchronizer.RequestEnqueue</c>, which in a co-op run sends
     /// it to every seat and alone queues it here.
@@ -178,9 +169,15 @@ internal static class Peers
 
     /// <summary>
     /// Whether the game here cannot go on until another seat acts: this seat
-    /// has ended its turn or voted, or the game waits on another player's
-    /// choice.
+    /// has ended its turn or voted while another has not, or the game waits
+    /// on another player's choice.
     /// </summary>
+    /// <remarks>
+    /// Once every player has ended the turn, nobody holds the game. It is on
+    /// its way to the enemies' turn, which it runs off a signal the next
+    /// frame takes up, and stands idle until then. Every vote in is the same:
+    /// the host moves the party, and the votes clear as it arrives.
+    /// </remarks>
     internal static bool HeldByOthers(RunState state)
     {
         if (!Shared)
@@ -188,7 +185,9 @@ internal static class Peers
             return false;
         }
         Player me = Seat.Me(state);
-        return EndedTurn(me) || Vote(me) != null || AwaitedChoices().Count > 0;
+        bool waitsOnTurnEnds = EndedTurn(me) && !state.Players.All(EndedTurn);
+        bool waitsOnVotes = Vote(me) != null && !state.Players.All(p => Vote(p) != null);
+        return waitsOnTurnEnds || waitsOnVotes || AwaitedChoices().Count > 0;
     }
 
     /// <summary>The facts above, for the observation.</summary>
@@ -202,8 +201,8 @@ internal static class Peers
         }).ToList(),
         ["awaiting"] = AwaitedChoices(),
         ["inFlight"] = InFlight,
-        ["synced"] = Synced,
-        ["checksums"] = Driver.Checksums,
+        ["still"] = Driver.Still(new HashSet<ulong>(), null),
+        ["links"] = Traffic.Report(),
     };
 }
 
