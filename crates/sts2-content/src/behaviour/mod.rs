@@ -10,6 +10,7 @@ pub(crate) mod cards;
 pub(crate) mod enchantments;
 pub(crate) mod encounters;
 pub mod events;
+pub(crate) mod filter;
 pub(crate) mod modifiers;
 pub(crate) mod monsters;
 pub(crate) mod orbs;
@@ -23,6 +24,8 @@ pub(crate) mod rules;
 use sts2_core::{
     CardAt, CardKind, Change, CostPool, Fight, FightKind, Lasting, Pile, RunStreamKinds,
 };
+
+pub use filter::CardFilter;
 
 /// How far a play got in a fight of kind `K`: where it stopped, if it did.
 pub type Played<V, K> = sts2_core::Played<V, Resume<V, K>>;

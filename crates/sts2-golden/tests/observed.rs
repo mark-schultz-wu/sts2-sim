@@ -5,7 +5,7 @@
 //! each, and of each section, has to agree at every step of every recording.
 
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::{Construct, Digested, Play, Step};
+use sts2_core::{Digested, Step};
 use sts2_golden::bench::reached;
 use sts2_golden::{every_run, recording};
 use sts2_sim::Sim;
@@ -18,8 +18,8 @@ fn the_lent_facts_digest_as_the_report_does() {
         let recorded = recording::<V>(&name).expect("a recorded run reads");
         let start = recorded.start().clone();
         let steps: Vec<Step<V>> = recorded.steps().to_vec();
-        let supported = reached::<V, Sim<V>>(&start, &steps);
-        let mut sim = Sim::<V>::begin((), &start).expect("a recording starts a run");
+        let supported = reached::<V>(&start, &steps);
+        let mut sim = Sim::<V>::begin(&start).expect("a recording starts a run");
 
         for (at, step) in steps[..supported].iter().enumerate() {
             sim.step(step)
