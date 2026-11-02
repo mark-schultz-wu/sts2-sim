@@ -57,16 +57,20 @@ crate's choice, and a second front end can disagree.
 `sts2 show map` draws the whole act. Which room to enter next is the largest decision
 in a run, and you make it from several rows ahead.
 
-## sts2-sim
+## sts2 sim
 
-`sts2-sim` is the same screen as a bare `sts2`, on the simulator. It needs no
+`sts2 sim` is the same screen as a bare `sts2`, on the simulator. It needs no
 game and no daemon. The run lives in the process that draws it, and the run ends
 when you quit. Pick a character and a seed, and the run starts at once.
 
 ```
-$ sts2-sim
-$ sts2-sim --game-version v0.111.0
+$ sts2 sim
+$ sts2 --game-version v0.111.0 sim
 ```
+
+The screen is a player of the run, as `docs/RUNNERS.md` says. The runner asks
+it for each move, and it reads keys until one asks for one. A run at the
+daemon's table and a run at the simulator's are played the same way.
 
 The screen draws in 24-bit colour when `COLORTERM` says the terminal can, and
 in the terminal's own sixteen colours otherwise. `STS2_COLOR=16` or

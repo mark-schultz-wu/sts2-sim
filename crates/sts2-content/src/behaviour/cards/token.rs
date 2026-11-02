@@ -48,28 +48,22 @@ fn parry<V: crate::Build>(powers: &[sts2_core::Stack<V>]) -> Number {
 /// What a card that works its own target out from the fight names.
 pub(super) fn computed_target<V: crate::Build>(
     card: V::Card,
-    powers: &[sts2_core::Stack<V>],
+    carries: impl Fn(V::Power) -> bool,
 ) -> TargetType {
     match card {
         // `SovereignBlade.TargetType`: one enemy, or the lot under Seeking
         // Edge.
-        __c0 if __c0 == V::Card::SOVEREIGN_BLADE => {
-            match powers
-                .iter()
-                .any(|h| h.power == V::Power::SEEKING_EDGE_POWER)
-            {
+        __c0 if __c0 == V::Card::SOVEREIGN_BLADE => match carries(V::Power::SEEKING_EDGE_POWER) {
+            true => TargetType::AllEnemies,
+            false => TargetType::AnyEnemy,
+        },
+        // `Shiv.TargetType`: the same, under Fan of Knives.
+        __c0 if __c0 == <V::Card as crate::ids::CardIds>::SHIV => {
+            match carries(V::Power::FAN_OF_KNIVES_POWER) {
                 true => TargetType::AllEnemies,
                 false => TargetType::AnyEnemy,
             }
         }
-        // `Shiv.TargetType`: the same, under Fan of Knives.
-        __c0 if __c0 == <V::Card as crate::ids::CardIds>::SHIV => match powers
-            .iter()
-            .any(|h| h.power == V::Power::FAN_OF_KNIVES_POWER)
-        {
-            true => TargetType::AllEnemies,
-            false => TargetType::AnyEnemy,
-        },
         card => unimplemented!("what {card:?} points at"),
     }
 }

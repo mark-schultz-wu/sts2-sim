@@ -118,7 +118,7 @@ impl<V: sts2_core::ContentVersion> sts2_run::Player<V> for Picking {
         seat: sts2_core::SeatIndex,
         table: &mut T,
         moves: &[sts2_core::Decision<V>],
-    ) -> Result<usize, T::Error> {
+    ) -> Result<Option<sts2_core::Decision<V>>, T::Error> {
         match self {
             Picking::Random(player) => player.choose(seat, table, moves),
             Picking::Uniform(player) => player.choose(seat, table, moves),
@@ -189,6 +189,9 @@ fn id<T: serde::de::DeserializeOwned>(id: &str) -> Result<T, Error> {
 fn run<V>(cli: Play) -> Result<Verdict, Error>
 where
     V: sts2_content::Build + sts2_content_wire::WireContentVersion,
+    sts2_core::Seated<V>: Send,
+    sts2_core::Answered<V>: Send,
+    sts2_core::Setup<V>: Sync,
 {
     let Play {
         seed,
