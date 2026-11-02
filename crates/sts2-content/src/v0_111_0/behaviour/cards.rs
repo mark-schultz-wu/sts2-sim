@@ -116,11 +116,19 @@ pub(crate) fn own_card_event_hook(
         // to nothing.
         (
             Cards::Defect(DefectCard::RocketPunch),
-            sts2_core::EventHook::CardGeneratedForCombat { card, creator, .. },
+            sts2_core::EventHook::CardGeneratedForCombat {
+                card,
+                player,
+                creator,
+                ..
+            },
         ) => {
             // `creator == Owner && card.Owner == Owner`: a Status its own
             // player made, for that player.
-            if creator == Some(owner) && V::card_kind(card) == Some(sts2_core::CardKind::Status) {
+            if creator == Some(owner)
+                && player == owner
+                && V::card_kind(card) == Some(sts2_core::CardKind::Status)
+            {
                 asked.push(sts2_core::HookEffect::ModifySelf {
                     change: sts2_core::Change::ChangeCost(sts2_core::CostPool::Energy, -1),
                     lasting: sts2_core::Lasting::UntilPlayed,

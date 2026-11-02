@@ -1515,6 +1515,14 @@ macro_rules! rules {
                     crate::behaviour::rules::observe_event::<Self>(state, run)
                 }
 
+                fn event_kills(
+                    state: &Self::EventState,
+                    option: u8,
+                    run: &impl sts2_core::EventView<Self>,
+                ) -> bool {
+                    crate::behaviour::rules::event_kills::<Self>(state, option, run)
+                }
+
                 fn choose_event<R: sts2_core::rng::GameRng>(
                     state: &mut Self::EventState,
                     option: u8,

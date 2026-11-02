@@ -5,12 +5,14 @@
 //! from its own legal list. A run that ends is fine. A refused move, an error a game
 //! logged, or seats that stall are findings, and are named.
 //!
-//! The runs that end go into `target/coop/runs.bin`, one file of recorded
-//! runs, as a hunt keeps its own.
+//! The runs that end go into `runs.bin` in the directory, `target/coop`
+//! unless `--dir` names another, which the command empties first. Two at
+//! once each name their own.
 //!
 //! ```text
 //! STS2_GAME_VERSION=v0.111.0 cargo xtask coop
 //! STS2_GAME_VERSION=v0.111.0 cargo xtask coop --runs 20 --characters IRONCLAD,SILENT,DEFECT
+//! STS2_GAME_VERSION=v0.111.0 cargo xtask coop --hunt --first-seed 3 --runs 1 --dir target/coop-a
 //! ```
 //!
 //! The build is `STS2_GAME_VERSION`'s. Only v0.111.0 plays co-op.
@@ -41,6 +43,10 @@ pub struct Args {
     /// Play the simulator beside the game, and stop each run where they part.
     #[arg(long)]
     hunt: bool,
+    /// Where the runs keep their files, which this empties first. A
+    /// relative path is under the workspace.
+    #[arg(long, default_value = "target/coop")]
+    dir: std::path::PathBuf,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -58,11 +64,12 @@ pub fn run(args: Args) -> Result<String, Error> {
         characters,
         width,
         hunt,
+        dir,
     } = args;
     let root = crate::workspace();
     let runner = crate::error::build_runner(&root)?;
     let build = crate::runner::game_build();
-    let scratch = root.join("target/coop");
+    let scratch = root.join(dir);
     let _ = std::fs::remove_dir_all(&scratch);
     crate::error::create_dir(&scratch)?;
 

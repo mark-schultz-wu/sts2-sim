@@ -287,11 +287,14 @@ impl<V: Rules> State<V> {
                 return Ok(None);
             };
             fighting.live.ask_paused();
-            if !fighting.live.ending_turn(seat) || fighting.live.question(seat).is_some() {
+            let Some(ending) = fighting.live.turn_to_end(seat) else {
+                return Ok(None);
+            };
+            if fighting.live.question(ending).is_some() {
                 return Ok(None);
             }
-            fighting.live.take_ending_turn(seat);
-            if let Some(ended) = combat::end_turn(seat, fighting, ascension)? {
+            fighting.live.take_ending_turn(ending);
+            if let Some(ended) = combat::end_turn(ending, fighting, ascension)? {
                 return Ok(Some(ended));
             }
         }
@@ -334,6 +337,9 @@ impl<V: Rules> State<V> {
             }
             (ended, _) => ended,
         };
+        if let (None, Some(fighting)) = (ended, self.fighting()) {
+            combat::relist_hand_picks(seat, fighting);
+        }
         let ended = self
             .selector_answered(seat, ended)
             .unwrap_or_else(|error| unimplemented!("a pushed selector's answer failing: {error}"));
@@ -372,15 +378,10 @@ impl<V: Rules> State<V> {
             }
             Some(combat::Ended::Won) => {
                 let seats: smallvec::SmallVec<[sts2_core::SeatIndex; 4]> = self.seats().collect();
-                let host = sts2_core::SeatIndex(0);
-                let in_event = self.resuming.is_some();
                 // `ActionQueueSet.CombatEnded` cancels every combat action
                 // not running, a play paused on another player's choice among
                 // them. They go with the fight.
                 let (mut live, belts) = self.left_fight();
-                if seats.len() > 1 && in_event {
-                    unimplemented!("a fight of several players won inside an event");
-                }
                 let extra_rewards: smallvec::SmallVec<[Vec<combat::ExtraReward<V>>; 2]> =
                     seats.iter().map(|&seat| live.extra_rewards(seat)).collect();
                 let taken: smallvec::SmallVec<[Vec<sts2_core::DeckCard<V>>; 1]> = seats
@@ -408,17 +409,24 @@ impl<V: Rules> State<V> {
                 let encounter = combats[0].encounter;
                 if let Some(resuming) = self.resuming.as_mut() {
                     resuming.escaped = escaped;
-                    if !extra_rewards[0].is_empty() || !extra.is_empty() {
-                        let encounter = encounter.unwrap_or_else(|| {
-                            unimplemented!("a fight with no encounter behind it")
-                        });
-                        resuming.extras = Some(Box::new(Extras {
-                            rewards: extra_rewards[0].clone(),
-                            ending: extra_of(host),
-                            taken: taken[0].clone(),
-                            room: reward_room::<V>(encounter),
-                        }));
-                    }
+                    // `CombatRoom.ExtraRewards`, each player's own.
+                    resuming.extras = (seats.iter().enumerate())
+                        .map(|(at, &each)| {
+                            let ending = extra_of(each);
+                            if extra_rewards[at].is_empty() && ending.is_empty() {
+                                return None;
+                            }
+                            let encounter = encounter.unwrap_or_else(|| {
+                                unimplemented!("a fight with no encounter behind it")
+                            });
+                            Some(Box::new(Extras {
+                                rewards: extra_rewards[at].clone(),
+                                ending,
+                                taken: taken[at].clone(),
+                                room: reward_room::<V>(encounter),
+                            }))
+                        })
+                        .collect();
                 }
                 // What the fight's end asked of the run, in the order it
                 // asked, each for the player whose listener asked.
@@ -452,6 +460,12 @@ impl<V: Rules> State<V> {
                     return self
                         .proceed(seat)
                         .unwrap_or_else(|e| unreachable!("an event resumes after its fight: {e}"));
+                }
+                // Each machine leaves such a fight's rewards, and resumes the
+                // event, as its own player proceeds. No event that resumes
+                // after its fight gives rewards for it.
+                if seats.len() > 1 && self.resuming.is_some() {
+                    unimplemented!("a fight of several players won inside an event, with rewards");
                 }
                 // `WithRewardsFromRoom` sets nothing for the last act's boss,
                 // its room's extra rewards included, and rolls nothing. The

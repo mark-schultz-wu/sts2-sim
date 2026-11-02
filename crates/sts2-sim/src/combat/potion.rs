@@ -67,6 +67,7 @@ pub(crate) fn drink<V: Rules>(
             ended,
             branched: false,
             chooser: None,
+            context: None,
         },
         used,
         true,
