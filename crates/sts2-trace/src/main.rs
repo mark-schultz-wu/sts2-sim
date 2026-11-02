@@ -19,7 +19,7 @@ use std::process::ExitCode;
 use clap::Parser;
 
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::{Play as _, Step};
+use sts2_core::Step;
 use sts2_golden::bench::reached;
 use sts2_golden::{every_run, recording};
 use sts2_sim::Sim;
@@ -78,12 +78,12 @@ fn run(Cli { out }: Cli) -> Result<(), Error> {
     let recorded = recording::<V>(&name)?;
     let start = recorded.start().clone();
     let steps: Vec<Step<V>> = recorded.steps().to_vec();
-    let supported = reached::<V, Sim<V>>(&start, &steps);
-    if let Err(source) = Sim::<V>::begin((), &start) {
+    let supported = reached::<V>(&start, &steps);
+    if let Err(source) = Sim::<V>::begin(&start) {
         return Err(Error::Begin { name, source });
     }
     let replay = || {
-        let mut sim = Sim::<V>::begin((), &start).expect("the run began once already");
+        let mut sim = Sim::<V>::begin(&start).expect("the run began once already");
         for step in &steps[..supported] {
             let _ = std::hint::black_box(sim.advance(step));
         }
