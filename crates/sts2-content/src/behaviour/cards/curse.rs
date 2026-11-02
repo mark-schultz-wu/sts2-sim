@@ -51,24 +51,23 @@ fn bad_luck<V: crate::Build, F: Fight<V>>(fight: &mut F) {
 /// Deliver a notification to one curse in the fight.
 pub(super) fn event_hook<V: crate::Build>(
     card: V::Card,
+    owner: sts2_core::CombatId,
     pile: Option<sts2_core::Pile>,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    use crate::generated::runstate::CombatSide;
     use sts2_core::{EventHook, HookEffect, Pile};
 
     match (card, hook) {
         // `Regret.BeforeSideTurnEnd`: the hand's size noted as `CardsInHand`,
-        // where it stands in the hand as its owner's turn ends.
+        // where it stands in the hand and its owner takes part in the turn's
+        // end.
         (
             __c0,
             EventHook::BeforeSideTurnEnd {
-                side: CombatSide::Player,
-                hand,
-                ..
+                participants, hand, ..
             },
-        ) if __c0 == V::Card::REGRET => {
+        ) if __c0 == V::Card::REGRET && participants.contains(owner) => {
             if pile == Some(Pile::Hand) {
                 let hand = crate::behaviour::cards::Number::try_from(hand)
                     .expect("a hand fits a game number");

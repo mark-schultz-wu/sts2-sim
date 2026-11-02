@@ -988,8 +988,8 @@ fn temporary<V: crate::Build>(
                 PowerAmount::Counted(signed(landing)),
             ))
         }
-        (PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
-            if side == held.owner =>
+        (PowerAmount::Counted(amount), EventHook::SideTurnEnd { participants, .. })
+            if participants.contains(held.holder) =>
         {
             // `PowerCmd.Remove(this)` and then the lent amount back, which is the
             // order the game hands them over in.
@@ -2809,8 +2809,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `KnockdownPower.AfterSideTurnEnd`: gone once its owner's side ends a
         // turn. Its `AfterApplied` only writes its applier's name.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::KNOCKDOWN_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::KNOCKDOWN_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -2870,8 +2870,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `FlankingPower.AfterSideTurnEnd`: gone once its owner's side ends
         // a turn.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::FLANKING_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::FLANKING_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -2899,8 +2899,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::CardPlayed { .. }) if __c0 == V::Power::SNEAKY_POWER => None,
         // `NoEnergyGainPower.AfterSideTurnEnd`: gone once its owner's turn
         // ends.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::NO_ENERGY_GAIN_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::NO_ENERGY_GAIN_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -2939,26 +2939,26 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `DebilitatePower.AfterSideTurnEnd`: one off its stack as its owner's
         // turn ends. What it does to Vulnerable and Weak, they read.
-        (__c0, PowerAmount::Counted(_), EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::DEBILITATE_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(_), EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::DEBILITATE_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Decrement)
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::DEBILITATE_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::DEBILITATE_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Debilitate")
         }
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::DEBILITATE_POWER => None,
         // `ConsumingShadowPower.AfterSideTurnEnd`: `OrbCmd.EvokeLast` once for
         // each of its stack as its owner's turn ends, while an orb is left.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::CONSUMING_SHADOW_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::CONSUMING_SHADOW_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::EvokeLast(amount))
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::CONSUMING_SHADOW_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::CONSUMING_SHADOW_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Consuming Shadow")
         }
@@ -3276,8 +3276,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::CardPlayed { .. }) if __c0 == V::Power::MASTER_PLANNER_POWER => None,
         // `ShadowStepPower.AfterSideTurnStart`: its stack as Double Damage on
         // its owner as its owner's side begins a turn, then it goes.
-        (__c0, amount, EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::SHADOW_STEP_POWER && (side == owner) =>
+        (__c0, amount, EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::SHADOW_STEP_POWER && (participants.contains(holder)) =>
         {
             asked.push(HookEffect::ApplyToOwner(
                 V::Power::DOUBLE_DAMAGE_POWER,
@@ -3289,8 +3289,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::SideTurnStart { .. }) if __c0 == V::Power::SHADOW_STEP_POWER => None,
         // `DoubleDamagePower.AfterSideTurnEnd`: one off its stack as its
         // owner's turn ends.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::DOUBLE_DAMAGE_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::DOUBLE_DAMAGE_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Decrement)
         }
@@ -3327,8 +3327,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::CardPlayed { .. }) if __c0 == V::Power::RAGE_POWER => None,
         // `RagePower.AfterSideTurnEnd`: `PowerCmd.Remove(this)` as its owner's
         // turn ends.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::RAGE_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::RAGE_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -3530,21 +3530,21 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::DamageGiven { .. }) if __c0 == V::Power::SIC_EM_POWER => None,
         // `SicEmPower.AfterSideTurnEnd`: `PowerCmd.Remove(this)` as its
         // owner's turn ends.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::SIC_EM_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::SIC_EM_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::SIC_EM_POWER => None,
         // `ConquerorPower.AfterSideTurnEnd`: one off its stack as its owner's
         // side's turn ends.
-        (__c0, PowerAmount::Counted(_), EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::CONQUEROR_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(_), EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::CONQUEROR_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Decrement)
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::CONQUEROR_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::CONQUEROR_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Conqueror")
         }
@@ -3578,8 +3578,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `RingingPower.AfterSideTurnEnd`: gone as its owner's side ends a
         // turn.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::RINGING_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::RINGING_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -3623,8 +3623,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::CardEnteredCombat { .. }) if __c0 == V::Power::SMOGGY_POWER => None,
         // `SmoggyPower.AfterSideTurnEnd`, as its owner's side ends a turn: Smog
         // off every card that has it. The power stays.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::SMOGGY_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::SMOGGY_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::ClearAffliction(
                 sts2_core::Writing::EveryAfflictedWith(V::Affliction::SMOG),
@@ -3689,8 +3689,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::CardEnteredCombat { .. }) if __c0 == V::Power::TANGLED_POWER => None,
         // `TangledPower.AfterSideTurnEnd`: gone as its owner's side ends a
         // turn.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::TANGLED_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::TANGLED_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -3703,8 +3703,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `DemisePower.AfterSideTurnEnd`: its stack off its owner as its
         // owner's side's turn ends.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::DEMISE_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::DEMISE_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::DamageOwnerInFight {
                 amount,
@@ -3712,24 +3712,24 @@ pub(crate) fn event_hook<V: crate::Build>(
                 self_dealt: false,
             })
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::DEMISE_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::DEMISE_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Demise")
         }
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::DEMISE_POWER => None,
         // `BiasedCognitionPower.AfterSideTurnStart`: its stack off its owner's
         // Focus as its owner's side begins a turn.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::BIASED_COGNITION_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::BIASED_COGNITION_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::ApplyToOwner(
                 V::Power::FOCUS_POWER,
                 PowerAmount::Counted(-amount),
             ))
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::BIASED_COGNITION_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::BIASED_COGNITION_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Biased Cognition")
         }
@@ -3762,8 +3762,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `StranglePower.AfterSideTurnEnd`: gone as its owner's side ends a
         // turn.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::STRANGLE_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::STRANGLE_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -3860,8 +3860,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `MonologuePower.AfterSideTurnEnd` on its owner's side: gone, and
         // all it lent taken back.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::MONOLOGUE_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::MONOLOGUE_POWER && (participants.contains(holder)) =>
         {
             let State::Monologue { applied, .. } = state else {
                 unreachable!("Strength counted for {:?}", state.power())
@@ -3931,8 +3931,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `WraithFormPower.AfterSideTurnStart`: its stack off its owner's
         // Dexterity as its owner's side starts a turn.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::WRAITH_FORM_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::WRAITH_FORM_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::ApplyToOwner(
                 V::Power::DEXTERITY_POWER,
@@ -3947,8 +3947,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::SideTurnStart { .. }) if __c0 == V::Power::WRAITH_FORM_POWER => None,
         // `DisintegrationPower.AfterSideTurnEndLate`: its stack off its owner,
         // dealt by the owner and unpowered, as its owner's side's turn ends.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEndLate { side })
-            if __c0 == V::Power::DISINTEGRATION_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEndLate { participants, .. })
+            if __c0 == V::Power::DISINTEGRATION_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::DamageOwnerInFight {
                 amount,
@@ -3956,8 +3956,8 @@ pub(crate) fn event_hook<V: crate::Build>(
                 self_dealt: true,
             })
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnEndLate { side })
-            if __c0 == V::Power::DISINTEGRATION_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnEndLate { participants, .. })
+            if __c0 == V::Power::DISINTEGRATION_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Disintegration")
         }
@@ -3988,10 +3988,10 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `VoidFormPower.BeforeSideTurnStart`: the count starts again as its
         // owner's side's turn begins.
-        (__c0, _, EventHook::BeforeSideTurnStart { side, .. })
+        (__c0, _, EventHook::BeforeSideTurnStart { participants, .. })
             if __c0 == V::Power::VOID_FORM_POWER =>
         {
-            if side == owner {
+            if participants.contains(holder) {
                 let State::VoidForm { played } = state else {
                     unreachable!("Void Form counts its plays")
                 };
@@ -4029,8 +4029,10 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `SlothPower.BeforeSideTurnStart`: the count starts again as its
         // owner's side's turn begins.
-        (__c0, _, EventHook::BeforeSideTurnStart { side, .. }) if __c0 == V::Power::SLOTH_POWER => {
-            if side == owner {
+        (__c0, _, EventHook::BeforeSideTurnStart { participants, .. })
+            if __c0 == V::Power::SLOTH_POWER =>
+        {
+            if participants.contains(holder) {
                 let State::Sloth { played } = state else {
                     unreachable!("plays counted for {:?}", state.power())
                 };
@@ -4040,8 +4042,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `ConstrictPower.AfterSideTurnEnd`: its stack off its owner, dealt by
         // the owner and unpowered, as its owner's side's turn ends.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::CONSTRICT_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::CONSTRICT_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::DamageOwnerInFight {
                 amount,
@@ -4049,8 +4051,8 @@ pub(crate) fn event_hook<V: crate::Build>(
                 self_dealt: true,
             })
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::CONSTRICT_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::CONSTRICT_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Constrict")
         }
@@ -4107,8 +4109,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::INTANGIBLE_POWER => None,
         // `BorrowedTimePower.AfterSideTurnEnd`: gone once its owner's turn
         // ends.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::BORROWED_TIME_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::BORROWED_TIME_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -4116,8 +4118,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         // `PoisonPower.AfterSideTurnStart`, for its owner's side: `TriggerCount`
         // rounds, which is its stack or one more than the Accelerant its
         // owner's living opponents carry, whichever is fewer.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::POISON_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::POISON_POWER && (participants.contains(holder)) =>
         {
             let accelerant: Number = fight
                 .living_opponents(holder)
@@ -4134,24 +4136,24 @@ pub(crate) fn event_hook<V: crate::Build>(
                 times: amount.min(1 + accelerant),
             })
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::POISON_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::POISON_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Poison")
         }
         (__c0, _, EventHook::SideTurnStart { .. }) if __c0 == V::Power::POISON_POWER => None,
         // `NoxiousFumesPower.AfterSideTurnStart`: its stack of Poison onto
         // every enemy that can be hit, from its owner.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::NOXIOUS_FUMES_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::NOXIOUS_FUMES_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::ApplyToOpponents(
                 V::Power::POISON_POWER,
                 PowerAmount::Counted(amount),
             ))
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::NOXIOUS_FUMES_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::NOXIOUS_FUMES_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Noxious Fumes")
         }
@@ -4324,8 +4326,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::AfterDeath { .. }) if __c0 == V::Power::RAVENOUS_POWER => None,
         // `HighVoltagePower.AfterSideTurnEnd`: its stack of Strength as its
         // owner's side ends a turn.
-        (__c0, amount, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::HIGH_VOLTAGE_POWER && (side == owner) =>
+        (__c0, amount, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::HIGH_VOLTAGE_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::ApplyToOwner(V::Power::STRENGTH_POWER, amount))
         }
@@ -4376,8 +4378,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         (__c0, _, EventHook::CardPlayed { .. }) if __c0 == V::Power::GALVANIC_POWER => None,
         // `NoDrawPower.AfterSideTurnEnd`: gone once its owner's turn ends.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::NO_DRAW_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::NO_DRAW_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -4420,8 +4422,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         // `ShrinkPower.AfterSideTurnEnd`, for the side its owner is among the
         // participants of. An infinite Shrink, the one the game gives a
         // negative amount, lasts the fight.
-        (__c0, PowerAmount::Counted(_), EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::SHRINK_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(_), EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::SHRINK_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Decrement)
         }
@@ -4435,8 +4437,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `AfterSideTurnEnd` for the side its owner is among the participants
         // of, which is its owner's own side.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::TERRITORIAL_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::TERRITORIAL_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::ApplyToOwner(
                 V::Power::STRENGTH_POWER,
@@ -4449,8 +4451,9 @@ pub(crate) fn event_hook<V: crate::Build>(
             unimplemented!("an endless Territorial")
         }
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::TERRITORIAL_POWER => None,
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::ESCAPE_ARTIST_POWER && (side == owner && amount > one) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::ESCAPE_ARTIST_POWER
+                && (participants.contains(holder) && amount > one) =>
         {
             Some(HookEffect::Decrement)
         }
@@ -4462,13 +4465,13 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::ESCAPE_ARTIST_POWER => None,
         // `HatchPower.AfterSideTurnEnd`: `PowerCmd.Decrement` as its owner's
         // side ends.
-        (__c0, PowerAmount::Counted(_), EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::HATCH_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(_), EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::HATCH_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Decrement)
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::HATCH_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::HATCH_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Hatch")
         }
@@ -4573,6 +4576,7 @@ pub(crate) fn event_hook<V: crate::Build>(
             _,
             EventHook::SideTurnStartLate {
                 side: CombatSide::Enemy,
+                ..
             },
         ) if __c0 == V::Power::SANDPIT_POWER => Some(HookEffect::Decrement),
         (__c0, _, EventHook::SideTurnStartLate { .. }) if __c0 == V::Power::SANDPIT_POWER => None,
@@ -4876,8 +4880,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `NemesisPower.AfterSideTurnEnd`, as its owner's side's turn ends:
         // Intangible every other turn, and taken off on the turns between.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::NEMESIS_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::NEMESIS_POWER && (participants.contains(holder)) =>
         {
             let State::Nemesis { intangible } = state else {
                 unreachable!("Nemesis holding {state:?}")
@@ -4898,16 +4902,18 @@ pub(crate) fn event_hook<V: crate::Build>(
         // `BattlewornDummyTimeLimitPower.AfterSideTurnEnd`, as its owner's
         // side's turn ends: one off, and at the last the dummy escapes. The
         // escape is what the encounter's `RanOutOfTime` records.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::BATTLEWORN_DUMMY_TIME_LIMIT_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::BATTLEWORN_DUMMY_TIME_LIMIT_POWER
+                && (participants.contains(holder)) =>
         {
             Some(match amount > one {
                 true => HookEffect::Decrement,
                 false => HookEffect::Escape,
             })
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::BATTLEWORN_DUMMY_TIME_LIMIT_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::BATTLEWORN_DUMMY_TIME_LIMIT_POWER
+                && (participants.contains(holder)) =>
         {
             unimplemented!("an endless time limit")
         }
@@ -5007,8 +5013,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `BeforeSideTurnEnd`, as its owner's side's turn ends: none played,
         // and Bound off every card that has it.
-        (__c0, _, EventHook::BeforeSideTurnEnd { side, .. })
-            if __c0 == V::Power::CHAINS_OF_BINDING_POWER && (side == owner) =>
+        (__c0, _, EventHook::BeforeSideTurnEnd { participants, .. })
+            if __c0 == V::Power::CHAINS_OF_BINDING_POWER && (participants.contains(holder)) =>
         {
             *state = State::ChainsOfBinding {
                 bound_played: false,
@@ -5025,8 +5031,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         // `TheBombPower.BeforeSideTurnEnd`: one off its turns as its owner's
         // turn is about to end. At the last, its damage, unpowered, to each
         // enemy that can be hit, and then it goes.
-        (__c0, PowerAmount::Counted(turns), EventHook::BeforeSideTurnEnd { side, .. })
-            if __c0 == V::Power::THE_BOMB_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(turns), EventHook::BeforeSideTurnEnd { participants, .. })
+            if __c0 == V::Power::THE_BOMB_POWER && (participants.contains(holder)) =>
         {
             if turns > 1 {
                 Some(HookEffect::Decrement)
@@ -5039,8 +5045,8 @@ pub(crate) fn event_hook<V: crate::Build>(
                 return;
             }
         }
-        (__c0, PowerAmount::Endless, EventHook::BeforeSideTurnEnd { side, .. })
-            if __c0 == V::Power::THE_BOMB_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::BeforeSideTurnEnd { participants, .. })
+            if __c0 == V::Power::THE_BOMB_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Bomb")
         }
@@ -5151,8 +5157,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         // `TenderPower.AfterSideTurnEnd` for the side its owner is among the
         // participants of. Everything taken this turn comes back, and the
         // count starts again.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::TENDER_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::TENDER_POWER && (participants.contains(holder)) =>
         {
             state.clear();
             asked.extend([
@@ -5165,8 +5171,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         // `SlumberPower.AfterSideTurnEnd` for the side its owner is among. The
         // beetle sleeps through its own turns and wakes when the count is
         // spent, which `PowerCmd.Decrement` taking the last instance off is.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::SLUMBER_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::SLUMBER_POWER && (participants.contains(holder)) =>
         {
             if amount == one {
                 asked.extend([
@@ -5180,8 +5186,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::SLUMBER_POWER => None,
         // `AsleepPower.AfterSideTurnEnd` for its owner's side: one off. The
         // `WakeUpMove` it then calls at nothing left only plays the waking.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::ASLEEP_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::ASLEEP_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Decrement)
         }
@@ -5191,8 +5197,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (
             __c0,
             PowerAmount::Counted(amount),
-            EventHook::BeforeSideTurnEndVeryEarly { side, .. },
-        ) if __c0 == V::Power::ASLEEP_POWER && (side == owner && amount <= one) => {
+            EventHook::BeforeSideTurnEndVeryEarly { participants, .. },
+        ) if __c0 == V::Power::ASLEEP_POWER && (participants.contains(holder) && amount <= one) => {
             Some(HookEffect::RemoveFromOwner(V::Power::PLATING_POWER))
         }
         (__c0, _, EventHook::BeforeSideTurnEndVeryEarly { .. })
@@ -5223,14 +5229,14 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::DamageReceived { .. }) if __c0 == V::Power::ASLEEP_POWER => None,
         // `BlurPower.AfterSideTurnStart`: one off, as its owner's side starts
         // a turn.
-        (__c0, _, EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::BLUR_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::BLUR_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Decrement)
         }
         (__c0, _, EventHook::SideTurnStart { .. }) if __c0 == V::Power::BLUR_POWER => None,
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::FURNACE_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::FURNACE_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Forge {
                 card: V::Card::SOVEREIGN_BLADE,
@@ -5257,8 +5263,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         {
             Some(HookEffect::Draw(amount))
         }
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::DARK_EMBRACE_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::DARK_EMBRACE_POWER && (participants.contains(holder)) =>
         {
             let counted = state.counted();
             state.clear();
@@ -5299,8 +5305,10 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         (__c0, _, EventHook::CardPlayed { .. }) if __c0 == V::Power::JUGGLING_POWER => None,
         // `AfterSideTurnEnd` on its owner's side starts the count again.
-        (__c0, _, EventHook::SideTurnEnd { side, .. }) if __c0 == V::Power::JUGGLING_POWER => {
-            if side == owner {
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::JUGGLING_POWER =>
+        {
+            if participants.contains(holder) {
                 state.clear();
             }
             None
@@ -5367,8 +5375,8 @@ pub(crate) fn event_hook<V: crate::Build>(
             unimplemented!("an endless Curl Up")
         }
         (__c0, _, EventHook::CardPlayed { .. }) if __c0 == V::Power::CURL_UP_POWER => None,
-        (__c0, _, EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::SLOW_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::SLOW_POWER && (participants.contains(holder)) =>
         {
             state.clear();
             None
@@ -5495,14 +5503,14 @@ pub(crate) fn event_hook<V: crate::Build>(
             __c0,
             PowerAmount::Counted(_),
             EventHook::SideTurnStart {
-                side,
+                participants,
                 round,
                 players,
                 ..
             },
         ) if __c0 == V::Power::PLATING_POWER
             && (owner == CombatSide::Enemy
-                && side == owner
+                && participants.contains(holder)
                 && round > <V as sts2_core::ContentVersion>::Count::from(1u8)) =>
         {
             Some(HookEffect::ModifyAmount(-Number::from(players)))
@@ -5522,18 +5530,25 @@ pub(crate) fn event_hook<V: crate::Build>(
         {
             Some(HookEffect::GainBlock(amount))
         }
-        (__c0, PowerAmount::Counted(amount), EventHook::BeforeSideTurnEndEarly { side, .. })
-            if __c0 == V::Power::PLATING_POWER && (side == owner) =>
-        {
+        (
+            __c0,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeSideTurnEndEarly { participants, .. },
+        ) if __c0 == V::Power::PLATING_POWER && (participants.contains(holder)) => {
             Some(HookEffect::GainBlock(amount))
         }
         // `PlatingPower.AfterSideTurnStart` on a player: one comes off each
         // of its turns but the first, by `PowerCmd.Decrement`.
-        (__c0, PowerAmount::Counted(_), EventHook::SideTurnStart { side, turn, .. })
-            if __c0 == V::Power::PLATING_POWER
-                && (owner != CombatSide::Enemy
-                    && side == owner
-                    && turn > <V as sts2_core::ContentVersion>::Count::from(1u8)) =>
+        (
+            __c0,
+            PowerAmount::Counted(_),
+            EventHook::SideTurnStart {
+                participants, turn, ..
+            },
+        ) if __c0 == V::Power::PLATING_POWER
+            && (owner != CombatSide::Enemy
+                && participants.contains(holder)
+                && turn > <V as sts2_core::ContentVersion>::Count::from(1u8)) =>
         {
             Some(HookEffect::Decrement)
         }
@@ -5875,8 +5890,10 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `PanachePower.AfterSideTurnEnd`: the count starts again as its
         // owner's side ends a turn.
-        (__c0, _, EventHook::SideTurnEnd { side, .. }) if __c0 == V::Power::PANACHE_POWER => {
-            if side == owner {
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::PANACHE_POWER =>
+        {
+            if participants.contains(holder) {
                 let State::Panache { cards_left, .. } = state else {
                     unreachable!("cards left for {:?}", state.power())
                 };
@@ -5933,26 +5950,26 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::DamageReceived { .. }) if __c0 == V::Power::REFLECT_POWER => None,
         // `ReflectPower.AfterSideTurnStart`: one off its stack as its owner's
         // side's turn starts.
-        (__c0, PowerAmount::Counted(_), EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::REFLECT_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(_), EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::REFLECT_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Decrement)
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::REFLECT_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::REFLECT_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Reflect")
         }
         (__c0, _, EventHook::SideTurnStart { .. }) if __c0 == V::Power::REFLECT_POWER => None,
         // `ClarityPower.AfterSideTurnStart`: one off its stack as its owner's
         // side's turn starts.
-        (__c0, PowerAmount::Counted(_), EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::CLARITY_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(_), EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::CLARITY_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Decrement)
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::CLARITY_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::CLARITY_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Clarity")
         }
@@ -5970,8 +5987,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::PlayCountModified { .. }) if __c0 == V::Power::DUPLICATION_POWER => {
             Some(HookEffect::Decrement)
         }
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::DUPLICATION_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::DUPLICATION_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -5990,11 +6007,11 @@ pub(crate) fn event_hook<V: crate::Build>(
         {
             None
         }
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
             if (__c0 == V::Power::BURST_POWER
                 || __c0 == V::Power::SHADOWMELD_POWER
                 || __c0 == V::Power::CORROSIVE_WAVE_POWER)
-                && (side == owner) =>
+                && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -6069,16 +6086,16 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::CardDrawn { .. }) if __c0 == V::Power::SPEEDSTER_POWER => None,
         // `PrepTimePower.AfterSideTurnStart`: its stack of Vigor onto its
         // owner, as its owner's side starts a turn.
-        (__c0, amount, EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::PREP_TIME_POWER && (side == owner) =>
+        (__c0, amount, EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::PREP_TIME_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::ApplyToOwner(V::Power::VIGOR_POWER, amount))
         }
         (__c0, _, EventHook::SideTurnStart { .. }) if __c0 == V::Power::PREP_TIME_POWER => None,
         // `DemonFormPower.AfterSideTurnStart`: its stack of Strength onto its
         // owner, as its owner's side starts a turn.
-        (__c0, amount, EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::DEMON_FORM_POWER && (side == owner) =>
+        (__c0, amount, EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::DEMON_FORM_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::ApplyToOwner(V::Power::STRENGTH_POWER, amount))
         }
@@ -6165,14 +6182,14 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::DamageGiven { .. }) if __c0 == V::Power::MONARCHS_GAZE_POWER => None,
         // `RegenPower.AfterSideTurnEnd`: its stack healed, then one off, as
         // its owner's side ends a turn.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::REGEN_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::REGEN_POWER && (participants.contains(holder)) =>
         {
             asked.extend([HookEffect::Heal(amount), HookEffect::Decrement]);
             return;
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::REGEN_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::REGEN_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Regen")
         }
@@ -6180,14 +6197,16 @@ pub(crate) fn event_hook<V: crate::Build>(
         // v0.111.0's `RegenPower.BeforeSideTurnEndEarly`, which does the same
         // earlier in the turn's end. Each build's class overrides one of the
         // two, so it hears only that one.
-        (__c0, PowerAmount::Counted(amount), EventHook::BeforeSideTurnEndEarly { side, .. })
-            if __c0 == V::Power::REGEN_POWER && (side == owner) =>
-        {
+        (
+            __c0,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeSideTurnEndEarly { participants, .. },
+        ) if __c0 == V::Power::REGEN_POWER && (participants.contains(holder)) => {
             asked.extend([HookEffect::Heal(amount), HookEffect::Decrement]);
             return;
         }
-        (__c0, PowerAmount::Endless, EventHook::BeforeSideTurnEndEarly { side, .. })
-            if __c0 == V::Power::REGEN_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::BeforeSideTurnEndEarly { participants, .. })
+            if __c0 == V::Power::REGEN_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Regen")
         }
@@ -6197,8 +6216,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         // `RitualPower.AfterSideTurnEnd`: its stack of Strength as its
         // owner's side ends a turn. A monster's skips the turn it was applied
         // in, through `AfterApplied`.
-        (__c0, amount, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::RITUAL_POWER && (side == owner) =>
+        (__c0, amount, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::RITUAL_POWER && (participants.contains(holder)) =>
         {
             match state.swap_just_applied(false) {
                 true => None,
@@ -6234,8 +6253,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::PlayCountModified { .. }) if __c0 == V::Power::ONE_TWO_PUNCH_POWER => {
             Some(HookEffect::Decrement)
         }
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::ONE_TWO_PUNCH_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::ONE_TWO_PUNCH_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -6245,13 +6264,15 @@ pub(crate) fn event_hook<V: crate::Build>(
             None
         }
         // `AggressionPower.BeforeSideTurnStart`, for its owner's own side.
-        (__c0, PowerAmount::Counted(amount), EventHook::BeforeSideTurnStart { side, .. })
-            if __c0 == V::Power::AGGRESSION_POWER && (side == owner) =>
-        {
+        (
+            __c0,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeSideTurnStart { participants, .. },
+        ) if __c0 == V::Power::AGGRESSION_POWER && (participants.contains(holder)) => {
             Some(HookEffect::AttacksFromDiscard(amount))
         }
-        (__c0, PowerAmount::Endless, EventHook::BeforeSideTurnStart { side, .. })
-            if __c0 == V::Power::AGGRESSION_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::BeforeSideTurnStart { participants, .. })
+            if __c0 == V::Power::AGGRESSION_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Aggression")
         }
@@ -6261,44 +6282,56 @@ pub(crate) fn event_hook<V: crate::Build>(
         // `DoomPower.BeforeSideTurnEnd`, for its owner's own side. A class
         // that also overrides `AfterSideTurnEnd`, as v0.111.0's does, leaves
         // the player's side to that.
-        (__c0, _, EventHook::BeforeSideTurnEnd { side, .. }) if __c0 == V::Power::DOOM_POWER => {
+        (
+            __c0,
+            _,
+            EventHook::BeforeSideTurnEnd {
+                side, participants, ..
+            },
+        ) if __c0 == V::Power::DOOM_POWER => {
             use sts2_core::PowerTable as _;
             let after = power
                 .overrides()
                 .contains(sts2_core::ModelHook::AfterSideTurnEnd);
-            match side == owner && !(after && side == CombatSide::Player) {
+            match participants.contains(holder) && !(after && side == CombatSide::Player) {
                 true => Some(HookEffect::DoomKill),
                 false => None,
             }
         }
         // v0.111.0's `DoomPower.AfterSideTurnEnd`, for its owner's own side
         // when that is not the enemies'.
-        (__c0, _, EventHook::SideTurnEnd { side, .. }) if __c0 == V::Power::DOOM_POWER => {
-            match side == owner && side != CombatSide::Enemy {
+        (
+            __c0,
+            _,
+            EventHook::SideTurnEnd {
+                side, participants, ..
+            },
+        ) if __c0 == V::Power::DOOM_POWER => {
+            match participants.contains(holder) && side != CombatSide::Enemy {
                 true => Some(HookEffect::DoomKill),
                 false => None,
             }
         }
         // `HailstormPower.BeforeSideTurnEnd`: its stack of damage to every enemy
         // while its owner holds a Frost orb.
-        (__c0, PowerAmount::Counted(amount), EventHook::BeforeSideTurnEnd { side, .. })
-            if __c0 == V::Power::HAILSTORM_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::BeforeSideTurnEnd { participants, .. })
+            if __c0 == V::Power::HAILSTORM_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::DamageOpponentsHolding {
                 orb: V::Orb::FROST_ORB,
                 amount,
             })
         }
-        (__c0, PowerAmount::Endless, EventHook::BeforeSideTurnEnd { side, .. })
-            if __c0 == V::Power::HAILSTORM_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::BeforeSideTurnEnd { participants, .. })
+            if __c0 == V::Power::HAILSTORM_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Hailstorm")
         }
         (__c0, _, EventHook::BeforeSideTurnEnd { .. }) if __c0 == V::Power::HAILSTORM_POWER => None,
         // `NeurosurgePower.AfterSideTurnStart`: its stack of Doom on its own
         // owner, each of its owner's turns.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::NEUROSURGE_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::NEUROSURGE_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::ApplyToOwner(
                 V::Power::DOOM_POWER,
@@ -6307,17 +6340,17 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `CountdownPower.AfterSideTurnStart`: its stack of Doom on one enemy
         // that can be hit.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::COUNTDOWN_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::COUNTDOWN_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::ApplyToRandomOpponent {
                 power: V::Power::DOOM_POWER,
                 amount: PowerAmount::Counted(amount),
             })
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { side, .. })
+        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { participants, .. })
             if (__c0 == V::Power::NEUROSURGE_POWER || __c0 == V::Power::COUNTDOWN_POWER)
-                && (side == owner) =>
+                && (participants.contains(holder)) =>
         {
             unimplemented!("an endless {power:?}")
         }
@@ -6409,21 +6442,23 @@ pub(crate) fn event_hook<V: crate::Build>(
             state.set_feral_played(state.feral_played() + one);
             None
         }
-        (__c0, _, EventHook::SideTurnStart { side, .. }) if __c0 == V::Power::FERAL_POWER => {
-            if side == owner {
+        (__c0, _, EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::FERAL_POWER =>
+        {
+            if participants.contains(holder) {
                 state.set_feral_played(0);
             }
             None
         }
         // `CoolantPower.AfterSideTurnStart`: its stack of block for each kind
         // of orb its owner holds.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::COOLANT_POWER && (side == owner) =>
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::COOLANT_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::GainBlockPerOrbKind(amount))
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { side, .. })
-            if __c0 == V::Power::COOLANT_POWER && (side == owner) =>
+        (__c0, PowerAmount::Endless, EventHook::SideTurnStart { participants, .. })
+            if __c0 == V::Power::COOLANT_POWER && (participants.contains(holder)) =>
         {
             unimplemented!("an endless Coolant")
         }
@@ -6465,8 +6500,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::ResultPileModified { .. }) if __c0 == V::Power::REBOUND_POWER => {
             Some(HookEffect::Decrement)
         }
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::REBOUND_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::REBOUND_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -6827,9 +6862,10 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `DrawCardsNextTurnPower.AfterSideTurnStart` goes once the turn it
         // drew for has begun.
-        (__c0, _, EventHook::SideTurnStart { side, .. })
+        (__c0, _, EventHook::SideTurnStart { participants, .. })
             if __c0 == V::Power::DRAW_CARDS_NEXT_TURN_POWER
-                && (side == owner && held.on_turn_start != PowerAmount::Counted(0)) =>
+                && (participants.contains(holder)
+                    && held.on_turn_start != PowerAmount::Counted(0)) =>
         {
             Some(HookEffect::Remove)
         }
@@ -6839,8 +6875,8 @@ pub(crate) fn event_hook<V: crate::Build>(
             None
         }
         // `RetainHandPower.AfterSideTurnEnd`, for the side its owner is among.
-        (__c0, _, EventHook::SideTurnEnd { side, .. })
-            if __c0 == V::Power::RETAIN_HAND_POWER && (side == owner) =>
+        (__c0, _, EventHook::SideTurnEnd { participants, .. })
+            if __c0 == V::Power::RETAIN_HAND_POWER && (participants.contains(holder)) =>
         {
             Some(HookEffect::Decrement)
         }

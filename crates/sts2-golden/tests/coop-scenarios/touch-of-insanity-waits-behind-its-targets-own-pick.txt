@@ -1,0 +1,15 @@
+# The Silent plays Survivor, whose discard waits on the Silent. The
+# Ironclad throws Touch of Insanity at the Silent meanwhile. Its pick is
+# the Silent's, so the rest of the potion goes on as a hook action at the
+# back of the Silent's queue, behind Survivor. Once Survivor's discard is
+# over, the potion lists the Silent's hand as it stands then.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1001,"seat":0}
+{"cmd":"grant","potion":"TOUCH_OF_INSANITY","target":1,"seat":0}
+{"cmd":"play_card","index":7,"seat":1}
+{"cmd":"answer","pick":0,"seat":1}
+{"cmd":"use_potion","index":0,"target":1,"seat":0}
+{"cmd":"answer","done":true,"seat":1}
+{"cmd":"answer","pick":0,"seat":1}
+{"cmd":"answer","done":true,"seat":1}

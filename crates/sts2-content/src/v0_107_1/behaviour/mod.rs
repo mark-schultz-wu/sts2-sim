@@ -61,10 +61,11 @@ impl crate::build::OwnRules for V {
 
     fn own_relic_event_hook(
         state: &mut crate::behaviour::relics::State<V>,
+        owner: sts2_core::CombatId,
         hook: sts2_core::EventHook<V>,
         asked: &mut sts2_core::HookEffects<V>,
     ) {
-        relics::own_relic_event_hook(state, hook, asked);
+        relics::own_relic_event_hook(state, owner, hook, asked);
     }
 
     fn own_card_hooks(_card: <V as sts2_core::ContentVersion>::Card) -> bool {
@@ -82,10 +83,16 @@ impl crate::build::OwnRules for V {
         None
     }
 
+    fn own_card_fields(
+        _card: <V as sts2_core::ContentVersion>::Card,
+    ) -> Option<crate::behaviour::cards::Fields> {
+        None
+    }
+
     fn own_card_result_pile(
         _card: <V as sts2_core::ContentVersion>::Card,
         _base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>> {
+    ) -> Option<sts2_core::HookResponse<sts2_core::CardResult>> {
         None
     }
 

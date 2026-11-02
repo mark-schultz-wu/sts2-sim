@@ -279,10 +279,10 @@ pub(crate) fn own_power_event_hook(
                 amount,
             )))
         }
-        // `AfterSideTurnEnd` on its owner's side clears the turn's
-        // activation.
-        (Power::PaleBlueDotPower, EventHook::SideTurnEnd { side, .. }) => {
-            if side == held.owner {
+        // `AfterSideTurnEnd` clears the turn's activation where its owner
+        // takes part.
+        (Power::PaleBlueDotPower, EventHook::SideTurnEnd { participants, .. }) => {
+            if participants.contains(held.holder) {
                 *state = State::PaleBlueDot { activated: false };
             }
             Some(None)
