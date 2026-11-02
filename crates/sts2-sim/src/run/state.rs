@@ -4797,10 +4797,15 @@ impl<V: Rules> State<V> {
     ) {
         use sts2_core::EventHook;
 
-        // `Hook.ModifyCardBeingAddedToDeck`, both passes.
-        card.ident = self.rewritten(seat, card.ident, |card| EventHook::CardBeingAddedToDeck {
-            card,
-        });
+        // `Hook.ModifyCardBeingAddedToDeck`, both passes. A listener that
+        // changes the card hands back a `CloneCard` of it, and the clone is
+        // what joins the deck. So a card given back by a theft joins as
+        // another card, which Hoarder's list does not hold.
+        let asked = self.notify_run_for(seat, EventHook::CardBeingAddedToDeck { card: card.ident });
+        if !asked.is_empty() {
+            card.id = self.players[seat].mint();
+        }
+        card.ident = rewrite(card.ident, asked);
         self.unheard(sts2_core::ModelHook::TryModifyCardBeingAddedToDeckLate);
 
         self.players[seat].deck_mut().push(card);

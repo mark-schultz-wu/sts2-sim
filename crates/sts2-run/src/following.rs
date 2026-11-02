@@ -218,8 +218,10 @@ where
     let played = catching(|| {
         let mut table = T::begin(host, start)?;
         let followed = follow(run, &mut table, false, |_| {});
+        // Out of moves, the run stops as a capped one does, so the last
+        // position is compared too. A hunt's parted run parts there.
         let ended = match &followed {
-            Ok(_) => end(End::Agreed, run.moves.len(), String::new()),
+            Ok(_) => end(End::Capped, run.moves.len(), String::new()),
             Err(fault) => end(fault.end, run.moves.len(), fault.detail.clone()),
         };
         Ok::<_, Fault>(table.finish(ended))

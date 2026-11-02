@@ -1,0 +1,16 @@
+# Toasty Mittens exhausts the last card of the draw pile before the hand is
+# drawn. Dark Embrace draws for it, which shuffles the discard pile in, and
+# Stratagem then asks for a card from it into the hand. The setup waits on
+# the answer. Three more cards in the deck leave one card in the draw pile as
+# the third turn begins.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","relic":"TOASTY_MITTENS"}
+{"cmd":"grant","card":"STRIKE_REGENT"}
+{"cmd":"grant","card":"DEFEND_REGENT"}
+{"cmd":"grant","card":"DEFEND_REGENT"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"DARK_EMBRACE_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}

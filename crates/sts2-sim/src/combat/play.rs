@@ -2033,7 +2033,7 @@ fn run_deferred<V: Rules>(
             super::live::Deferred::Draw {
                 count,
                 hand_draw,
-                resumed,
+                resume,
                 drew,
             } => match ended {
                 None => super::board::draw_in_effect::<V>(
@@ -2044,7 +2044,7 @@ fn run_deferred<V: Rules>(
                     ascension,
                     count,
                     hand_draw,
-                    resumed,
+                    resume,
                     drew,
                 ),
                 ended => ended,

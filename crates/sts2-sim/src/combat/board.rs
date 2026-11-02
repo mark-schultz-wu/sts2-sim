@@ -372,7 +372,9 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// `Creature.CanReceivePowers` for a creature in the fight: no listener's
     /// `ShouldAllowHitting` refuses it. `IsAlive` is `CurrentHp > 0`, so a
-    /// creature a hit took to nothing is dead to it before it dies.
+    /// creature a hit took to nothing is dead to it before it dies. A fight
+    /// over or ending has no listeners. So a power lands on the last enemy
+    /// even where its own `BeforeApplied` killed it.
     fn can_receive_powers(&self, creature: CombatId) -> bool {
         let alive = self
             .live
@@ -384,7 +386,7 @@ impl<'a, V: Rules> Board<'a, V> {
             self.walk(),
             sts2_core::DecisionHook::ShouldAllowHitting { creature, alive },
             false,
-        )
+        ) || self.over()
     }
 
     /// The card whose effect this is, as the fight holds it now.
@@ -5580,7 +5582,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             self.live.defer(super::live::Deferred::Draw {
                 count,
                 hand_draw: false,
-                resumed: false,
+                resume: DrawResume::Fresh,
                 drew: Some(drew),
             });
             return sts2_core::Drew::new();
@@ -5593,7 +5595,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             self.ascension,
             count,
             false,
-            false,
+            DrawResume::Fresh,
             Some(drew),
         );
         // A draw that stood still left its copies for the effect's resume.
@@ -7540,7 +7542,15 @@ pub(super) fn draw<V: Rules>(
     drew: Option<&mut sts2_core::Drew<V>>,
 ) -> Option<super::Ended> {
     match draw_pausing::<V>(
-        seat, live, rngs, belts, ascension, count, false, false, drew,
+        seat,
+        live,
+        rngs,
+        belts,
+        ascension,
+        count,
+        false,
+        DrawResume::Fresh,
+        drew,
     ) {
         Drawn::Done(ended) => ended,
         Drawn::Paused { asks, .. } => {
@@ -7721,10 +7731,10 @@ pub(super) fn draw_in_effect<V: Rules>(
     ascension: V::AscensionLevel,
     count: usize,
     hand_draw: bool,
-    resumed: bool,
+    resume: DrawResume<V>,
     mut drew: Option<sts2_core::Drew<V>>,
 ) -> Option<super::Ended> {
-    let (mut count, mut resumed) = (count, resumed);
+    let (mut count, mut resume) = (count, resume);
     loop {
         match draw_pausing::<V>(
             seat,
@@ -7734,7 +7744,7 @@ pub(super) fn draw_in_effect<V: Rules>(
             ascension,
             count,
             hand_draw,
-            resumed,
+            resume,
             drew.as_mut(),
         ) {
             // What an effect's draw drew waits for the effect.
@@ -7743,11 +7753,11 @@ pub(super) fn draw_in_effect<V: Rules>(
                 return ended;
             }
             // The auto-played card's play waits first, then the draw.
-            Drawn::Asked { left } => {
+            Drawn::Asked { left, resume } => {
                 live.defer(super::live::Deferred::Draw {
                     count: left,
                     hand_draw,
-                    resumed: true,
+                    resume,
                     drew,
                 });
                 return None;
@@ -7776,13 +7786,13 @@ pub(super) fn draw_in_effect<V: Rules>(
                         live.defer(super::live::Deferred::Draw {
                             count: left,
                             hand_draw,
-                            resumed: true,
+                            resume: DrawResume::Stopped,
                             drew,
                         });
                         return None;
                     }
                 }
-                (count, resumed) = (left, true);
+                (count, resume) = (left, DrawResume::Stopped);
             }
         }
     }
@@ -7959,32 +7969,66 @@ pub(super) fn auto_play_from_draw<V: Rules>(
 }
 
 /// How a draw that can pause stopped.
-pub(super) enum Drawn {
+pub(super) enum Drawn<V: Rules> {
     /// As many cards as there were to draw, and how the fight ended if it did.
     Done(Option<super::Ended>),
     /// A shuffle inside it asked for a selection, with `left` cards still to
     /// draw once it is answered.
     Paused { left: usize, asks: ShuffleAsks },
-    /// A card auto-played as it was drawn asked the player something, with
-    /// `left` cards still to draw once its play is over.
-    Asked { left: usize },
+    /// A question stopped it inside a card's play, with `left` cards still to
+    /// draw once that play is over. `resume` says what the draw owes first.
+    Asked { left: usize, resume: DrawResume<V> },
 }
 
-impl Drawn {
-    /// The same stop, with `left` cards still to draw behind it.
-    fn with_left(self, left: usize) -> Drawn {
+impl<V: Rules> Drawn<V> {
+    /// The same stop, with `left` cards still to draw behind it. The stop
+    /// came from a listener's draw inside it. That draw waits in
+    /// [`Live::hook_draws`] with what it owes, so this one owes nothing.
+    fn with_left(self, left: usize) -> Drawn<V> {
         match self {
             Drawn::Done(ended) => Drawn::Done(ended),
             Drawn::Paused { asks, .. } => Drawn::Paused { left, asks },
-            Drawn::Asked { .. } => Drawn::Asked { left },
+            Drawn::Asked { .. } => Drawn::Asked {
+                left,
+                resume: DrawResume::Stopped,
+            },
+        }
+    }
+
+    /// How a draw that stopped here goes on.
+    fn resume(&self) -> DrawResume<V> {
+        match self {
+            Drawn::Asked { resume, .. } => *resume,
+            Drawn::Done(_) | Drawn::Paused { .. } => DrawResume::Stopped,
         }
     }
 }
 
+/// Where a draw goes on from.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum DrawResume<V: Rules> {
+    /// A new draw, which asks `ShouldDraw` first.
+    Fresh,
+    /// The rest of a draw a question stopped, which asked `ShouldDraw`
+    /// already.
+    Stopped,
+    /// The rest of a draw stopped where `drawn`'s auto-play asked, as it was
+    /// drawn. The late pass of `Hook.AfterCardDrawn` over it comes first.
+    /// `hand_draw` is that draw's `fromHandDraw`.
+    Late { drawn: CardId<V>, hand_draw: bool },
+}
+
+impl<V: Rules> DrawResume<V> {
+    /// Whether the draw asked `ShouldDraw` already.
+    fn resumed(self) -> bool {
+        !matches!(self, DrawResume::Fresh)
+    }
+}
+
 /// [`draw`], stopping where a shuffle inside it asks the player something.
-/// `resumed` is a draw that carries on from such a stop, which has asked
-/// `ShouldDraw` already. `drew` gathers the copies it draws itself, and
-/// none a listener's draw inside it draws.
+/// `resume` says whether it carries on from such a stop, and what it owes
+/// first. `drew` gathers the copies it draws itself, and none a listener's
+/// draw inside it draws.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw_pausing<V: Rules>(
     seat: sts2_core::SeatIndex,
@@ -7994,9 +8038,10 @@ pub(super) fn draw_pausing<V: Rules>(
     ascension: V::AscensionLevel,
     count: usize,
     hand_draw: bool,
-    resumed: bool,
+    resume: DrawResume<V>,
     mut drew: Option<&mut sts2_core::Drew<V>>,
-) -> Drawn {
+) -> Drawn<V> {
+    let resumed = resume.resumed();
     // `Hook.ShouldDraw`, once for the whole draw, and `AfterPreventingDraw`
     // when a listener stops it.
     let player = live.player(seat).id;
@@ -8015,7 +8060,11 @@ pub(super) fn draw_pausing<V: Rules>(
     }
     // The late pass for the card whose auto-play asked, which the draw it
     // came in by owes first.
-    if resumed && let Some((id, hand_draw)) = live.drawn_late.take() {
+    if let DrawResume::Late {
+        drawn: id,
+        hand_draw,
+    } = resume
+    {
         let drawn = live.players[seat]
             .cards
             .named(id)
@@ -8040,7 +8089,12 @@ pub(super) fn draw_pausing<V: Rules>(
     if resumed && !live.hook_draws.is_empty() {
         let waiting = std::mem::take(&mut live.hook_draws);
         for at in (0..waiting.len()).rev() {
-            let HookDraw { left, drawn, then } = waiting[at].clone();
+            let HookDraw {
+                left,
+                resume,
+                drawn,
+                then,
+            } = waiting[at].clone();
             let stopped = match draw_pausing::<V>(
                 seat,
                 live,
@@ -8049,7 +8103,7 @@ pub(super) fn draw_pausing<V: Rules>(
                 ascension,
                 left,
                 false,
-                true,
+                resume,
                 None,
             ) {
                 Drawn::Done(Some(ended)) => return Drawn::Done(Some(ended)),
@@ -8067,8 +8121,16 @@ pub(super) fn draw_pausing<V: Rules>(
                     Drawn::Done(Some(ended)) => return Drawn::Done(Some(ended)),
                     stopped => stopped,
                 },
-                stopped @ (Drawn::Paused { left, .. } | Drawn::Asked { left }) => {
-                    live.hook_draws.insert(0, HookDraw { left, drawn, then });
+                stopped @ (Drawn::Paused { left, .. } | Drawn::Asked { left, .. }) => {
+                    live.hook_draws.insert(
+                        0,
+                        HookDraw {
+                            left,
+                            resume: stopped.resume(),
+                            drawn,
+                            then,
+                        },
+                    );
                     stopped
                 }
             };
@@ -8156,9 +8218,12 @@ pub(super) fn draw_pausing<V: Rules>(
         // An auto-play that asks stands the draw still. Its late pass and the
         // rest of the draw wait for the play to end.
         if live.asking.is_some() {
-            live.drawn_late = Some((drawn.id, hand_draw));
             return Drawn::Asked {
                 left: count - drawing - 1,
+                resume: DrawResume::Late {
+                    drawn: drawn.id,
+                    hand_draw,
+                },
             };
         }
         match card_drawn_late::<V>(
@@ -8195,7 +8260,7 @@ fn card_drawn_late<V: Rules>(
     drawn: &super::live::CardInstance<V>,
     hand_draw: bool,
     ended: Option<super::Ended>,
-) -> Drawn {
+) -> Drawn<V> {
     // `IterateCombatHookListeners` hands a fight that is over or ending no
     // listeners, as one an auto-play in the early pass won, which `ended`
     // already says.
@@ -8222,11 +8287,12 @@ fn card_drawn_late<V: Rules>(
 }
 
 /// A listener's draw that a question stopped inside another draw. It still
-/// owes `left` cards, and `then` is the rest of the walk over the card
-/// `drawn`, which waits for it.
+/// owes `left` cards, after what `resume` says it owes first. `then` is the
+/// rest of the walk over the card `drawn`, which waits for it.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct HookDraw<V: Rules> {
     left: usize,
+    resume: DrawResume<V>,
     drawn: CardId<V>,
     then: Box<super::listen::Walking<V>>,
 }
@@ -8245,7 +8311,7 @@ fn carry_out_drawn<V: Rules>(
     drawn: CardId<V>,
     mut walking: super::listen::Walking<V>,
     mut ended: Option<super::Ended>,
-) -> Drawn {
+) -> Drawn<V> {
     while let Some((listener, effect)) = walking.next(seat, live, belts) {
         match (listener, effect) {
             // Written on the card that asked, wherever it stands.
@@ -8290,15 +8356,16 @@ fn carry_out_drawn<V: Rules>(
                     ascension,
                     owed,
                     false,
-                    false,
+                    DrawResume::Fresh,
                     None,
                 ) {
                     Drawn::Done(now) => ended = now,
-                    stopped @ (Drawn::Paused { left, .. } | Drawn::Asked { left }) => {
+                    stopped @ (Drawn::Paused { left, .. } | Drawn::Asked { left, .. }) => {
                         live.hook_draws.insert(
                             below,
                             HookDraw {
                                 left,
+                                resume: stopped.resume(),
                                 drawn,
                                 then: Box::new(walking),
                             },

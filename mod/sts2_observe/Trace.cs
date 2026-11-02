@@ -6,7 +6,10 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Extensions;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Random;
@@ -276,7 +279,34 @@ public static class Trace
     }
 
     /// <summary>
-    /// An argument, short: a power by its id, amount and owner, any other
+    /// A card by its id, then the game's own numbers for which card it is.
+    /// <c>#n</c> is its <c>NetCombatCardDb</c> id in a fight. <c>(deck n)</c>
+    /// is the <c>NetDeckCard.DeckIndex</c> of the deck card it is, or was
+    /// copied from for the fight. Like cards differ only in these.
+    /// </summary>
+    private static string ShowCard(CardModel card)
+    {
+        if (!card.IsMutable)
+        {
+            return card.Id.Entry;
+        }
+        var text = new StringBuilder(card.Id.Entry);
+        if (NetCombatCardDb.Instance.TryGetCardId(card, out uint id))
+        {
+            text.Append('#').Append(id);
+        }
+        CardModel deckCard = card.DeckVersion ?? card;
+        CardPile? deck = deckCard.Pile;
+        if (deck?.Type == PileType.Deck)
+        {
+            text.Append("(deck ").Append(deck.Cards.IndexOf(deckCard)).Append(')');
+        }
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// An argument, short: a power by its id, amount and owner, a card as
+    /// <see cref="ShowCard"/> shows it, any other
     /// model by its id, a creature by its combat id and name, a collection by
     /// its length, any other list by its type, and anything else by its own
     /// text.
@@ -286,6 +316,7 @@ public static class Trace
         null => "null",
         PowerModel power => $"{power.Id.Entry}[{power.Amount}]@{power.Owner?.CombatId}",
         Rng rng => ShowRng(rng),
+        CardModel card => ShowCard(card),
         AbstractModel model => model.Id.Entry,
         Creature creature => $"#{creature.CombatId} {creature.LogName}",
         string text => '"' + text + '"',
