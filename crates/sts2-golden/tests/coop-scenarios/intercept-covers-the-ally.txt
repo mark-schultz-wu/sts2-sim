@@ -1,0 +1,8 @@
+# Intercept covers the ally it is pointed at: no powered hit hurts them,
+# and its owner takes twice as much.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"INTERCEPT","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":1,"seat":0}
+{"cmd":"end_turn","seat":0}
+{"cmd":"end_turn","seat":1}

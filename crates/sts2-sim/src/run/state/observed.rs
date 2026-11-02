@@ -99,7 +99,7 @@ impl<V: Rules> Observed<V> for AtSeat<'_, V> {
     }
 
     fn proceed(&self) -> bool {
-        self.state.can_proceed()
+        self.state.can_proceed(self.seat)
     }
 
     fn run_streams(&self) -> impl ExactSizeIterator<Item = (V::RunRngType, Position)> + '_ {

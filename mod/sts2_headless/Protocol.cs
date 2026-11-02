@@ -594,12 +594,11 @@ internal static class Protocol
                 }
 
                 // One past the relics is the skip, which is what the screen's
-                // own button does.
-                if (index < 0 || index > relics.Count)
+                // own button does, for a single player alone.
+                int offered = relics.Count + (Chest.Skippable(_state) ? 1 : 0);
+                if (index < 0 || index >= offered)
                 {
-                    // One past the relics is the skip, so the count offered is
-                    // one more than the relics on the screen.
-                    await Error("choose_option", Refusals.OutOfRange(index, relics.Count + 1));
+                    await Error("choose_option", Refusals.OutOfRange(index, offered));
                     return;
                 }
 
@@ -623,6 +622,21 @@ internal static class Protocol
                 {
                     await Error("choose_option", Refusals.OptionLocked());
                     return;
+                }
+
+                if (Moves.Kills(sync.GetLocalEvent(), options[index]))
+                {
+                    await Error("choose_option", Refusals.OptionWouldKill());
+                    return;
+                }
+
+                // `NEventRoom.OptionButtonClicked` runs a proceed option on
+                // this machine alone, and sends every other through the
+                // synchronizer.
+                if (options[index].IsProceed)
+                {
+                    BackgroundWork.Track(options[index].Chosen());
+                    break;
                 }
 
                 List<Task> pending = (List<Task>)PendingOptionTasks.GetValue(sync)!;
@@ -842,7 +856,7 @@ internal static class Protocol
         }
         else
         {
-            RunManager.Instance.ActChangeSynchronizer.SetLocalPlayerReady();
+            Peers.VoteForNextAct();
         }
 
         bool resolved = await Driver.WaitForDecisionPoint();
@@ -909,7 +923,7 @@ internal static class Protocol
             return;
         }
 
-        if (!card.CanPlayTargeting(target))
+        if (!Moves.Aimable(card, target))
         {
             await Error("play_card", Refusals.WrongTarget(card, target?.CombatId));
             return;
