@@ -29,6 +29,8 @@ pub enum Error {
     Bridge(#[from] super::bridge::Error),
     #[error("a relic is in no pool at all")]
     NoPool,
+    #[error("the dump's relics are not in their ids' ordinal order, which `order` reads")]
+    Unordered,
     #[error("{0}: merchant cost is computed, which Price cannot spell")]
     ComputedPrice(String),
     #[error("{relic}.{flag}: {value} is not a flag")]
@@ -446,6 +448,12 @@ fn emit_relics(
     }
     writeln!(out, "}}\n").unwrap();
 
+    // `order` is the discriminant, which holds while the dump lists the
+    // relics as `ModelId.CompareTo` orders them: ordinal over the id.
+    if !relics.windows(2).all(|pair| pair[0][1] < pair[1][1]) {
+        return Err(Error::Unordered);
+    }
+
     let mut extras = String::new();
     writeln!(
         extras,
@@ -512,6 +520,15 @@ fn emit_relics(
         "        self.data().flags.get(RelicFlag::UponPickup) == Field::Constant(true)"
     )
     .unwrap();
+    writeln!(extras, "    }}\n").unwrap();
+
+    writeln!(
+        extras,
+        "    /// Where this relic sorts: `ModelId.CompareTo`, ordinal over its id."
+    )
+    .unwrap();
+    writeln!(extras, "    fn order(self) -> u16 {{").unwrap();
+    writeln!(extras, "        self as u16").unwrap();
     writeln!(extras, "    }}\n").unwrap();
 
     writeln!(extras, "    /// What a merchant charges before the haggle.").unwrap();

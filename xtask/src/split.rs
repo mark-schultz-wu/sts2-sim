@@ -2,7 +2,7 @@
 //! as a scenario.
 //!
 //! Up to its first split the simulator's legal list is the game's, so the
-//! moves it plays there are the moves the game played. `follow_run
+//! moves it plays there are the moves the game played. `sts2-run follow
 //! --scenario` spells them, and this writes them to
 //! `tests/scenarios/<NAME>.txt`. Then the game is asked for the scenario like
 //! any other, and `cargo xtask scenario-diff <NAME>` names what parts.
@@ -41,21 +41,27 @@ pub struct Args {
 
 pub fn run(Args { index, name, file }: Args) -> Result<String, Error> {
     let root = crate::workspace();
-    let follow = error::build_example(&root, "follow_run")?;
+    let follow = error::build_runner(&root)?;
     let file = match file {
         Some(file) => file,
         None => crate::followed::recorded_file(&root)?,
     };
     let at = index.to_string();
-    let followed = error::output(Command::new(&follow).arg(&file).arg(&at))?;
-    let spelled = error::output(Command::new(&follow).arg(&file).arg(&at).arg("--scenario"))?;
+    let followed = error::output(Command::new(&follow).arg("follow").arg(&file).arg(&at))?;
+    let spelled = error::output(
+        Command::new(&follow)
+            .arg("follow")
+            .arg(&file)
+            .arg(&at)
+            .arg("--scenario"),
+    )?;
 
     let mut scenario = String::new();
     let said = String::from_utf8_lossy(&followed.stdout);
+    let said = said.lines().last().unwrap_or_default();
     writeln!(
         scenario,
-        "# Recorded run {index}, to its first split: {}",
-        said.trim()
+        "# Recorded run {index}, to its first split: {said}"
     )
     .unwrap();
     scenario.push_str(&String::from_utf8_lossy(&spelled.stdout));

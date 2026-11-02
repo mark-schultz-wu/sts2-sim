@@ -1,12 +1,13 @@
-//! The turn loop as a coroutine, from the player's turn end to the start of
-//! the player's next turn. It runs `EndPlayerTurnPhaseOne`,
-//! `EndPlayerTurnPhaseTwo`, `SwitchSides` and the enemies' turn.
+//! The turn loop as a coroutine, from the player's turn end to the play
+//! phase of the player's next turn. It runs `EndPlayerTurnPhaseOne`,
+//! `EndPlayerTurnPhaseTwo`, `SwitchSides`, the enemies' turn and the
+//! player's `StartTurn`. A fight's first turn runs the last of those alone.
 //!
 //! The post-play phase, `BeforeSideTurnEnd`, `DoTurnEnd`, `BeforeFlushLate`,
-//! `AfterTurnEnd` and each enemy's move can stop on a question. `diapause`
-//! turns the straight-line code below into the state it waits in, which
-//! [`Live::deferred`](crate::combat::live::Live) holds and clones. The
-//! player's next turn starts once it is over.
+//! `AfterTurnEnd`, each enemy's move, `SetupPlayerTurn` and the pre-play
+//! phase can stop on a question. `diapause` turns the straight-line code
+//! below into the state it waits in, which
+//! [`Live::deferred`](crate::combat::live::Live) holds and clones.
 
 use smallvec::SmallVec;
 use sts2_core::{CombatId, Rules, SideKinds};
@@ -15,209 +16,598 @@ use super::{Error, Fighting};
 use crate::combat::board::Board;
 use crate::combat::live::{CREATURES, Paused, Skips};
 use crate::combat::setup::Lent;
-use crate::combat::turn::{InHand, Moved, PassRest, Stood, TurnEndPass};
+use crate::combat::turn::{InHand, Moved, PassRest, PrePlayed, SideStarted, Stood, TurnEndPass};
 
-/// How the turn loop came out.
-#[derive(Debug, Clone, PartialEq)]
-pub(super) enum Looped<V: Rules> {
-    /// The fight ended, and the turn loop stops.
-    Ended(crate::combat::Ended),
-    /// The player's next turn starts, with what skips the tick this turn.
-    /// `extra` is a turn `ShouldTakeExtraTurn` gave.
-    PlayerTurn { skipping: Skips<V>, extra: bool },
+/// What the turn loop waits on when it yields.
+pub(super) enum Wait<V: Rules> {
+    /// A question, which stands in [`Live::asking`](crate::combat::live::Live).
+    Question,
+    /// Every living player's pick of a monster's move, each on their queue.
+    Picks,
+    /// The tasks of the listeners that paused at a hook whose `WhenAll`
+    /// waits for them, in the order they paused.
+    Tasks(Vec<Paused<V>>),
+    /// The task of a `SetupPlayerTurn` that stopped on a question, which
+    /// `RunAutoPrePlayPhase` waits for. `skipping` is what skips the tick
+    /// this turn, which stands once the choice the setup signalled comes up.
+    Setup { task: Paused<V>, skipping: Skips<V> },
 }
 
 /// What a hook that waits for its listeners came to. It holds how the hook
 /// ended the fight, and the tasks of the listeners that paused, in order.
 type Waits<V> = (Option<crate::combat::Ended>, Option<Vec<Paused<V>>>);
 
-/// The turn loop, from the player's turn end to the start of the next.
-///
-/// It yields on each question it stops on, which stands in
-/// [`Live::asking`](crate::combat::live::Live). Some hooks wait for their
-/// paused listeners. At each of those, it yields the listeners' tasks in
-/// the order they paused, and they go on before the turn loop does.
-#[diapause::coroutine(yield = Option<Vec<Paused<V>>>, resume = for<'f> Lent<'f, V>)]
+/// The turn loop, from the player's turn end to the next turn's play phase.
+/// A `first` turn is the fight's opening one, which only starts. How the
+/// fight ended, if it did. It yields what it waits on, a [`Wait`].
+#[diapause::coroutine(yield = Wait<V>, resume = for<'f> Lent<'f, V>)]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) fn turn_loop<V: Rules>(
     seat: sts2_core::SeatIndex,
     ascension: V::AscensionLevel,
-) -> Looped<V> {
-    // The post-play phase. An auto-play there that asks stands the turn's
-    // end still behind the answer.
-    let mut pass: PassRest<V> = post_play_pass::<V>(seat, resumed!());
-    if post_play::<V>(seat, resumed!(), &mut pass) {
-        loop {
-            yield_!(None);
-            if let Some(ended) = resumed!().ended {
-                return Looped::Ended(ended);
+    first: bool,
+) -> Result<Option<crate::combat::Ended>, Error> {
+    let mut skipping: Skips<V> = Skips::<V>::default();
+    let mut extra: bool = false;
+    if !first {
+        // A fight of several players runs each phase for every player, and no
+        // pause holds it up yet.
+        if several::<V>(resumed!()) {
+            // `AfterAutoPostPlayPhaseEntered` for each player, each under its
+            // own context. One that asks waits at the front of its player's
+            // queue, and the turn's end waits for every one.
+            if post_play_each::<V>(resumed!()) {
+                yield_!(Wait::Picks);
+                if let Some(ended) = resumed!().ended {
+                    return Ok(Some(ended));
+                }
             }
-            if !post_play::<V>(seat, resumed!(), &mut pass) {
-                break;
+            if let Some(ended) = turn_ends_each::<V>(ascension, resumed!(), &mut skipping) {
+                return Ok(Some(ended));
             }
-        }
-    }
-
-    // `BeforeSideTurnEnd`, whose `WhenAll` waits for every listener that
-    // paused, each in the order it paused.
-    let mut skipping: Skips<V> = std::mem::take(&mut resumed!().live.skip_tick);
-    let hooks: Waits<V> = match before_turn_end::<V>(seat, ascension, resumed!()) {
-        Ok(hooks) => hooks,
-        Err(ended) => {
-            resumed!().live.skip_tick = skipping;
-            return Looped::Ended(ended);
-        }
-    };
-    let mut over: Option<crate::combat::Ended> = hooks.0;
-    if hooks.1.is_some() {
-        yield_!(hooks.1);
-        over = over.or(resumed!().ended);
-    }
-
-    // `CheckWinCondition`, whatever ended the fight, then `DoTurnEnd`. A
-    // card's effect that asks stands the rest still behind the answer.
-    let mut done: InHand<V> = match turn_end::<V>(seat, ascension, over, resumed!(), &mut skipping)
-    {
-        Ok(done) => done,
-        Err(ended) => return Looped::Ended(ended),
-    };
-    if let InHand::Parked { .. } = done {
-        loop {
-            let held: (sts2_core::CardId<V>, crate::combat::turn::Rest<V>) =
-                match std::mem::replace(&mut done, InHand::Done(None)) {
-                    InHand::Parked { card, rest: left } => (card, left),
-                    InHand::Done(_) => break,
-                };
-            yield_!(None);
-            if let Some(ended) = resumed!().ended {
-                return Looped::Ended(ended);
-            }
-            done = in_hand_from::<V>(seat, ascension, resumed!(), held, &mut skipping);
-            if let InHand::Done(Some(by_hand)) = done {
-                resumed!().live.skip_tick = skipping;
-                return Looped::Ended(by_hand);
-            }
-        }
-    }
-
-    // `Hook.BeforeFlush`'s late pass, whose `WhenAll` waits for every
-    // listener that paused on its pick.
-    let picking: Option<Vec<Paused<V>>> = {
-        let (live, rngs, belts) = resumed!().parts();
-        let tasks = crate::combat::turn::before_flush_late::<V>(seat, live, rngs, belts);
-        (!tasks.is_empty()).then_some(tasks)
-    };
-    if picking.is_some() {
-        yield_!(picking);
-        if let Some(ended) = resumed!().ended {
-            return Looped::Ended(ended);
-        }
-    }
-
-    // `EndPlayerTurnPhaseTwo`: the flush and the cards' cleanup, then
-    // `Hook.AfterTurnEnd`. Its `WhenAll` waits for each pass's listeners
-    // that paused before the next pass, and a fight that ended skips the
-    // late pass.
-    flush::<V>(seat, ascension, resumed!());
-    let main: Waits<V> = after_turn_end::<V>(
-        seat,
-        ascension,
-        resumed!(),
-        &mut skipping,
-        TurnEndPass::Main,
-    );
-    let mut ended: Option<crate::combat::Ended> = main.0;
-    if main.1.is_some() {
-        yield_!(main.1);
-        ended = ended.or(resumed!().ended);
-    }
-    if ended.is_none() {
-        let late: Waits<V> = after_turn_end::<V>(
-            seat,
-            ascension,
-            resumed!(),
-            &mut skipping,
-            TurnEndPass::Late,
-        );
-        ended = late.0;
-        if late.1.is_some() {
-            yield_!(late.1);
-            ended = ended.or(resumed!().ended);
-        }
-    }
-    if let Some(by_turn_end) = ended {
-        let lent = resumed!();
-        lent.live.skip_tick = skipping;
-        crate::combat::turn::ended_at_turn_end::<V>(seat, lent.live, by_turn_end);
-        return Looped::Ended(by_turn_end);
-    }
-    if extra_turn::<V>(seat, resumed!()) {
-        return Looped::PlayerTurn {
-            skipping,
-            extra: true,
-        };
-    }
-
-    // `SwitchSides` to the enemy and its `StartTurn`, then
-    // `ExecuteEnemyTurn`: each enemy that acts performs what it advertised,
-    // in turn. Each is held against the fight again before it acts, since
-    // an earlier move can take a later one out. A move that stands still on
-    // a question stands the turn still with it.
-    let acting: SmallVec<[CombatId; CREATURES]> =
-        match enemy_side_starts::<V>(seat, ascension, resumed!()) {
-            Ok(acting) => acting,
-            Err(at_start) => {
-                resumed!().live.skip_tick = skipping;
-                return Looped::Ended(at_start);
-            }
-        };
-    let mut next: usize = 0;
-    let mut moved: Moved<V> = enemies_act::<V>(resumed!(), &mut skipping, &acting, &mut next);
-    if let Moved::Stood(_) = moved {
-        loop {
-            let stood: Stood<V> = match std::mem::replace(&mut moved, Moved::Over(None)) {
-                Moved::Stood(stood) => stood,
-                // `CheckWinCondition` after each enemy's turn: an ended
-                // fight gives the enemies after it no turn.
-                Moved::Over(by_move) => {
-                    if by_move.is_some() || next >= acting.len() {
-                        moved = Moved::Over(by_move);
+            extra = extra_turns::<V>(resumed!());
+        } else {
+            // The post-play phase. An auto-play there that asks stands the turn's
+            // end still behind the answer.
+            let mut pass: PassRest<V> = post_play_pass::<V>(seat, resumed!());
+            if post_play::<V>(seat, resumed!(), &mut pass) {
+                loop {
+                    yield_!(Wait::Question);
+                    if let Some(ended) = resumed!().ended {
+                        return Ok(Some(ended));
+                    }
+                    if !post_play::<V>(seat, resumed!(), &mut pass) {
                         break;
                     }
-                    moved = enemies_act::<V>(resumed!(), &mut skipping, &acting, &mut next);
-                    continue;
+                }
+            }
+            post_play_over::<V>(seat, resumed!());
+
+            // `BeforeSideTurnEnd`, whose `WhenAll` waits for every listener that
+            // paused, each in the order it paused.
+            skipping = std::mem::take(&mut resumed!().live.skip_tick);
+            let hooks: Waits<V> = match before_turn_end::<V>(seat, ascension, resumed!()) {
+                Ok(hooks) => hooks,
+                Err(ended) => {
+                    resumed!().live.skip_tick = skipping;
+                    return Ok(Some(ended));
                 }
             };
-            resumed!().live.skip_tick = skipping;
-            yield_!(None);
-            skipping = std::mem::take(&mut resumed!().live.skip_tick);
-            moved = move_goes_on::<V>(seat, resumed!(), &mut skipping, stood);
+            let mut over: Option<crate::combat::Ended> = hooks.0;
+            if let Some(tasks) = hooks.1 {
+                yield_!(Wait::Tasks(tasks));
+                over = over.or(resumed!().ended);
+            }
+
+            // `CheckWinCondition`, whatever ended the fight, then `DoTurnEnd`. A
+            // card's effect that asks stands the rest still behind the answer.
+            let mut done: InHand<V> =
+                match turn_end::<V>(seat, ascension, over, resumed!(), &mut skipping) {
+                    Ok(done) => done,
+                    Err(ended) => return Ok(Some(ended)),
+                };
+            if let InHand::Parked { .. } = done {
+                loop {
+                    let held: (sts2_core::CardId<V>, crate::combat::turn::Rest<V>) =
+                        match std::mem::replace(&mut done, InHand::Done(None)) {
+                            InHand::Parked { card, rest: left } => (card, left),
+                            InHand::Done(_) => break,
+                        };
+                    yield_!(Wait::Question);
+                    if let Some(ended) = resumed!().ended {
+                        return Ok(Some(ended));
+                    }
+                    done = in_hand_from::<V>(seat, ascension, resumed!(), held, &mut skipping);
+                    if let InHand::Done(Some(by_hand)) = done {
+                        resumed!().live.skip_tick = skipping;
+                        return Ok(Some(by_hand));
+                    }
+                }
+            }
+
+            // `Hook.BeforeFlush`'s late pass, whose `WhenAll` waits for every
+            // listener that paused on its pick.
+            let picking: Option<Vec<Paused<V>>> = {
+                let (live, rngs, belts) = resumed!().parts();
+                let tasks = crate::combat::turn::before_flush_late::<V>(seat, live, rngs, belts);
+                (!tasks.is_empty()).then_some(tasks)
+            };
+            if let Some(tasks) = picking {
+                yield_!(Wait::Tasks(tasks));
+                if let Some(ended) = resumed!().ended {
+                    return Ok(Some(ended));
+                }
+            }
+
+            // `EndPlayerTurnPhaseTwo`: the flush and the cards' cleanup, then
+            // `Hook.AfterTurnEnd`. Its `WhenAll` waits for each pass's listeners
+            // that paused before the next pass, and a fight that ended skips the
+            // late pass.
+            flush::<V>(seat, ascension, resumed!());
+            let main: Waits<V> = after_turn_end::<V>(
+                seat,
+                ascension,
+                resumed!(),
+                &mut skipping,
+                TurnEndPass::Main,
+            );
+            let mut ended: Option<crate::combat::Ended> = main.0;
+            if let Some(tasks) = main.1 {
+                yield_!(Wait::Tasks(tasks));
+                ended = ended.or(resumed!().ended);
+            }
+            if ended.is_none() {
+                let late: Waits<V> = after_turn_end::<V>(
+                    seat,
+                    ascension,
+                    resumed!(),
+                    &mut skipping,
+                    TurnEndPass::Late,
+                );
+                ended = late.0;
+                if let Some(tasks) = late.1 {
+                    yield_!(Wait::Tasks(tasks));
+                    ended = ended.or(resumed!().ended);
+                }
+            }
+            if let Some(by_turn_end) = ended {
+                let lent = resumed!();
+                lent.live.skip_tick = skipping;
+                crate::combat::turn::ended_at_turn_end::<V>(lent.live, by_turn_end);
+                return Ok(Some(by_turn_end));
+            }
+            extra = extra_turns::<V>(resumed!());
+        }
+        if !extra {
+            // `SwitchSides` to the enemy and its `StartTurn`, then
+            // `ExecuteEnemyTurn`: each enemy that acts performs what it advertised,
+            // in turn. Each is held against the fight again before it acts, since
+            // an earlier move can take a later one out. A move that stands still on
+            // a question stands the turn still with it.
+            let acting: SmallVec<[CombatId; CREATURES]> =
+                match enemy_side_starts::<V>(seat, ascension, resumed!()) {
+                    Ok(acting) => acting,
+                    Err(at_start) => {
+                        resumed!().live.skip_tick = skipping;
+                        return Ok(Some(at_start));
+                    }
+                };
+            let mut next: usize = 0;
+            let mut moved: Moved<V> =
+                enemies_act::<V>(resumed!(), &mut skipping, &acting, &mut next);
+            if let Moved::Stood(_) = moved {
+                loop {
+                    let stood: Stood<V> = match std::mem::replace(&mut moved, Moved::Over(None)) {
+                        Moved::Stood(stood) => stood,
+                        // `CheckWinCondition` after each enemy's turn: an ended
+                        // fight gives the enemies after it no turn.
+                        Moved::Over(by_move) => {
+                            if by_move.is_some() || next >= acting.len() {
+                                moved = Moved::Over(by_move);
+                                break;
+                            }
+                            moved = enemies_act::<V>(resumed!(), &mut skipping, &acting, &mut next);
+                            continue;
+                        }
+                    };
+                    resumed!().live.skip_tick = skipping;
+                    if stood.on_picks() {
+                        yield_!(Wait::Picks);
+                    } else {
+                        yield_!(Wait::Question);
+                    }
+                    skipping = std::mem::take(&mut resumed!().live.skip_tick);
+                    moved = move_goes_on::<V>(seat, resumed!(), &mut skipping, stood);
+                }
+            }
+            let over: Option<crate::combat::Ended> = match moved {
+                Moved::Over(by_enemies) => by_enemies,
+                Moved::Stood(_) => unreachable!("a move standing still after the enemies' turn"),
+            };
+            // `EndEnemyTurn` is gated on `IsInProgress`, which both endings clear.
+            // So a fight that ended during the enemy turn ends the turn with it.
+            if let Some(by_enemies) = over {
+                resumed!().live.skip_tick = skipping;
+                return Ok(Some(by_enemies));
+            }
+            if let Some(at_enemy_end) =
+                enemy_turn_ends::<V>(seat, ascension, resumed!(), &mut skipping)
+            {
+                resumed!().live.skip_tick = skipping;
+                return Ok(Some(at_enemy_end));
+            }
         }
     }
-    let over: Option<crate::combat::Ended> = match moved {
-        Moved::Over(by_enemies) => by_enemies,
-        Moved::Stood(_) => unreachable!("a move standing still after the enemies' turn"),
+
+    // `StartTurn` for the player's side, to `OrbQueue.AfterTurnStart`.
+    let started: Result<SideStarted<V>, Error> = side_starts::<V>(ascension, resumed!());
+    let parked: Option<Paused<V>> = match started {
+        Ok(SideStarted::Started { setup, ended: None }) => setup,
+        Ok(SideStarted::Started {
+            setup,
+            ended: Some(at_side_start),
+        }) => {
+            if let Some(task) = setup {
+                resumed!().live.rejoin(task);
+            }
+            resumed!().live.skip_tick = skipping;
+            return Ok(Some(at_side_start));
+        }
+        Ok(SideStarted::Ended(at_start)) => {
+            resumed!().live.skip_tick = skipping;
+            return Ok(Some(at_start));
+        }
+        Err(error) => return Err(error),
     };
-    // `EndEnemyTurn` is gated on `IsInProgress`, which both endings clear.
-    // So a fight that ended during the enemy turn ends the turn with it.
-    if let Some(by_enemies) = over {
-        resumed!().live.skip_tick = skipping;
-        return Looped::Ended(by_enemies);
+
+    // `RunAutoPrePlayPhase` for each player. In a fight of several, a setup
+    // that stopped on a question waits at the front of its player's queue.
+    if several::<V>(resumed!()) {
+        return pre_play_each::<V>(resumed!(), skipping);
     }
-    if let Some(at_enemy_end) = enemy_turn_ends::<V>(seat, ascension, resumed!(), &mut skipping) {
-        resumed!().live.skip_tick = skipping;
-        return Looped::Ended(at_enemy_end);
+
+    // `RunAutoPrePlayPhase`, which waits for a setup that stopped on a
+    // question. A choice it signalled comes up once it goes on.
+    let mut pre: PrePlayed<V> = match parked {
+        Some(task) => {
+            yield_!(Wait::Setup { task, skipping });
+            if let Some(by_setup) = resumed!().ended {
+                return Ok(Some(by_setup));
+            }
+            pre_play::<V>(seat, resumed!())
+        }
+        None => {
+            match come_up::<V>(seat, resumed!()) {
+                Ok(None) => {}
+                Ok(Some(came_up)) => {
+                    resumed!().live.skip_tick = skipping;
+                    return Ok(Some(came_up));
+                }
+                Err(error) => return Err(error),
+            }
+            let opening: PrePlayed<V> = pre_play::<V>(seat, resumed!());
+            if let PrePlayed::Over(Some(by_pre_play)) = opening {
+                resumed!().live.skip_tick = skipping;
+                return Ok(Some(by_pre_play));
+            }
+            resumed!().live.skip_tick = skipping;
+            opening
+        }
+    };
+    if let PrePlayed::Over(Some(after_setup)) = pre {
+        return Ok(Some(after_setup));
     }
-    Looped::PlayerTurn {
-        skipping,
-        extra: false,
+    play_phase::<V>(seat, resumed!());
+    // An auto-play there that asks stands the phase still behind the
+    // answer.
+    if let PrePlayed::Asked { .. } = pre {
+        loop {
+            let held: (PassRest<V>, usize) =
+                match std::mem::replace(&mut pre, PrePlayed::Over(None)) {
+                    PrePlayed::Asked { rest, next } => (rest, next),
+                    PrePlayed::Over(_) => break,
+                };
+            yield_!(Wait::Question);
+            if let Some(by_answer) = resumed!().ended {
+                return Ok(Some(by_answer));
+            }
+            pre = pre_play_from::<V>(seat, resumed!(), held);
+            if let PrePlayed::Over(Some(by_pre_play)) = pre {
+                return Ok(Some(by_pre_play));
+            }
+            play_phase::<V>(seat, resumed!());
+        }
     }
+    Ok(None)
+}
+
+/// `StartTurn` for the player's side.
+/// Out of line, which keeps the coroutine's body small.
+#[inline(never)]
+fn side_starts<V: Rules>(
+    ascension: V::AscensionLevel,
+    lent: &mut Lent<'_, V>,
+) -> Result<SideStarted<V>, Error> {
+    let fighting = lent.fighting();
+    crate::combat::turn::side_starts::<V>(
+        fighting.live,
+        fighting.streams,
+        fighting.belts,
+        ascension,
+    )
+}
+
+/// `EndPlayerTurnPhaseOne` and `EndPlayerTurnPhaseTwo` in a fight of
+/// several players. Each phase runs for every player ending the turn, in
+/// seat order, and the side's hooks run once. An extra turn's takers alone
+/// end it. How the fight ended, if it did.
+///
+/// # Panics
+///
+/// A phase that stops on a question, or a listener that pauses, which
+/// nothing here waits for yet.
+#[inline(never)]
+fn turn_ends_each<V: Rules>(
+    ascension: V::AscensionLevel,
+    lent: &mut Lent<'_, V>,
+    skipping: &mut Skips<V>,
+) -> Option<crate::combat::Ended> {
+    // `playersEndingTurn`: an extra turn's takers, or every player.
+    let seats: SmallVec<[sts2_core::SeatIndex; 4]> = lent.live.turn_seats().collect();
+    // What no one player owns acts as the first.
+    let host = sts2_core::SeatIndex(0);
+    // Each player turns to `End` once every player's post-play phase is
+    // over.
+    for &seat in &seats {
+        post_play_over::<V>(seat, lent);
+    }
+    // `BeforeSideTurnEnd`, once for the side.
+    *skipping = std::mem::take(&mut lent.live.skip_tick);
+    let over = match before_turn_end::<V>(host, ascension, lent) {
+        Ok((over, None)) => over,
+        Ok((_, Some(_))) => {
+            unimplemented!(
+                "a listener pausing as the side's turn ends in a fight of several players"
+            )
+        }
+        Err(ended) => {
+            lent.live.skip_tick = *skipping;
+            return Some(ended);
+        }
+    };
+    // `CheckWinCondition`, then `DoTurnEnd` for each player. Nothing checks
+    // the win between players, and `DoTurnEnd` runs the orbs before it
+    // looks at `IsCombatEnding`. So once one player's turn end ends the
+    // fight, each player after them still runs their orbs.
+    if let Some(ended) = win_check::<V>(host, ascension, over, lent, skipping) {
+        return Some(ended);
+    }
+    let mut ending = None;
+    for &seat in &seats {
+        if ending.is_some() {
+            let (live, rngs, belts) = lent.parts();
+            let by_orbs = crate::combat::turn::orb_triggers::<V>(
+                seat,
+                live,
+                rngs,
+                belts,
+                ascension,
+                crate::combat::turn::OrbMoment::TurnEnd,
+            );
+            ending = ending.or(by_orbs);
+            continue;
+        }
+        match turn_end::<V>(seat, ascension, None, lent, skipping) {
+            Ok(InHand::Done(_)) => {}
+            Ok(InHand::Parked { .. }) => {
+                unimplemented!("seat {seat:?}'s turn-end card asking in a fight of several players")
+            }
+            Err(ended) => ending = Some(ended),
+        }
+    }
+    if ending.is_some() {
+        return ending;
+    }
+    // `Hook.BeforeFlush` for each player.
+    for &seat in &seats {
+        let (live, rngs, belts) = lent.parts();
+        if !crate::combat::turn::before_flush_late::<V>(seat, live, rngs, belts).is_empty() {
+            unimplemented!("seat {seat:?}'s pick before the flush in a fight of several players");
+        }
+    }
+    // `EndPlayerTurnPhaseTwo`: each player's flush, then `AfterSideTurnEnd`
+    // once. A fight that ended skips its late pass.
+    // `FlushPlayerHand` does nothing for a dead player.
+    for &seat in &seats {
+        if lent.live.player(seat).alive {
+            flush::<V>(seat, ascension, lent);
+        }
+    }
+    let mut ended = None;
+    for pass in [TurnEndPass::Main, TurnEndPass::Late] {
+        if ended.is_some() {
+            break;
+        }
+        let (by_pass, paused) = after_turn_end::<V>(host, ascension, lent, skipping, pass);
+        if paused.is_some() {
+            unimplemented!(
+                "a listener pausing after the side's turn end in a fight of several players"
+            );
+        }
+        ended = by_pass;
+    }
+    if let Some(by_turn_end) = ended {
+        lent.live.skip_tick = *skipping;
+        crate::combat::turn::ended_at_turn_end::<V>(lent.live, by_turn_end);
+        return Some(by_turn_end);
+    }
+    None
+}
+
+/// `AfterAutoPostPlayPhaseEntered` for each player ending the turn, in seat
+/// order. One whose auto-play asks waits at the front of its player's
+/// queue, and the rest of its phase waits behind the question. The next
+/// player's runs. Whether any waits.
+fn post_play_each<V: Rules>(lent: &mut Lent<'_, V>) -> bool {
+    let seats: SmallVec<[sts2_core::SeatIndex; 4]> = lent.live.turn_seats().collect();
+    let mut waits = false;
+    for seat in seats {
+        let mut pass = post_play_pass::<V>(seat, lent);
+        if post_play::<V>(seat, lent, &mut pass) {
+            let live = &mut *lent.live;
+            live.defer(crate::combat::live::Deferred::PostPlayFrom {
+                seat,
+                rest: Box::new(pass),
+            });
+            live.stop_for_answer(seat);
+            waits = true;
+        }
+    }
+    lent.live.post_plays_end();
+    waits
+}
+
+/// Whether the fight has several players.
+fn several<V: Rules>(lent: &mut Lent<'_, V>) -> bool {
+    lent.live.players.len() > 1
+}
+
+/// `RunAutoPrePlayPhase` for each player in seat order, with no question
+/// standing.
+///
+/// Then each setup whose choice signalled, as the play phase opens.
+///
+/// # Panics
+///
+/// A choice that signalled outside a setup, or an auto-play that asks, in
+/// a fight of several players.
+fn pre_play_each<V: Rules>(
+    lent: &mut Lent<'_, V>,
+    skipping: Skips<V>,
+) -> Result<Option<crate::combat::Ended>, Error> {
+    if crate::combat::signalled(lent.live) {
+        unimplemented!("a choice signalled in a fight of several players");
+    }
+    // A dead player is ready to end the turn as it starts, and so is one
+    // not taking an extra turn others take. Neither runs a pre-play phase.
+    let live = &mut *lent.live;
+    for seat in crate::combat::turn::seats(live) {
+        if !live.player(seat).alive || !live.part_of_turn(seat) {
+            live.players[seat].ready = true;
+        }
+    }
+    for seat in crate::combat::turn::seats(lent.live) {
+        // A seat whose setup waits on its question runs this once it is over.
+        // Another player's pick that branched onto its queue holds nothing
+        // back, since the phase runs off the queues.
+        let setup_waits =
+            (lent.live.queues.stopped_with_owner(seat)).is_some_and(|(owner, _)| owner == seat);
+        if !lent.live.player(seat).alive || !lent.live.part_of_turn(seat) || setup_waits {
+            continue;
+        }
+        let mut played = pre_play::<V>(seat, lent);
+        // `BranchingPlayerChoiceContext`: an auto-play whose pick another
+        // player makes ends as the pick begins. The pick waits on that
+        // player's queue, and the phase goes on.
+        while let PrePlayed::Asked { rest, next } = played {
+            if !crate::combat::play::branched(lent.live) {
+                played = PrePlayed::Asked { rest, next };
+                break;
+            }
+            lent.live.stop_for_answer(seat);
+            played = pre_play_from::<V>(seat, lent, (rest, next));
+        }
+        match played {
+            PrePlayed::Over(Some(ended)) => {
+                lent.live.skip_tick = skipping;
+                return Ok(Some(ended));
+            }
+            PrePlayed::Over(None) => play_phase::<V>(seat, lent),
+            // The question waits at the front of the player's queue, with
+            // the rest of their pre-play phase behind it.
+            asked @ PrePlayed::Asked { .. } => {
+                crate::combat::turn::pre_played::<V>(seat, lent.live, asked);
+                // A pushed selector, as Whispering Earring's, answers as the
+                // question comes up, and the phase goes on before the next
+                // player's. The game's selector stack is the same for every
+                // player.
+                while let Some(picks) = crate::combat::selector_picks(seat, lent.live) {
+                    let answered = crate::combat::play::answer(seat, seat, lent.fighting(), picks)?;
+                    if let Some(ended) = answered {
+                        lent.live.skip_tick = skipping;
+                        return Ok(Some(ended));
+                    }
+                }
+                if lent
+                    .live
+                    .asking
+                    .as_ref()
+                    .is_some_and(|asking| asking.signalled)
+                {
+                    unimplemented!("seat {seat:?}'s pre-play phase signalling a choice");
+                }
+                lent.live.stop_for_answer(seat);
+            }
+        }
+    }
+    lent.live.skip_tick = skipping;
+    // `ActionExecutor.Unpause`: a setup that signalled its choice goes on, and
+    // the choice lists now, taking its cards unasked where it can. A question
+    // it still asks waits at the front of its player's queue again.
+    for seat in crate::combat::turn::seats(lent.live) {
+        let signalled = (lent.live.queues.stopped(seat)).is_some_and(|task| task.asking.signalled);
+        if !signalled {
+            continue;
+        }
+        let (_, task) = lent
+            .live
+            .queues
+            .go_on(seat)
+            .expect("the queue stopped on it");
+        lent.live.rejoin(task);
+        if let Some(ended) = come_up::<V>(seat, lent)? {
+            return Ok(Some(ended));
+        }
+        lent.live.stop_for_answer(seat);
+    }
+    Ok(None)
+}
+
+/// A choice signalled under a pause boundary, once the turn has run on.
+fn come_up<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    lent: &mut Lent<'_, V>,
+) -> Result<Option<crate::combat::Ended>, Error> {
+    crate::combat::play::come_up(seat, lent.fighting())
+}
+
+/// `RunAutoPrePlayPhase` from its start.
+fn pre_play<V: Rules>(seat: sts2_core::SeatIndex, lent: &mut Lent<'_, V>) -> PrePlayed<V> {
+    let (live, rngs, belts) = lent.parts();
+    crate::combat::turn::pre_play_phase::<V>(seat, live, rngs, belts)
+}
+
+/// `RunAutoPrePlayPhase` from where an auto-play's question stood it still.
+fn pre_play_from<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    lent: &mut Lent<'_, V>,
+    held: (PassRest<V>, usize),
+) -> PrePlayed<V> {
+    let (live, rngs, belts) = lent.parts();
+    crate::combat::turn::pre_play_from::<V>(seat, live, rngs, belts, held.0, held.1)
+}
+
+/// The phase after the pre-play phase, which is still that phase while a
+/// question it asked stands.
+fn play_phase<V: Rules>(seat: sts2_core::SeatIndex, lent: &mut Lent<'_, V>) {
+    let live = &mut *lent.live;
+    live.players[seat].phase = crate::combat::turn::after_pre_play::<V>(live);
 }
 
 /// Whether the player takes an extra turn, with it set up where so.
-fn extra_turn<V: Rules>(seat: sts2_core::SeatIndex, lent: &mut Lent<'_, V>) -> bool {
+fn extra_turns<V: Rules>(lent: &mut Lent<'_, V>) -> bool {
     let (live, _, belts) = lent.parts();
-    crate::combat::turn::takes_extra_turn::<V>(seat, live, belts)
+    crate::combat::turn::extra_turns::<V>(live, belts)
 }
 
 /// The enemy side's turn start, and the enemies that act in it.
@@ -255,6 +645,8 @@ fn move_goes_on<V: Rules>(
 }
 
 /// The enemies' turn end and the switch back to the player.
+/// Out of line, which keeps the coroutine's body small.
+#[inline(never)]
 fn enemy_turn_ends<V: Rules>(
     seat: sts2_core::SeatIndex,
     ascension: V::AscensionLevel,
@@ -298,12 +690,20 @@ fn after_turn_end<V: Rules>(
 fn post_play_pass<V: Rules>(seat: sts2_core::SeatIndex, lent: &mut Lent<'_, V>) -> PassRest<V> {
     let (live, _, belts) = lent.parts();
     live.players[seat].phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::AUTO_POST_PLAY;
-    let turn = live.turn;
+    let turn = live.players[seat].turn;
     PassRest::walk(
         live,
         belts,
-        sts2_core::EventHook::AutoPostPlayPhase { turn },
+        sts2_core::EventHook::AutoPostPlayPhase {
+            player: seat.creature(),
+            turn,
+        },
     )
+}
+
+/// The post-play phase over, which turns the player's phase to `End`.
+fn post_play_over<V: Rules>(seat: sts2_core::SeatIndex, lent: &mut Lent<'_, V>) {
+    lent.live.players[seat].phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::END;
 }
 
 /// The post-play phase from `pass`: true where an auto-play asked.
@@ -358,16 +758,10 @@ fn turn_end<V: Rules>(
     lent: &mut Lent<'_, V>,
     skipping: &mut Skips<V>,
 ) -> Result<InHand<V>, crate::combat::Ended> {
-    let (live, mut rngs, belts) = lent.parts();
-    let ended = over.or_else(|| {
-        let mut board = Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
-        board.end_if_ending();
-        board.ended()
-    });
-    if let Some(ended) = ended {
-        live.skip_tick = *skipping;
+    if let Some(ended) = win_check::<V>(seat, ascension, over, lent, skipping) {
         return Err(ended);
     }
+    let (live, rngs, belts) = lent.parts();
     let done = crate::combat::turn::turn_end::<V>(seat, live, rngs, belts, ascension);
     merge_landed::<V>(live, skipping);
     match done {
@@ -377,6 +771,26 @@ fn turn_end<V: Rules>(
         }
         done => Ok(done),
     }
+}
+
+/// `CheckWinCondition` with `over`, how the turn-end hooks ended the fight.
+fn win_check<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    ascension: V::AscensionLevel,
+    over: Option<crate::combat::Ended>,
+    lent: &mut Lent<'_, V>,
+    skipping: &Skips<V>,
+) -> Option<crate::combat::Ended> {
+    let (live, rngs, belts) = lent.parts();
+    let ended = over.or_else(|| {
+        let mut board = Board::for_card(seat, live, rngs, belts, ascension, None, None);
+        board.end_if_ending();
+        board.ended()
+    });
+    if ended.is_some() {
+        live.skip_tick = *skipping;
+    }
+    ended
 }
 
 /// `DoTurnEnd` from the end of the parked card's wrapper, once its question
@@ -401,29 +815,25 @@ fn merge_landed<V: Rules>(live: &mut crate::combat::live::Live<V>, skipping: &mu
     crate::combat::play::merge::<V>(skipping, landed.iter().copied().collect());
 }
 
-/// End the player's turn, then run the enemies' turn and the player's next.
+/// Run the turn loop: from the player's turn end, or from a fight's
+/// `first` turn's start, to the next play phase.
 pub(super) fn begin<V: Rules>(
     seat: sts2_core::SeatIndex,
     fighting: Fighting<'_, V>,
     ascension: V::AscensionLevel,
-    max_energy: V::Count,
+    first: bool,
 ) -> Result<Option<crate::combat::Ended>, Error> {
-    let mut looping = turn_loop::<V>(seat, ascension);
+    let mut looping = turn_loop::<V>(seat, ascension, first);
     let state = looping.start_with(Lent {
         live: &mut *fighting.live,
-        rngs: fighting.streams.combat(),
+        streams: &mut *fighting.streams,
         belts: &mut *fighting.belts,
         ended: None,
         taken: None,
     });
     match state {
-        diapause::CoroutineState::Yielded(tasks) => {
-            park(seat, fighting, max_energy, Box::new(looping), tasks);
-            Ok(None)
-        }
-        diapause::CoroutineState::Complete(done) => {
-            complete(seat, fighting, ascension, max_energy, done)
-        }
+        diapause::CoroutineState::Yielded(wait) => park(seat, fighting, Box::new(looping), wait),
+        diapause::CoroutineState::Complete(done) => done,
     }
 }
 
@@ -433,8 +843,6 @@ pub(super) fn begin<V: Rules>(
 pub(super) fn finish<V: Rules>(
     seat: sts2_core::SeatIndex,
     fighting: Fighting<'_, V>,
-    ascension: V::AscensionLevel,
-    max_energy: V::Count,
     mut looping: Box<turn_loop::State<V>>,
     ended: Option<crate::combat::Ended>,
     taken: Option<sts2_core::Taken<V>>,
@@ -443,63 +851,71 @@ pub(super) fn finish<V: Rules>(
         &mut *looping,
         Lent {
             live: &mut *fighting.live,
-            rngs: fighting.streams.combat(),
+            streams: &mut *fighting.streams,
             belts: &mut *fighting.belts,
             ended,
             taken,
         },
     );
     match state {
-        diapause::CoroutineState::Yielded(tasks) => {
-            park(seat, fighting, max_energy, looping, tasks);
-            Ok(None)
-        }
-        diapause::CoroutineState::Complete(done) => {
-            complete(seat, fighting, ascension, max_energy, done)
-        }
+        diapause::CoroutineState::Yielded(wait) => park(seat, fighting, looping, wait),
+        diapause::CoroutineState::Complete(done) => done,
     }
 }
 
-/// The turn loop waiting, behind the tasks of the listeners that paused
-/// where it yielded some. It is `Task.WhenAll`: the tasks go on in the
-/// order they paused, then the turn loop.
+/// The turn loop waiting on `wait`. Behind tasks it is `Task.WhenAll`: the
+/// tasks go on in the order they paused, then the turn loop.
 fn park<V: Rules>(
     seat: sts2_core::SeatIndex,
     fighting: Fighting<'_, V>,
-    max_energy: V::Count,
     looping: Box<turn_loop::State<V>>,
-    tasks: Option<Vec<Paused<V>>>,
-) {
-    let mut tasks = tasks.into_iter().flatten();
-    let first = tasks.next();
-    for task in tasks {
-        fighting
-            .live
-            .defer(crate::combat::live::Deferred::Rejoin(Box::new(task)));
-    }
-    fighting
-        .live
-        .defer(crate::combat::live::Deferred::TurnLoop {
-            looping,
-            max_energy,
-        });
-    if let Some(first) = first {
-        fighting.live.rejoin(seat, first);
-    }
-}
-
-/// The turn loop over: the fight's end, or the player's next turn.
-fn complete<V: Rules>(
-    seat: sts2_core::SeatIndex,
-    fighting: Fighting<'_, V>,
-    ascension: V::AscensionLevel,
-    max_energy: V::Count,
-    done: Looped<V>,
+    wait: Wait<V>,
 ) -> Result<Option<crate::combat::Ended>, Error> {
-    match done {
-        Looped::Ended(ended) => Ok(Some(ended)),
-        Looped::PlayerTurn { skipping, extra } => crate::combat::turn::start_player_turn(
-            seat, fighting, ascension, max_energy, skipping, extra,
-        ),
+    match wait {
+        Wait::Question => {
+            fighting
+                .live
+                .defer(crate::combat::live::Deferred::TurnLoop(looping));
+            Ok(None)
+        }
+        // `Task.WhenAll`: it goes on once the last player has picked.
+        Wait::Picks => {
+            fighting.live.after_picks = Some(looping);
+            Ok(None)
+        }
+        Wait::Tasks(tasks) => {
+            let mut tasks = tasks.into_iter();
+            let first = tasks.next();
+            for task in tasks {
+                fighting
+                    .live
+                    .defer(crate::combat::live::Deferred::Rejoin(Box::new(task)));
+            }
+            fighting
+                .live
+                .defer(crate::combat::live::Deferred::TurnLoop(looping));
+            if let Some(first) = first {
+                fighting.live.rejoin(first);
+            }
+            Ok(None)
+        }
+        // The setup goes on once the turn has started around it, and a
+        // choice it signalled comes up now.
+        Wait::Setup { task, skipping } => {
+            fighting
+                .live
+                .defer(crate::combat::live::Deferred::TurnLoop(looping));
+            fighting.live.rejoin(task);
+            let came_up = crate::combat::play::come_up(
+                seat,
+                Fighting {
+                    live: &mut *fighting.live,
+                    streams: &mut *fighting.streams,
+                    belts: &mut *fighting.belts,
+                },
+            )?;
+            fighting.live.skip_tick = skipping;
+            Ok(came_up)
+        }
     }
 }
