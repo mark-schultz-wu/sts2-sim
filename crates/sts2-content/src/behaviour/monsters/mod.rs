@@ -102,22 +102,28 @@ pub(crate) fn starting_powers<V: crate::Build>(
     }
 }
 
-/// Powers a monster's `AfterAddedToRoom` applies to each of its opponents.
-/// The Rocket surrounds the player.
-/// `Aeonglass.AfterAddedToRoom`: a `WitheringPresencePower` on itself for
-/// each opponent, pets too, aimed at it.
-pub(crate) fn starting_aimed_powers<V: crate::Build>(
+/// Whom a monster's starting power is aimed at. The Aeonglass aims a
+/// Withering Presence at each opponent, and the Gremlin Merc a Thievery at
+/// each player.
+pub(crate) fn starting_power_aim<V: crate::Build>(
     monster: V::Monster,
-) -> Vec<(V::Power, sts2_core::PowerAmount<Number>)> {
-    match monster {
-        __c0 if __c0 == V::Monster::AEONGLASS => vec![(
-            V::Power::WITHERING_PRESENCE_POWER,
-            sts2_core::PowerAmount::Counted(6),
-        )],
-        _ => Vec::new(),
+    power: V::Power,
+) -> Option<sts2_core::Aim> {
+    match (monster, power) {
+        (__c0, __c1)
+            if __c0 == V::Monster::AEONGLASS && __c1 == V::Power::WITHERING_PRESENCE_POWER =>
+        {
+            Some(sts2_core::Aim::EachOpponent)
+        }
+        (__c0, __c1) if __c0 == V::Monster::GREMLIN_MERC && __c1 == V::Power::THIEVERY_POWER => {
+            Some(sts2_core::Aim::EachPlayer)
+        }
+        _ => None,
     }
 }
 
+/// Powers a monster's `AfterAddedToRoom` applies to each of its opponents.
+/// The Rocket surrounds the player.
 pub(crate) fn starting_opponent_powers<V: crate::Build>(
     monster: V::Monster,
 ) -> Vec<(V::Power, sts2_core::PowerAmount<Number>)> {
