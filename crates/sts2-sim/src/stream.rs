@@ -119,6 +119,18 @@ impl<V: Rules> Streams<V> {
     }
 
     /// One of the run's streams, to draw from in place.
+    /// `PlayerRng.LoadFromSerializable`: `seat`'s streams as `from` holds
+    /// them.
+    pub(crate) fn load_player(&mut self, seat: usize, from: &Self) {
+        self.players[seat] = from.players[seat];
+    }
+
+    /// `RunState.Rng.LoadFromSerializable`: the run's streams as `from` holds
+    /// them.
+    pub(crate) fn load_run(&mut self, from: &Self) {
+        self.run = from.run;
+    }
+
     pub(crate) fn run(&mut self, kind: V::RunRngType) -> &mut MegaRng {
         &mut self.run[slot(V::run_rng_types(), kind)]
     }
