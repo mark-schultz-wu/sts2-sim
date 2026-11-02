@@ -108,6 +108,9 @@ pub(super) struct CardPlay<V: Rules> {
     /// the first play. Nothing for a card that leaves the fight.
     pub(super) pile: Option<sts2_core::Pile>,
     pub(super) position: sts2_core::PilePosition,
+    /// `GetResultLocationForCardPlay`'s `player`, where it names a
+    /// teammate the card goes to: `CardPileCmd.GiveToAnotherPlayer`.
+    pub(super) holder: Option<sts2_core::SeatIndex>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,9 +120,26 @@ pub(super) struct Resuming<V: Rules> {
     pub(super) ended: Option<super::Ended>,
     /// Where this effect is in `GeneratePlayCount`'s loop.
     pub(super) plays: Plays<V>,
+    /// Whether its choice branched it, as `BranchingPlayerChoiceContext`
+    /// does where another player picks. The effect's end ran as the choice
+    /// began, and the rest goes on as that player's hook action.
+    pub(super) branched: bool,
+    /// The other player a card's `CardSelectCmd` asks, for whom the rest of
+    /// its effect acts. Nothing while the card's owner picks.
+    pub(super) chooser: Option<sts2_core::SeatIndex>,
+    /// The other player whose choice context the effect runs in, as a card
+    /// another player's potion auto-plays does. A choice that is not theirs
+    /// branches, as `BranchingPlayerChoiceContext` does.
+    pub(super) context: Option<sts2_core::SeatIndex>,
 }
 
 impl<V: Rules> Resuming<V> {
+    /// Whether the effect's choice is another player's than the one whose
+    /// context it runs in, which `BranchingPlayerChoiceContext` branches on.
+    pub(super) fn chooser_elsewhere(&self, live: &Live<V>, seat: sts2_core::SeatIndex) -> bool {
+        self.reaching(live, seat).unwrap_or(seat) != self.context.unwrap_or(seat)
+    }
+
     /// The other player a potion is aimed at, for whom its effect acts and
     /// whom its `CardSelectCmd` asks. Nothing for a card, or a potion aimed
     /// at its drinker in `seat`.
@@ -130,7 +150,7 @@ impl<V: Rules> Resuming<V> {
     ) -> Option<sts2_core::SeatIndex> {
         match self.asker {
             Asker::Potion(_) => potion_reaching(live, seat, self.target),
-            Asker::Card(_) => None,
+            Asker::Card(_) => self.chooser,
         }
     }
 }
@@ -167,6 +187,16 @@ pub(super) enum Asked<V: Rules> {
     Among {
         cards: smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>,
         selection: sts2_core::Selection,
+        /// The filter of a pick from the hand, which lists the hand as it
+        /// stands each time it is shown, as `NPlayerHand.SelectCards` does.
+        hand: Option<V::CardFilter>,
+    },
+    /// A selection through a filter whose choice signalled and has not
+    /// listed yet. It lists as [`Asked::Among`] once its task goes on.
+    Filtered {
+        pile: sts2_core::Pile,
+        filter: V::CardFilter,
+        selection: sts2_core::Selection,
     },
     Offered {
         offered: sts2_core::Offered<V>,
@@ -182,8 +212,6 @@ pub(super) struct Paused<V: Rules> {
     pub(super) asking: Asking<V>,
     /// What waits behind it.
     pub(super) waiting: Vec<Deferred<V>>,
-    /// How many cards the hand held as it was set aside.
-    pub(super) hand: usize,
 }
 
 /// The listeners of one hook that the game runs each under a pause boundary
@@ -247,23 +275,18 @@ impl<V: Rules> Listening<V> {
     /// Close the boundary [`Listening::enter`] opened, and set the listener
     /// aside where it paused.
     #[inline]
-    pub(super) fn leave(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        live: &mut Live<V>,
-        entered: Boundary<V>,
-    ) {
+    pub(super) fn leave(&mut self, live: &mut Live<V>, entered: Boundary<V>) {
         live.pause_boundary = entered.boundary;
         match live.asking.is_some() {
-            true => self.set_aside(seat, live, entered),
+            true => self.set_aside(live, entered),
             false => live.deferred.keep_fresh(entered.fresh),
         }
     }
 
     /// The listener [`Listening::leave`] found paused, set aside.
     #[cold]
-    fn set_aside(&mut self, seat: sts2_core::SeatIndex, live: &mut Live<V>, entered: Boundary<V>) {
-        self.aside.push(live.set_aside(seat, entered.fresh));
+    fn set_aside(&mut self, live: &mut Live<V>, entered: Boundary<V>) {
+        self.aside.push(live.set_aside(entered.fresh));
         self.listeners.extend(entered.listener);
     }
 
@@ -370,7 +393,11 @@ pub(super) enum Deferred<V: Rules> {
     AutoPlayAtRandom { id: CardId<V> },
     /// `CardCmd.AutoPlay` of a card `AutoPlayFromDrawPile` already took into
     /// the play pile, with `ExhaustOnNextPlay` set to `force_exhaust` first.
-    AutoPlayTaken { id: CardId<V>, force_exhaust: bool },
+    AutoPlayTaken {
+        id: CardId<V>,
+        force_exhaust: bool,
+        context: Option<sts2_core::SeatIndex>,
+    },
     /// The rest of a play's `AfterCardPlayed` walk, which a question a
     /// listener asked stood still, then `AfterCardPlayedLate`.
     Played {
@@ -424,6 +451,14 @@ pub(super) enum Deferred<V: Rules> {
         seat: sts2_core::SeatIndex,
         rest: Box<super::turn::PassRest<V>>,
         next: usize,
+    },
+    /// The rest of `seat`'s `AfterAutoPostPlayPhaseEntered`, from where an
+    /// auto-play's question stood it still in a fight of several players.
+    /// The turn loop waits in [`Live::after_picks`] until no player's is
+    /// left.
+    PostPlayFrom {
+        seat: sts2_core::SeatIndex,
+        rest: Box<super::turn::PassRest<V>>,
     },
     /// A listener's task a pause boundary set aside, which goes on here
     /// where its caller waits for it.
@@ -957,13 +992,38 @@ impl<V: Rules> Face<V> {
         }
         let moved: V::Number =
             num_traits::NumCast::from(self.moved(at)).expect("a difference fits a game number");
+        let Some(table): Option<V::Number> = num_traits::NumCast::from(named.base) else {
+            return Self::printed_fraction(named, moved);
+        };
         let number = CardNumber {
             id: named.id,
-            base: Self::table(named) + moved,
+            base: table + moved,
             calculated: named.calculated,
             modifier: named.modifier,
         };
         (number, true)
+    }
+
+    /// [`Face::printed`] of a number whose table prints a fraction, such as
+    /// Tank's `DamageDecrease` of 0.5, with what this copy added to it.
+    #[cold]
+    #[inline(never)]
+    fn printed_fraction(
+        named: &CardNumber<V::CardVar, <V::Card as sts2_core::CardTable>::Number>,
+        moved: V::Number,
+    ) -> (CardNumber<V::CardVar, V::Number>, bool) {
+        let moved = num_traits::ToPrimitive::to_i64(&moved).expect("a game number fits a long");
+        let exact = Into::<Decimal>::into(named.base) + Decimal::from(moved);
+        let base = num_traits::ToPrimitive::to_i64(&exact.trunc())
+            .and_then(num_traits::cast)
+            .expect("a printed number fits a game number");
+        let number = CardNumber {
+            id: named.id,
+            base,
+            calculated: named.calculated,
+            modifier: named.modifier,
+        };
+        (number, exact.fract().is_zero())
     }
 
     /// [`Face::printed`] on a copy a fight wrote a fraction on.
@@ -2450,7 +2510,9 @@ pub(crate) fn refreshes<V: Rules>(hook: &sts2_core::EventHook<V>) -> bool {
 
     matches!(
         hook,
-        EventHook::BeforeSideTurnEndVeryEarly { .. }
+        EventHook::BeforeSideTurnStart { .. }
+            | EventHook::SideTurnStart { .. }
+            | EventHook::BeforeSideTurnEndVeryEarly { .. }
             | EventHook::BeforeSideTurnEndEarly { .. }
             | EventHook::BeforeSideTurnEnd { .. }
             | EventHook::SideTurnEnd { .. }
@@ -2647,6 +2709,9 @@ fn hooks_of<V: Rules>(potions: &[V::Potion]) -> sts2_core::Overrides {
 #[derive(Debug)]
 pub(crate) struct PlayerCombat<V: Rules> {
     pub(super) character: V::Character,
+    /// `PlayerCombatState.TurnNumber`: the player's turns so far, the one
+    /// under way among them. An extra turn counts up only its takers'.
+    pub(super) turn: V::Count,
     pub(super) phase: V::PlayerTurnPhase,
     pub(super) energy: V::Count,
     pub(super) stars: V::Count,
@@ -2702,6 +2767,7 @@ impl<V: Rules> Clone for PlayerCombat<V> {
     fn clone_from(&mut self, source: &Self) {
         let PlayerCombat {
             character,
+            turn,
             phase,
             energy,
             stars,
@@ -2720,6 +2786,7 @@ impl<V: Rules> Clone for PlayerCombat<V> {
             orbs,
         } = self;
         *character = source.character;
+        *turn = source.turn;
         *phase = source.phase;
         *energy = source.energy;
         *stars = source.stars;
@@ -2747,9 +2814,21 @@ pub(crate) struct Live<V: Rules> {
     /// What the run is being played at, which a card or a move reads for the
     /// numbers the level moves.
     pub(super) ascension: V::AscensionLevel,
-    pub(crate) turn: V::Count,
     pub(super) modifiers: RunModifiers<V>,
     pub(super) round: V::Count,
+    /// `creaturesStartingTurn`: the creatures that started the side's turn
+    /// now under way, taken before `BeforeSideTurnStart`. The turn's start
+    /// hooks name them as taking part.
+    pub(super) starting: sts2_core::Participants,
+    /// Whether the players' `TurnNumber`s differ, which only an extra turn
+    /// some of them take makes so. Set where it does, and never cleared.
+    pub(super) turns_apart: bool,
+    /// `PlayersTakingExtraTurn`: the seats taking an extra turn, a bit for
+    /// each. Empty for a turn every player takes.
+    pub(super) taking: u8,
+    /// The creatures ending the side's turn, which its end hooks name as
+    /// taking part. Taken as the end begins.
+    pub(super) ending: sts2_core::Participants,
     /// `ICombatState.CurrentSide`: whose turn it is.
     pub(super) side: V::CombatSide,
     /// `CombatManager.History`.
@@ -3044,15 +3123,26 @@ impl<V: Rules> CombatHistory<V> {
         ))
     }
 
-    /// The turn at `round` on `side`, in the player's turn `player_turn`, is
+    /// The turn at `round` on `side`, with each player's `TurnNumber` in
+    /// `player_turns`, is
     /// over. Its entries join the past turns, unless it had none.
-    fn end_turn(&mut self, round: V::Count, side: V::CombatSide, player_turn: V::Count) {
+    fn end_turn(
+        &mut self,
+        round: V::Count,
+        side: V::CombatSide,
+        player_turns: sts2_core::PlayerTurns<V>,
+    ) {
         self.unprompted.clear();
         if self.this_turn.is_empty() {
             return;
         }
         let past = self.before.get_or_insert_with(Default::default);
-        std::sync::Arc::make_mut(past).end_turn(round, side, player_turn, self.this_turn.drain(..));
+        std::sync::Arc::make_mut(past).end_turn(
+            round,
+            side,
+            player_turns,
+            self.this_turn.drain(..),
+        );
     }
 
     /// What `player`'s listeners read, `player` being their owner's
@@ -3151,9 +3241,12 @@ impl<V: Rules> Clone for Live<V> {
         let Live {
             players,
             ascension,
-            turn,
             modifiers,
             round,
+            starting,
+            turns_apart,
+            taking,
+            ending,
             side,
             history,
             kept,
@@ -3194,9 +3287,12 @@ impl<V: Rules> Clone for Live<V> {
         } = self;
         players.clone_from(&source.players);
         *ascension = source.ascension;
-        *turn = source.turn;
         *modifiers = source.modifiers;
         *round = source.round;
+        *starting = source.starting;
+        *turns_apart = source.turns_apart;
+        *taking = source.taking;
+        *ending = source.ending;
         *side = source.side;
         history.clone_from(&source.history);
         kept.clone_from(&source.kept);
@@ -3338,9 +3434,12 @@ impl<V: Rules> Live<V> {
         self.players[seat].ready
     }
 
-    /// Whether a play asked for the turn to end.
-    pub(crate) fn ending_turn(&self, seat: sts2_core::SeatIndex) -> bool {
-        self.players[seat].ending_turn
+    /// The player whose turn ends once the decision is over. That is `seat`
+    /// where its play asked, or else the first player who asked.
+    pub(crate) fn turn_to_end(&self, seat: sts2_core::SeatIndex) -> Option<sts2_core::SeatIndex> {
+        std::iter::once(seat)
+            .chain(self.players.seats())
+            .find(|&each| self.players[each].ending_turn)
     }
 
     /// Clear a play's ask for the turn to end, as the turn ends.
@@ -3409,11 +3508,7 @@ impl<V: Rules> Live<V> {
     /// The task a pause boundary waited on, which paused on the question
     /// asked: the question, and what it deferred since `fresh` was opened.
     /// The boundary's caller runs on without it.
-    pub(super) fn set_aside(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        fresh: (usize, Option<usize>),
-    ) -> Paused<V> {
+    pub(super) fn set_aside(&mut self, fresh: (usize, Option<usize>)) -> Paused<V> {
         let asking = self
             .asking
             .take()
@@ -3421,7 +3516,6 @@ impl<V: Rules> Live<V> {
         Paused {
             asking,
             waiting: self.deferred.take_fresh(fresh),
-            hand: self.players[seat].cards.len(sts2_core::Pile::Hand),
         }
     }
 
@@ -3430,26 +3524,10 @@ impl<V: Rules> Live<V> {
     ///
     /// # Panics
     ///
-    /// Where the caller asked a question of its own as it ran on. Where a
-    /// filtered choice signalled and the hand changed since: the choice
-    /// listed the hand as it stopped, and the game lists it now.
-    pub(super) fn rejoin(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        Paused {
-            asking,
-            waiting,
-            hand,
-        }: Paused<V>,
-    ) {
+    /// Where the caller asked a question of its own as it ran on.
+    pub(super) fn rejoin(&mut self, Paused { asking, waiting }: Paused<V>) {
         if let Some(other) = &self.asking {
             unimplemented!("{other:?} asked while a paused task waited to rejoin");
-        }
-        if let Asked::Among { cards, .. } = &asking.question
-            && asking.signalled
-            && self.players[seat].cards.len(sts2_core::Pile::Hand) != hand
-        {
-            unimplemented!("a filtered choice over {cards:?} whose hand changed as it paused");
         }
         self.asking = Some(asking);
         self.deferred.put_back(waiting);
@@ -3477,8 +3555,8 @@ impl<V: Rules> Live<V> {
         if self.asking.is_some() || !self.deferred.is_empty() {
             return;
         }
-        if let Some((owner, task)) = self.queues.take_next() {
-            self.rejoin(owner, task);
+        if let Some((_, task)) = self.queues.take_next() {
+            self.rejoin(task);
         }
     }
 
@@ -3522,36 +3600,86 @@ impl<V: Rules> Live<V> {
         offered
     }
 
+    /// `PotionModel.EnqueueManualUse` in a fight of several players. Where
+    /// `seat`'s queue holds an action already, the potion in belt slot
+    /// `slot` waits at its end, and this says so. Otherwise it is drunk now.
+    pub(crate) fn queue_potion(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        slot: usize,
+        target: Option<CombatId>,
+    ) -> bool {
+        if self.players.len() == 1 || !self.queues.waits(seat) {
+            return false;
+        }
+        self.queues.enqueue_potion(seat, slot, target);
+        true
+    }
+
+    /// `PotionModel.IsQueued` for `seat`'s belt slot `slot`.
+    pub(crate) fn potion_queued(&self, seat: sts2_core::SeatIndex, slot: usize) -> bool {
+        self.queues.queued_potion(seat, slot)
+    }
+
+    /// The next queued potion whose turn has come, taken off its queue, once
+    /// nothing is in play: its owner, belt slot and target.
+    pub(crate) fn ready_potion(
+        &mut self,
+    ) -> Option<(sts2_core::SeatIndex, usize, Option<CombatId>)> {
+        if self.asking.is_some() || !self.deferred.is_empty() {
+            return None;
+        }
+        self.queues.take_ready_potion()
+    }
+
     /// In a fight of several players, the question `seat`'s decision ended
     /// on goes to the front of `seat`'s queue, with what waits behind it. The
     /// other seats act around it until `seat` answers.
     pub(crate) fn stop_for_answer(&mut self, seat: sts2_core::SeatIndex) {
-        if self.players.len() == 1 {
-            return;
+        if let Some((answerer, task)) = self.paused_for_answer(seat) {
+            self.queues.stop(seat, answerer, task);
         }
-        let Some(asking) = self.asking.take() else {
-            return;
+    }
+
+    /// The question `seat`'s decision ended on, with what waits behind it,
+    /// beside who answers it. Nothing in a fight of one.
+    fn paused_for_answer(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+    ) -> Option<(sts2_core::SeatIndex, Paused<V>)> {
+        if self.players.len() == 1 {
+            return None;
+        }
+        let asking = self.asking.take()?;
+        // A potion aimed at another player asks them, and its choice stands
+        // in their queue.
+        let answerer = match &asking.then {
+            Then::Play { effect, .. } => effect.reaching(self, seat),
+            _ => None,
         };
         let task = Paused {
             asking,
             waiting: self.deferred.take_fresh((0, None)),
-            hand: self.players[seat].cards.len(sts2_core::Pile::Hand),
         };
-        self.queues.stop(seat, task);
+        Some((answerer.unwrap_or(seat), task))
+    }
+
+    /// [`Live::stop_for_answer`], with the question at the front of its
+    /// answerer's queue, where its task stood before it listed.
+    pub(super) fn stop_at_front(&mut self, seat: sts2_core::SeatIndex) {
+        if let Some((answerer, task)) = self.paused_for_answer(seat) {
+            self.queues.stop_first(seat, answerer, task);
+        }
     }
 
     /// The question `seat` answers, back in play with what waits behind it,
     /// where a queue stopped on one. The seat whose action goes on, which
     /// is the drinker's for a potion aimed at `seat`.
     pub(crate) fn answering(&mut self, seat: sts2_core::SeatIndex) -> sts2_core::SeatIndex {
-        let Some(owner) = self.stopped_for(seat).map(|(owner, _)| owner) else {
+        let Some((owner, task)) = self.queues.go_on(seat) else {
             return seat;
         };
-        let task = self
-            .queues
-            .go_on(owner)
-            .expect("the queue stopped on the question");
-        self.rejoin(owner, task);
+        self.rejoin(task);
         owner
     }
 
@@ -3569,13 +3697,7 @@ impl<V: Rules> Live<V> {
         &self,
         seat: sts2_core::SeatIndex,
     ) -> Option<(sts2_core::SeatIndex, &Paused<V>)> {
-        self.queues.every_stopped().find(|&(owner, task)| {
-            let answerer = match &task.asking.then {
-                Then::Play { effect, .. } => effect.reaching(self, owner),
-                _ => None,
-            };
-            answerer.unwrap_or(owner) == seat
-        })
+        self.queues.stopped_with_owner(seat)
     }
 
     /// The card-selection question on which this fight is parked.
@@ -3596,6 +3718,7 @@ impl<V: Rules> Live<V> {
                 piles.all(|pile| pile == first).then_some(first).flatten()
             }
             Asked::Offered { .. } => None,
+            Asked::Filtered { .. } => unreachable!("a filtered choice lists before it is shown"),
         };
         let options: Vec<_> = match &asked.question {
             Asked::Pile { pile, .. } => self
@@ -3622,6 +3745,7 @@ impl<V: Rules> Live<V> {
                 })
                 .collect(),
             Asked::Offered { offered, .. } => offered.to_vec(),
+            Asked::Filtered { .. } => unreachable!("a filtered choice lists before it is shown"),
         };
         Some(sts2_core::Question::SelectCards {
             min,
@@ -3666,11 +3790,14 @@ impl<V: Rules> Live<V> {
                 let (min, max) = bounds(*selection);
                 (min, max, self.players[seat].cards.len(*pile))
             }
-            Asked::Among { cards, selection } => {
+            Asked::Among {
+                cards, selection, ..
+            } => {
                 let (min, max) = bounds(*selection);
                 (min, max, cards.len())
             }
             Asked::Offered { offered, skippable } => (u32::from(!skippable), 1, offered.len()),
+            Asked::Filtered { .. } => unreachable!("a filtered choice lists before it is shown"),
         })
     }
 
@@ -3697,7 +3824,6 @@ impl<V: Rules> Live<V> {
         for intent in &mut next.intents {
             if let Some(attack) = &mut intent.attack {
                 attack.damage = super::board::modified::<V>(
-                    seat,
                     super::listen::Walk { live: self, belts },
                     Some(fighter.id),
                     Some(player),
@@ -3782,7 +3908,11 @@ impl<V: Rules> Live<V> {
     /// `SwitchSides`: the turn now over joins the history, and `side` takes
     /// its turn. `OnSideSwitch` clears every monster's `SpawnedThisTurn`.
     pub(super) fn switch_side(&mut self, side: V::CombatSide) {
-        self.history.end_turn(self.round, self.side, self.turn);
+        let mut turns: sts2_core::PlayerTurns<V> = [num_traits::zero(); sts2_core::MAX_PLAYERS];
+        for (seat, player) in self.players.seated() {
+            turns[seat.at()] = player.turn;
+        }
+        self.history.end_turn(self.round, self.side, turns);
         self.side = side;
         for held in &mut self.machines {
             held.spawned_this_turn = false;
@@ -3819,26 +3949,62 @@ impl<V: Rules> Live<V> {
         let player = &self.players[seat];
         let holding_potions = || !player.potions.is_empty();
         match hook {
-            EventHook::BeforeSideTurnEndVeryEarly { side, .. } => {
-                EventHook::BeforeSideTurnEndVeryEarly {
-                    side,
-                    block: self.player(seat).block,
-                }
-            }
-            EventHook::BeforeSideTurnEndEarly { side, turn, .. } => {
-                EventHook::BeforeSideTurnEndEarly {
-                    side,
-                    plays: self.history.unprompted_plays_this_turn(seat.creature()),
-                    turn,
-                }
-            }
-            EventHook::BeforeSideTurnEnd { side, .. } => EventHook::BeforeSideTurnEnd {
+            EventHook::BeforeSideTurnEndVeryEarly {
+                side, participants, ..
+            } => EventHook::BeforeSideTurnEndVeryEarly {
                 side,
+                participants,
+                block: self.player(seat).block,
+            },
+            EventHook::BeforeSideTurnEndEarly {
+                side, participants, ..
+            } => EventHook::BeforeSideTurnEndEarly {
+                side,
+                participants,
+                plays: self.history.unprompted_plays_this_turn(seat.creature()),
+                turn: player.turn,
+            },
+            EventHook::BeforeSideTurnStart {
+                side,
+                participants,
+                round,
+                ..
+            } => EventHook::BeforeSideTurnStart {
+                side,
+                participants,
+                turn: player.turn,
+                round,
+            },
+            EventHook::SideTurnStart {
+                side,
+                participants,
+                round,
+                room,
+                extra,
+                players,
+                ..
+            } => EventHook::SideTurnStart {
+                side,
+                participants,
+                turn: player.turn,
+                round,
+                room,
+                extra,
+                players,
+            },
+            EventHook::BeforeSideTurnEnd {
+                side, participants, ..
+            } => EventHook::BeforeSideTurnEnd {
+                side,
+                participants,
                 energy: player.energy,
                 hand: player.cards.len(sts2_core::Pile::Hand),
             },
-            EventHook::SideTurnEnd { side, .. } => EventHook::SideTurnEnd {
+            EventHook::SideTurnEnd {
+                side, participants, ..
+            } => EventHook::SideTurnEnd {
                 side,
+                participants,
                 block: self.player(seat).block,
             },
             EventHook::RoomEntered {
@@ -3893,7 +4059,15 @@ impl<V: Rules> Live<V> {
         seat: impl FnOnce() -> Option<sts2_core::SeatIndex>,
         hook: sts2_core::EventHook<V>,
     ) -> sts2_core::EventHook<V> {
-        match refreshes(&hook).then(seat).flatten() {
+        // A turn's start carries only the turn number for its listener's
+        // player, which is everyone's alike until an extra turn parts them.
+        let starts = matches!(
+            hook,
+            sts2_core::EventHook::BeforeSideTurnStart { .. }
+                | sts2_core::EventHook::SideTurnStart { .. }
+        );
+        let fills = refreshes(&hook) && (!starts || self.turns_apart);
+        match fills.then(seat).flatten() {
             Some(seat) => self.refreshed(seat, hook),
             None => hook,
         }
@@ -3931,13 +4105,53 @@ impl<V: Rules> Live<V> {
         }
     }
 
-    /// Seat `seat`'s player. A fight adds its players first, in seat order.
+    /// `EndPlayerTurnPhaseOne` waits for each player's post-play phase in
+    /// seat order, and turns each player's phase to `End` as theirs is
+    /// over. So each player before the first whose phase still waits on a
+    /// question turns to `End`.
+    pub(crate) fn post_plays_end(&mut self) {
+        let auto = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::AUTO_POST_PLAY;
+        for seat in self.players.seats() {
+            let waits = self.queues.stopped(seat).is_some_and(|task| {
+                (task.waiting.iter()).any(|w| matches!(w, Deferred::PostPlayFrom { .. }))
+            });
+            if waits {
+                break;
+            }
+            if self.part_of_turn(seat) && self.players[seat].phase == auto {
+                self.players[seat].phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::END;
+            }
+        }
+    }
+
+    /// `IsPartOfPlayerTurn`: whether `seat` takes part in the player turn,
+    /// which every seat does but where some take an extra turn alone.
+    pub(crate) fn part_of_turn(&self, seat: sts2_core::SeatIndex) -> bool {
+        self.taking == 0 || self.taking & (1 << seat.0) != 0
+    }
+
+    /// The seats taking part in the player turn, in seat order:
+    /// `playersStartingTurn` and `playersEndingTurn`.
+    pub(crate) fn turn_seats(&self) -> impl Iterator<Item = sts2_core::SeatIndex> + '_ {
+        self.players.seats().filter(|&seat| self.part_of_turn(seat))
+    }
+
+    /// The `TurnNumber` of the player `creature` is, or of the first player
+    /// for a creature that is no player's, which no listener reads it of.
+    pub(crate) fn turn_of(&self, creature: CombatId) -> V::Count {
+        let seat = sts2_core::SeatIndex(creature.get());
+        match usize::from(creature.get()) < self.players.len() {
+            true => self.players[seat].turn,
+            false => self.players[sts2_core::SeatIndex(0)].turn,
+        }
+    }
+
+    /// Seat `seat`'s player. A fight adds its players first, in seat order,
+    /// and a creature joins after them.
     pub(crate) fn player(&self, seat: sts2_core::SeatIndex) -> &Fighter<V> {
-        let id = seat.creature();
-        self.creatures
-            .iter()
-            .find(|creature| creature.id == id)
-            .expect("a fight has every player in it")
+        let player = &self.creatures[seat.at()];
+        debug_assert_eq!(player.id, seat.creature(), "the players come first");
+        player
     }
 
     /// Ask the power at `at` among `owner`'s about `hook`, with the fight in
@@ -4177,7 +4391,7 @@ impl<V: Rules> Live<V> {
             })
             .collect();
         Combat {
-            turn: self.turn,
+            turn: self.players[seat].turn,
             phase: self.players[seat].phase,
             energy: self.players[seat].energy,
             stars: self.players[seat].stars,
@@ -4393,6 +4607,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
 
         let player = PlayerCombat {
             character: Character::Regent,
+            turn: 1,
             phase: PlayerTurnPhase::Play,
             energy: 3,
             stars: 0,
@@ -4413,9 +4628,12 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
         Live {
             players: crate::seats::BySeat::new(player, Vec::new()),
             ascension: AscensionLevel::None,
-            turn: 1,
             modifiers: RunModifiers::holding(&[]),
             round: 1,
+            starting: sts2_core::Participants::default(),
+            turns_apart: false,
+            taking: 0,
+            ending: sts2_core::Participants::default(),
             side: CombatSide::Player,
             history: CombatHistory::new(),
             kept: Vec::new(),

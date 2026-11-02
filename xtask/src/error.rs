@@ -176,6 +176,12 @@ pub fn build_runner(root: &Path) -> Result<PathBuf, ProcessError> {
     Ok(root.join("target/release/sts2-run"))
 }
 
+/// The runs merger, built as it is needed. A record or a hunt runs for
+/// hours, and the nightly sweep can delete a binary built when it began.
+pub fn merger(root: &Path) -> Result<PathBuf, ProcessError> {
+    build_example(root, "merge_runs")
+}
+
 pub fn build_example(root: &Path, name: &str) -> Result<PathBuf, ProcessError> {
     status(
         Command::new("cargo")

@@ -1,0 +1,5 @@
+# Energy Surge gives its energy to each living player, its owner too.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"ENERGY_SURGE","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":null,"seat":0}
