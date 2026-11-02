@@ -51,6 +51,11 @@ impl<V: crate::Build> EventBehavior<V> for SunkenStatue {
         )
     }
 
+    /// `WillKillPlayer`, for `DiveIntoWater`: its hit point loss.
+    fn kills(&self, _state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 1 && run.hp() <= HP_LOSS
+    }
+
     /// `GrabSword`: Sword of Stone. `DiveIntoWater`: the gold, then the
     /// damage. Each finishes the event.
     fn choose<R: sts2_core::rng::GameRng>(

@@ -727,6 +727,7 @@ pub trait Build:
     + ContentVersion<
         EnchantmentState = crate::behaviour::enchantments::State,
         CardWrite = crate::behaviour::cards::CardWrite,
+        CardFilter = crate::behaviour::CardFilter<Self>,
     >
 {
 }
@@ -746,6 +747,7 @@ impl<V> Build for V where
         + ContentVersion<
             EnchantmentState = crate::behaviour::enchantments::State,
             CardWrite = crate::behaviour::cards::CardWrite,
+            CardFilter = crate::behaviour::CardFilter<V>,
         >
 {
 }
@@ -1089,6 +1091,15 @@ macro_rules! rules {
 
                 fn on_card_turn_end<F: Fight<Self>>(card: Self::Card, fight: &mut F) {
                     crate::behaviour::rules::on_card_turn_end::<Self, F>(card, fight)
+                }
+
+                fn among<F: Fight<Self>>(
+                    fight: &F,
+                    pile: sts2_core::Pile,
+                    filter: &Self::CardFilter,
+                ) -> smallvec::SmallVec<[sts2_core::CardAt<Self>; sts2_core::MAX_CARDS_IN_HAND]>
+                {
+                    crate::behaviour::filter::among::<Self, F>(fight, pile, filter)
                 }
 
                 fn resume_play<'a, K: sts2_core::FightKind<Self>>(
@@ -1502,6 +1513,14 @@ macro_rules! rules {
                     run: &impl sts2_core::EventView<Self>,
                 ) -> sts2_core::Room<Self> {
                     crate::behaviour::rules::observe_event::<Self>(state, run)
+                }
+
+                fn event_kills(
+                    state: &Self::EventState,
+                    option: u8,
+                    run: &impl sts2_core::EventView<Self>,
+                ) -> bool {
+                    crate::behaviour::rules::event_kills::<Self>(state, option, run)
                 }
 
                 fn choose_event<R: sts2_core::rng::GameRng>(
