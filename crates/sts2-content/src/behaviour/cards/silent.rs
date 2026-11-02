@@ -352,16 +352,9 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 scaling: Scaling::Dynamic,
             });
             fight.apply(block);
-            let cards = fight
-                .cards_in(Pile::Hand)
-                .into_iter()
-                .filter(|&held| {
-                    V::card_kind(fight.card_ident(held).card) == Some(CardKind::Skill)
-                        && !fight.card_keyword_this_turn(held, CardKeyword::Sly)
-                })
-                .collect();
             yield_!(crate::behaviour::paused::Ask::AskingAmong {
-                cards,
+                pile: Pile::Hand,
+                filter: crate::behaviour::CardFilter::SkillNotSlyThisTurn,
                 selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
             });
             // `CardCmd.ApplySingleTurnSly` on the one taken.
