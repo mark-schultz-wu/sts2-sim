@@ -9,25 +9,22 @@ use sts2_content::v0_107_1::{
     V0_107_1, cards::Cards, cards::RegentCard, characters::Character, runstate::UnplayableReason,
 };
 use sts2_core::fixture::{at, hand};
-use sts2_core::{Answer, Coord, Decision, Play, Reason, Seed, SideKinds, Start};
+use sts2_core::{Answer, Coord, Decision, Reason, Seed, SideKinds, Start};
 use sts2_sim::Sim;
 
 type V = V0_107_1;
 
 /// A run standing in its first fight, which is where a card can be played.
 fn fighting() -> Sim<V> {
-    let mut sim = Sim::begin(
-        (),
-        &Start {
-            seed: Seed::new("0RACLE1").expect("a canonical seed"),
-            players: vec![sts2_core::Player {
-                character: Character::Regent,
-                wins: 0,
-            }],
-            ascension: AscensionLevel::None,
-            modifiers: Vec::new(),
-        },
-    )
+    let mut sim = Sim::begin(&Start {
+        seed: Seed::new("0RACLE1").expect("a canonical seed"),
+        players: vec![sts2_core::Player {
+            character: Character::Regent,
+            wins: 0,
+        }],
+        ascension: AscensionLevel::None,
+        modifiers: Vec::new(),
+    })
     .expect("the run starts");
     sim.play(&Decision::ChooseOption {
         index: 0,
@@ -216,7 +213,7 @@ fn a_card_the_pools_cannot_pay_for_is_unplayable_before_it_is_refused() {
 #[test]
 fn a_selection_refuses_the_clicks_its_screen_would() {
     use sts2_content::v0_107_1::cards::IroncladCard;
-    use sts2_core::{Construct as _, Gift, Setup};
+    use sts2_core::{Gift, Setup};
 
     // Burning Pact asks for exactly one card from the hand.
     let mut sim = fighting();
