@@ -6,17 +6,19 @@ use sts2_core::{EventHook, HookEffect};
 
 use crate::generated::runstate::CombatSide;
 
-/// `AfterCardDiscarded` in its owner's side's turn: `CreatureCmd.Damage` from
-/// its owner on an enemy that can be hit, drawn off `CombatTargets`. A fight
-/// here has one player, whose every card is its owner's.
+/// `AfterCardDiscarded` of its owner's card in its owner's side's turn:
+/// `CreatureCmd.Damage` from its owner on an enemy that can be hit. The enemy
+/// is drawn off `CombatTargets`.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
         EventHook::CardDiscarded {
+            player,
             side: CombatSide::Player,
-        } => asked.push(HookEffect::DamageRandomOpponent {
+        } if player == owner => asked.push(HookEffect::DamageRandomOpponent {
             amount: V::Relic::TINGSHA_DAMAGE,
             unblockable: false,
             from_owner: true,

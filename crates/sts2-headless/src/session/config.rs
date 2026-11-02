@@ -28,6 +28,12 @@ pub struct Config {
     /// with a home of its own gets a copy of the user's profile there as it
     /// launches. So the mods `deploy.sh` enabled are enabled.
     pub data_home: Option<PathBuf>,
+    /// Where the mod writes the game's traced calls, or `None` for the file
+    /// `STS2_HEADLESS_TRACE_FILE` names, if any.
+    ///
+    /// The mod opens its trace file afresh, so games that share one write
+    /// over each other. A game of a co-op run gets a file of its own.
+    pub trace_file: Option<PathBuf>,
 }
 
 impl Config {
@@ -38,12 +44,19 @@ impl Config {
             startup_timeout: Duration::from_secs(60),
             command_timeout: Duration::from_secs(30),
             data_home: None,
+            trace_file: None,
         }
     }
 
     /// Give the game a profile of its own. See [`Config::data_home`].
     pub fn data_home(mut self, dir: impl Into<PathBuf>) -> Self {
         self.data_home = Some(dir.into());
+        self
+    }
+
+    /// Trace the game's calls to a file of its own. See [`Config::trace_file`].
+    pub fn trace_file(mut self, file: impl Into<PathBuf>) -> Self {
+        self.trace_file = Some(file.into());
         self
     }
 
