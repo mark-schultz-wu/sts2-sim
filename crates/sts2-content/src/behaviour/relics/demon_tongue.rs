@@ -13,6 +13,8 @@ pub struct State {
 /// that got past the block: `CreatureCmd.Heal` by what got through, once a
 /// turn. `BeforeSideTurnStart` of the owner's side makes it ready again.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
@@ -22,14 +24,13 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::DamageReceived {
             target,
             unblocked,
-            player,
             side,
             ..
-        } if side == own && target == player && unblocked > 0 && !state.triggered_this_turn => {
+        } if side == own && target == owner && unblocked > 0 && !state.triggered_this_turn => {
             state.triggered_this_turn = true;
             asked.push(HookEffect::Heal(unblocked));
         }
-        EventHook::BeforeSideTurnStart { side, .. } if side == own => {
+        EventHook::BeforeSideTurnStart { participants, .. } if participants.contains(owner) => {
             state.triggered_this_turn = false;
         }
         EventHook::DamageReceived { .. }

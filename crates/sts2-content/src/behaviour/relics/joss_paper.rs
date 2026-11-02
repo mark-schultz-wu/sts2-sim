@@ -4,7 +4,6 @@ use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
-use crate::generated::runstate::CombatSide;
 
 /// `CardsExhausted`, which it saves, and `EtherealCount`, the exhausts
 /// Ethereal made as a turn ended, counted once the hand is flushed.
@@ -31,20 +30,20 @@ impl State {
 /// `AfterCombatEnd` drops what waits. Its own draw over, the count keeps
 /// to what is left.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
+        // `card.Owner == base.Owner`: another player's card counts nothing.
+        EventHook::CardExhausted { player, .. } if player != owner => {}
         EventHook::CardExhausted { ethereal: true, .. } => state.ethereal += 1,
         EventHook::CardExhausted { .. } => {
             state.cards_exhausted += 1;
             state.draw::<V>(asked);
         }
-        EventHook::SideTurnEnd {
-            side: CombatSide::Player,
-            ..
-        } => {
+        EventHook::SideTurnEnd { participants, .. } if participants.contains(owner) => {
             state.cards_exhausted += state.ethereal;
             state.ethereal = 0;
             state.draw::<V>(asked);
