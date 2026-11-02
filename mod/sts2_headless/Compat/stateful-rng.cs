@@ -118,8 +118,12 @@ internal static class GameApi
         Player me = Seat.Me(state);
         IReadOnlyList<uint> ids = run.PlayerChoiceSynchronizer.ChoiceIds;
         int slot = state.GetPlayerSlotIndex(me);
+        // The id this selection reserved, read now. `ChoiceIds` is the
+        // synchronizer's live list, and another choice of this player's can
+        // reserve the next while this one waits for its answer.
+        uint? reserved = slot < ids.Count ? ids[slot] - 1 : null;
         List<CardModel> chosen = (await asked).ToList();
-        if (method == null || !Shapes.TryGetValue(method, out Shape shape) || slot >= ids.Count)
+        if (method == null || !Shapes.TryGetValue(method, out Shape shape) || reserved is not uint choiceId)
         {
             if (Peers.Shared)
             {
@@ -138,7 +142,7 @@ internal static class GameApi
             Shape.DeckCards => PlayerChoiceResult.FromMutableDeckCards(chosen),
             _ => throw new NotSupportedException($"sending a selection shaped {shape}"),
         };
-        run.PlayerChoiceSynchronizer.SyncLocalChoice(me, ids[slot] - 1, result);
+        run.PlayerChoiceSynchronizer.SyncLocalChoice(me, choiceId, result);
         return chosen;
     }
 }

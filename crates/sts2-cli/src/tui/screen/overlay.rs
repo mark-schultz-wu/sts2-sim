@@ -7,7 +7,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
-use sts2_core::{CardIdent, Play};
+use sts2_core::CardIdent;
 
 use crate::tui::app::App;
 use crate::tui::keys::HELP;
@@ -17,11 +17,9 @@ use crate::tui::theme;
 
 use super::{card, centred, map, widget};
 
-pub fn draw<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>)
+pub fn draw<V>(frame: &mut Frame, body: Rect, app: &App<V>)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     let Some(overlay) = &app.ui.overlay else {
         return;
@@ -107,11 +105,9 @@ fn detail(frame: &mut Frame, body: Rect, lines: &[String]) {
 /// The only actionable overlay, since potions are otherwise unreachable. A
 /// potion the game rejects keeps its row but loses its digit, with the reported
 /// reason beside it.
-fn belt<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>)
+fn belt<V>(frame: &mut Frame, body: Rect, app: &App<V>)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     let Some(observed) = app.view() else {
         return;
@@ -181,11 +177,9 @@ where
 /// Read-only: a relic is a passive and there is nothing to do to one. It exists
 /// because a run strip listing eight names says nothing about what any of them
 /// does, either before it was picked up or after.
-fn relics<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>)
+fn relics<V>(frame: &mut Frame, body: Rect, app: &App<V>)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     let Some(observed) = app.view() else {
         return;
@@ -228,11 +222,9 @@ where
 /// The draw pile is listed in the order the game reports it, which is the order
 /// it will be drawn in. That is a real advantage the game gives a player who
 /// looks, and an alphabetical sort throws it away.
-fn pile<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>, which: Pile)
+fn pile<V>(frame: &mut Frame, body: Rect, app: &App<V>, which: Pile)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     let Some(observed) = app.view() else {
         return;

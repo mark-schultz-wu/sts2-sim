@@ -59,6 +59,9 @@ pub struct State {
     lines: u8,
     /// `CurrentLineIndex`.
     line: u8,
+    /// `WinRun` ran on a machine this copy is not the local player's, which
+    /// leaves it no options.
+    closed: bool,
 }
 
 impl State {
@@ -106,12 +109,25 @@ impl<V: crate::Build> EventBehavior<V> for TheArchitect {
                     .expect("a draw below the count is an index");
             valid[at].lines
         };
-        State { lines, line: 0 }
+        State {
+            lines,
+            line: 0,
+            closed: false,
+        }
     }
 
     /// One option. A line before the last moves the dialogue on, and the last
     /// line, or no dialogue, offers the bare `PROCEED`.
     fn observe(&self, state: &State, _run: &impl EventView<V>) -> Room<V> {
+        if state.closed {
+            return Room::Event {
+                event: V::Event::THE_ARCHITECT,
+                finished: false,
+                title: None,
+                text: None,
+                options: Vec::new(),
+            };
+        }
         let option = if state.line + 1 < state.lines {
             EventOptionId::Dialogue(state.line)
         } else {
@@ -138,19 +154,24 @@ impl<V: crate::Build> EventBehavior<V> for TheArchitect {
         }
     }
 
-    /// `AdvanceDialogue` on a line before the last. `WinRun` on `PROCEED`:
-    /// the attack the screen plays, whose draws off the event's own stream
-    /// leave with the room, then `ActChangeSynchronizer.SetLocalPlayerReady`,
-    /// which enters the next act.
+    /// `AdvanceDialogue` on a line before the last. `WinRun` on `PROCEED`
+    /// acts for the local player's copy alone. It plays the attack the screen
+    /// shows, whose draws off the event's own stream leave with the room.
+    /// Then `ActChangeSynchronizer.SetLocalPlayerReady` enters the next act.
+    /// Any copy is then left with no options.
     fn choose<R: GameRng>(
         &self,
         state: &mut State,
         _option: u8,
-        _run: &impl EventView<V>,
+        run: &impl EventView<V>,
         _rng: &mut R,
     ) -> HookEffects<V> {
         if state.line + 1 < state.lines {
             state.line += 1;
+            return HookEffects::new();
+        }
+        if !run.local() {
+            state.closed = true;
             return HookEffects::new();
         }
         smallvec::smallvec![HookEffect::EnterNextAct]
