@@ -1,0 +1,7 @@
+# The Ironclad throws Entropic Brew at the Silent. It fills the Silent's
+# open potion slots with potions for the Silent, and leaves the Ironclad's
+# belt empty.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","potion":"ENTROPIC_BREW","target":1,"seat":0}
+{"cmd":"use_potion","index":0,"target":1,"seat":0}
