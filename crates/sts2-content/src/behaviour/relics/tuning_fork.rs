@@ -14,11 +14,13 @@ pub struct State {
 /// `AfterCardPlayed` counts each skill its owner plays. The tenth gives its
 /// block and takes ten off the count.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    if let EventHook::CardPlayed { card, .. } = hook
+    if let EventHook::CardPlayed { card, player, .. } = hook
+        && player == owner
         && <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Skill)
     {
         state.skills_played += 1;

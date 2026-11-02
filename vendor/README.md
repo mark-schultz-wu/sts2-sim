@@ -67,20 +67,45 @@ when nothing suspended. A body that rarely stops paid that on each run.
 The simulator's end of turn spent about 1,000 instructions a turn on it.
 
 `cfg::inline_joins` runs after the lowering, in `expand` and
-`expand_debug`. It copies each such join once for each path into it,
-with the blocks only it leads to. Each copy is plain Rust in the arm that
-reaches it. A yield in a copy comes with its resume point, so each
-copy has its own. A join on a loop stays a state, and so does a block
-that defines a direct borrow. A copied block's jump markers get fresh
-jumps of their own. A budget of the body's own size, and at least 128
-statements, bounds the copies.
+`expand_debug`. It copies a join for the paths into it, with the blocks
+only it leads to. Each copy is plain Rust in the arm that reaches it. A
+yield in a copy comes with its resume point, so each copy has its own. A
+join on a loop stays a state, and so does a block that defines a direct
+borrow. A copied block's jump markers get fresh jumps of their own. A
+budget of the body's own size, and at least 128 statements, bounds the
+copies.
+
+The path that does not suspend gets its copies first. A path that
+resumed from a yield came through the dispatch loop already, so it can
+reach a join as a state. Copied for every path, a chain of joins with a
+yield before each doubles at each step. On the simulator's turn loop,
+that used up the budget before the turn's start, which then cost +0.5%
+in `cargo xtask instructions`. Copied for the hot
+paths first, the chain grows by one copy of each join, and the cost goes.
+The budget left over then goes to every path, as fewer states make a
+smaller enum to compile.
 
 The lowering's own tests see the CFG without the copies. On the fork,
 upstream's macro-core suite, runtime suite and compile-fail cases pass.
 One compile-fail case,
 `value_let_missing_annotation`, had to hold its value across a second
 yield, since the copy took away the first state it crossed. The random
-differential test passes 2,000 cases on two seeds. On the first seed
-rustc's peak memory falls from 27.8 GB to 20.5 GB. The test takes 321 s
-to build and run, against 248 s. `sts2-content` builds in about
-the same time with and without the pass.
+differential test passes 2,000 cases on two seeds. On 1,000 cases of the
+second seed, rustc peaks at 12.9 GB, against 19.4 GB with no pass. The
+test takes 83 s, against 129 s. At 2,000 cases it peaks at 27.6 GB, close
+to what the machine holds. Copying every path alike peaked at 21.9 GB.
+`sts2-content` and `sts2-sim` build in the same time and memory with
+either. This change is ours alone.
+
+### A spent inclusive range saves the same state on every toolchain
+
+A `for` loop over `a..=b` keeps its place in a `__RangeInclusiveIter`,
+with an explicit `done` flag, because std's `RangeInclusive` does not
+serialize its own. After each element the wrapper copied back the
+`start` that std's `next` left. Where std leaves `start` after the last
+element changed between releases. Rust 1.99 moves it past `end`, so
+`1..=1` saves as `start: 2`, and the serde test that expects 1 failed on
+upstream's main too. Now the wrapper copies `start` back only while the
+range has elements left. The saved state is then the same on every
+toolchain, and the serde suite passes. The fix is offered upstream in
+<https://github.com/todesking/diapause/pull/3>.
