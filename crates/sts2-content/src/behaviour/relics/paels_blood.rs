@@ -5,10 +5,14 @@ use sts2_core::{Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 
-/// `ModifyHandDraw`: one more card each turn. A relic's owner is the player,
-/// and a fight here has one, so the player drawing is always its own.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+/// `ModifyHandDraw`: one more card for its owner each turn.
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
+        // `player != base.Owner`: another player's number is left as it is.
+        ModifyHook::HandDraw { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::HandDraw { .. } => Modify::Added(V::Relic::PAELS_BLOOD_CARDS),
         hook => unimplemented!("what PaelsBlood does for {hook:?}"),
     }

@@ -16,11 +16,14 @@ fn affects<V: crate::Build>(card: V::Card) -> bool {
 /// arrives. `AfterRoomEntered` writes it on every one the fight holds as a
 /// fight's room opens.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::CardEnteredCombat { at, card, .. } if affects::<V>(card) => {
+        EventHook::CardEnteredCombat {
+            at, card, player, ..
+        } if player == owner && affects::<V>(card) => {
             asked.push(HookEffect::AddKeyword {
                 to: Writing::One(at),
                 keyword: CardKeyword::Ethereal,
