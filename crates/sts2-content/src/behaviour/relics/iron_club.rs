@@ -12,14 +12,17 @@ pub struct State {
     cards_played: u32,
 }
 
-/// `AfterCardPlayed` counts each card its owner plays, and every fourth
-/// draws one while the fight is in progress. A fight here has one player.
+/// `AfterCardPlayed` counts each card its owner plays, and every fourth draws
+/// one while the fight is in progress.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    if let EventHook::CardPlayed { .. } = hook {
+    if let EventHook::CardPlayed { player, .. } = hook
+        && player == owner
+    {
         state.cards_played += 1;
         if state
             .cards_played

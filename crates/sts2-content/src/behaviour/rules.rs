@@ -26,6 +26,7 @@ pub(crate) fn modify_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             owner,
             holder,
             applier,
+            target,
             monster,
             on_turn_start,
             state,
@@ -36,6 +37,7 @@ pub(crate) fn modify_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
                 owner,
                 holder,
                 applier,
+                target,
                 monster,
                 on_turn_start,
                 history,
@@ -60,7 +62,7 @@ pub(crate) fn modify_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             unimplemented!("what {card:?} does for {hook:?}")
         }
         // No potion in this build overrides a number's hook.
-        sts2_core::Listener::Potion(potion) => {
+        sts2_core::Listener::Potion { potion, .. } => {
             unimplemented!("what {potion:?} does for {hook:?}")
         }
         sts2_core::Listener::Modifier(modifier) => {
@@ -80,6 +82,7 @@ pub(crate) fn decide_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             owner,
             holder,
             applier,
+            target,
             monster,
             on_turn_start,
             state,
@@ -91,6 +94,7 @@ pub(crate) fn decide_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
                 owner,
                 holder,
                 applier,
+                target,
                 monster,
                 on_turn_start,
                 history,
@@ -98,19 +102,22 @@ pub(crate) fn decide_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             };
             crate::behaviour::powers::decide_hook::<V>(power, amount, held, state, hook)
         }
-        sts2_core::Listener::Relic { state, belt, .. } => {
-            crate::behaviour::relics::decide_hook(state, belt, hook)
+        sts2_core::Listener::Relic {
+            state, belt, owner, ..
+        } => crate::behaviour::relics::decide_hook(state, belt, owner, hook),
+        sts2_core::Listener::Potion { potion, owner } => {
+            crate::behaviour::potions::decide_hook(potion, owner, hook)
         }
-        sts2_core::Listener::Potion(potion) => crate::behaviour::potions::decide_hook(potion, hook),
         sts2_core::Listener::Modifier(modifier) => {
             crate::behaviour::modifiers::decide_hook(modifier, hook)
         }
         sts2_core::Listener::Card {
             card,
+            owner,
             pile,
             history,
             ..
-        } => crate::behaviour::cards::decide_hook::<V>(card, pile, history, hook),
+        } => crate::behaviour::cards::decide_hook::<V>(card, owner, pile, history, hook),
         // A raised hook reaches only a listener that overrides it, and no
         // monster this build ports overrides one of these.
         sts2_core::Listener::Monster { .. } => match hook.model_hook() {
@@ -131,6 +138,7 @@ pub(crate) fn power_event_hook<V: crate::Build>(
         owner,
         holder,
         applier,
+        target,
         monster,
         on_turn_start,
         state,
@@ -141,6 +149,7 @@ pub(crate) fn power_event_hook<V: crate::Build>(
         owner,
         holder,
         applier,
+        target,
         monster,
         on_turn_start,
         history,
@@ -173,7 +182,7 @@ pub(crate) fn enchanted_changes<V: crate::Build>(
 pub(crate) fn card_result_pile<V: crate::Build>(
     card: V::Card,
     base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)> {
+) -> sts2_core::HookResponse<sts2_core::CardResult> {
     crate::behaviour::cards::result_pile::<V>(card, base)
 }
 
@@ -279,16 +288,20 @@ pub(crate) fn enchantment_event_hook<V: crate::Build>(
     crate::behaviour::enchantments::event_hook(enchanted, id, hook, asked);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn card_event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     card: V::Card,
     id: sts2_core::CardId<V>,
+    owner: sts2_core::CombatId,
     pile: Option<sts2_core::Pile>,
     printed: &P,
     history: sts2_core::History<'_, V>,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    crate::behaviour::cards::event_hook::<V, _>(card, id, pile, printed, history, hook, asked)
+    crate::behaviour::cards::event_hook::<V, _>(
+        card, id, owner, pile, printed, history, hook, asked,
+    )
 }
 
 pub(crate) fn act_layout<V: crate::Build>(act: V::Act) -> sts2_core::Layout {
@@ -527,8 +540,11 @@ pub(crate) fn monster_health_after_added<V: crate::Build>(
     ascension: crate::generated::ascension::AscensionLevel,
     rolled: i32,
     teammates: &[i32],
+    scaled: impl Fn(i32) -> sts2_core::Decimal,
 ) -> Option<i32> {
-    crate::behaviour::monsters::health_after_added::<V>(monster, ascension, rolled, teammates)
+    crate::behaviour::monsters::health_after_added::<V>(
+        monster, ascension, rolled, teammates, scaled,
+    )
 }
 
 pub(crate) fn encounter_gold_proportion<V: crate::Build>(
@@ -885,6 +901,14 @@ pub(crate) fn observe_event<V: crate::Build>(
     run: &impl sts2_core::EventView<V>,
 ) -> sts2_core::Room<V> {
     crate::behaviour::events::observe::<V>(state, run)
+}
+
+pub(crate) fn event_kills<V: crate::Build>(
+    state: &V::EventState,
+    option: u8,
+    run: &impl sts2_core::EventView<V>,
+) -> bool {
+    crate::behaviour::events::kills::<V>(state, option, run)
 }
 
 pub(crate) fn choose_event<V: crate::Build, R: sts2_core::rng::GameRng>(

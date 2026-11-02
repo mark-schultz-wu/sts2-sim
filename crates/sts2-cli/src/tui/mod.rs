@@ -6,9 +6,9 @@
 //! because every look costs a line of typing and nothing stays on the screen.
 //! This holds the game between moves instead, so the screen *is* the state.
 //!
-//! What it knows about the game is what the subcommands know: that it
-//! implements [`Play`](sts2_core::Play). The type it drives is named once, in
-//! `main.rs`, and a simulator goes in the same slot.
+//! What it knows about the game is what the subcommands know: that it is a
+//! [`RunTable`](sts2_core::RunTable). The screen is a player of the run, and
+//! the simulator's table takes the same slot as the daemon's.
 //!
 //! Nothing here decides anything about the run. Every move goes through
 //! `Decision<V>`, and every screen is drawn from the [`View`](sts2_core::View)
@@ -41,16 +41,9 @@ pub enum Error {
     },
     #[error("reading a key: {0}")]
     Key(std::io::Error),
-    #[error("asking the game where it is: {0}")]
-    Looking(Box<dyn std::error::Error + Send + Sync>),
-    #[error("sending {said}: {source}")]
-    Sending {
-        said: String,
-        source: Box<dyn std::error::Error + Send + Sync>,
-    },
 }
 pub use state::Options;
-pub use term::play;
+pub use term::{Human, play};
 
 /// What the TUI needs of a build: the spellings it draws with, and the rules
 /// a card's type is read from.

@@ -94,7 +94,8 @@ divergence:
     cargo test -p sts2-golden --test divergence -- --nocapture
 
 # What the game answers for every scenario, as one file. Needs the game and the
-# mod, and is the only thing in the suite that launches one.
+# mod. The co-op scenarios record the same way, on v0.111.0: see
+# crates/sts2-golden/tests/coop-scenarios/README.md.
 [doc("Rewrite the recorded scenario answers")]
 scenarios: deploy
     STS2_UPDATE=1 cargo test -p sts2-golden --test scenarios -- --nocapture
@@ -237,16 +238,15 @@ determinism-test: deploy
 live: deploy
     cargo test --workspace -- --ignored
 
-# Owns its own game process rather than the daemon, so a run that kills the game
-# kills nothing else. Every move is recorded beside the run, which is what makes
-# a finding a file rather than a story. `docs/ARCHITECTURE.md` says what counts
-# as one.
+# One run of the game picking every legal move alike, Cancel among them, until
+# the run ends or something breaks: a move the game refuses after listing it, or
+# an error it logs. The run is written to `target/fuzz/<seed>.bin`, which
+# `sts2-run follow` replays. `docs/RUNNERS.md` says how the runner plays it.
 #
-# Release, because a fuzz run is thousands of round trips and the debug build
-# spends longer converting observations than the game spends producing them.
-#
-# Arguments go through: `just fuzz --seed ABCDEFGH --steps 200`. The build comes
-# from STS2_GAME_VERSION, the same setting that chose STS2_GAME_DIR.
+# `just fuzz C000000042 IRONCLAD`, and more of `sts2-run play`'s flags after.
+# The build comes from STS2_GAME_VERSION, the same setting that chose
+# STS2_GAME_DIR.
 [doc("Random legal play until the run ends or something breaks")]
-fuzz *args: deploy
-    cargo run --release --bin sts2-fuzz -- {{args}}
+fuzz seed character *args: deploy
+    mkdir -p target/fuzz
+    cargo run --release -p sts2-run -- play {{seed}} {{character}} --build ${STS2_GAME_VERSION:-v0.107.1} --table game --player uniform --carried --record target/fuzz/{{seed}}.bin --home "$PWD/target/fuzz/home" {{args}}

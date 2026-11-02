@@ -9,7 +9,6 @@ use super::super::generated::potions::Potion;
 use super::super::generated::powers::Power;
 use super::super::generated::relics::Relic;
 use crate::behaviour::relics::State;
-use crate::generated::runstate::CombatSide;
 
 /// `DiamondDiadem`'s `BlockVar(20m, ValueProp.Unpowered)`, which v0.107.1's
 /// Diadem lacks.
@@ -35,6 +34,7 @@ pub(crate) fn own_relic_state(relic: Relic) -> Option<OwnRelic> {
 /// `EventHook` for a relic of this build's own.
 pub(crate) fn own_relic_event_hook(
     state: &mut State<V>,
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -51,8 +51,13 @@ pub(crate) fn own_relic_event_hook(
         }
         // `DiamondDiadem.AfterSideTurnStart`: on its owner's first turn, its
         // block, unpowered, then one Blur on its owner.
-        (State::DiamondDiadem(_), EventHook::SideTurnStart { side, turn, .. }) => {
-            if side == CombatSide::Player && turn <= 1 {
+        (
+            State::DiamondDiadem(_),
+            EventHook::SideTurnStart {
+                participants, turn, ..
+            },
+        ) => {
+            if participants.contains(owner) && turn <= 1 {
                 asked.extend([
                     HookEffect::GainBlock(DIAMOND_DIADEM_BLOCK),
                     HookEffect::ApplyToOwner(Power::BlurPower, PowerAmount::Counted(1)),
@@ -170,8 +175,8 @@ pub(crate) fn own_shared_relic_event_hook(
         ) => Some(()),
         // `HistoryCourse.AfterAutoPrePlayPhaseEntered` replays the last
         // Attack alone, where v0.107.1's took a Skill too.
-        (State::HistoryCourse, EventHook::AutoPrePlayPhase { turn }) => {
-            if turn > 1 {
+        (State::HistoryCourse, EventHook::AutoPrePlayPhase { player, turn }) => {
+            if player == owner && turn > 1 {
                 asked.push(HookEffect::AutoPlayDupeOfLastPlay {
                     kinds: &[sts2_core::CardKind::Attack],
                 });
@@ -254,7 +259,7 @@ pub(crate) fn own_shared_relic_event_hook(
         (State::Regalite(state), EventHook::CardGeneratedForCombat { creator, .. }) => {
             use crate::vars::RelicVars as _;
 
-            if creator.is_some() && !state.used_this_turn {
+            if creator == Some(owner) && !state.used_this_turn {
                 state.used_this_turn = true;
                 asked.push(HookEffect::GainBlock(Relic::REGALITE_BLOCK));
             }
@@ -262,8 +267,8 @@ pub(crate) fn own_shared_relic_event_hook(
         }
         // `BeforeSideTurnStart` on its owner's side, and `AfterCombatEnd`,
         // clear the turn's use.
-        (State::Regalite(state), EventHook::BeforeSideTurnStart { side, .. }) => {
-            if side == CombatSide::Player {
+        (State::Regalite(state), EventHook::BeforeSideTurnStart { participants, .. }) => {
+            if participants.contains(owner) {
                 state.used_this_turn = false;
             }
             Some(())

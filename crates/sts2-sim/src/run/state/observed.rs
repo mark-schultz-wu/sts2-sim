@@ -57,9 +57,9 @@ impl<V: Rules> Observed<V> for AtSeat<'_, V> {
             self.seat,
             &self.state.players[self.seat].potions,
             self.state.fight(),
-            self.state.merchant(),
+            self.state.merchant(self.seat),
             self.state.standing(self.seat).alive,
-            self.state.potions_held(),
+            self.state.potions_held(self.seat),
         )
     }
 
@@ -99,7 +99,7 @@ impl<V: Rules> Observed<V> for AtSeat<'_, V> {
     }
 
     fn proceed(&self) -> bool {
-        self.state.can_proceed()
+        self.state.can_proceed(self.seat)
     }
 
     fn run_streams(&self) -> impl ExactSizeIterator<Item = (V::RunRngType, Position)> + '_ {
@@ -121,7 +121,7 @@ impl<V: Rules> Observed<V> for AtSeat<'_, V> {
                 belts: &self.state.belts,
                 seat: self.seat,
             }),
-            Phase::Lost { combat, .. } => Some(Fight::Over(combat)),
+            Phase::Lost { combats, .. } => Some(Fight::Over(&combats[self.seat])),
             Phase::Rewards { seats, .. } => Some(Fight::Over(&seats[self.seat].combat)),
             Phase::Map
             | Phase::Won { .. }
