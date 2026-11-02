@@ -816,8 +816,6 @@ mod tests {
     #[test]
     #[ignore = "prints screens to look at; asserts nothing"]
     fn screens_of_a_run() {
-        use sts2_core::Play as _;
-
         let seed = std::env::var("SHOTS_SEED").unwrap_or_else(|_| "C000000077".into());
         let (w, h) = std::env::var("SHOTS_SIZE")
             .ok()
@@ -835,7 +833,7 @@ mod tests {
             ascension: crate::cli::ascension::<V>("None").expect("no ascension"),
             modifiers: Vec::new(),
         };
-        let mut sim = sts2_sim::Sim::<V>::begin((), &start).expect("the run starts");
+        let mut sim = sts2_sim::Sim::<V>::begin(&start).expect("the run starts");
         let mut printed: std::collections::BTreeMap<String, usize> = Default::default();
         // xorshift, so the run is the same each time without a dependency.
         let mut x: u64 = 0x9E37_79B9_7F4A_7C15;

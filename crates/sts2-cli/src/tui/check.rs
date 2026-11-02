@@ -72,8 +72,8 @@ pub trait Stage<V: crate::tui::Build> {
 
 /// Every decision an implementation was told, in order.
 ///
-/// Shared with the [`Spy`] rather than read back off it. The front end owns the
-/// game it is driving, and a test cannot reach through it.
+/// Shared with [`Driven`] rather than read back off it, so a claim reads it
+/// beside the screen.
 #[derive(Debug)]
 pub struct Sent<V: crate::tui::Build>(Rc<RefCell<Watched<V>>>);
 
@@ -81,7 +81,7 @@ pub struct Sent<V: crate::tui::Build>(Rc<RefCell<Watched<V>>>);
 ///
 /// The start is beside the decisions rather than the first of them, because it
 /// is not one. It reaches the game through
-/// [`Play::begin`](sts2_core::Play::begin), so the spy notes it there.
+/// [`RunTable::begin`](sts2_core::RunTable::begin), which notes it there.
 #[derive(Debug)]
 struct Watched<V: crate::tui::Build> {
     started: Option<Start<V>>,

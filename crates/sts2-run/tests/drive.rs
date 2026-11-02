@@ -5,8 +5,7 @@
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
-    Decision, End, Peer, Peers, Play as _, Player, RunTable, SeatIndex, Seated, Seed, Start,
-    Verdict,
+    Decision, End, Peer, Peers, Player, RunTable, SeatIndex, Seated, Seed, Start, Verdict,
 };
 use sts2_sim::{Sim, SimTable};
 
@@ -72,8 +71,8 @@ fn a_seat_that_ended_its_turn_or_voted_waits() {
             seats: vec![Peer::default(); 2],
             awaiting: Vec::new(),
             in_flight: false,
-            synced: 0,
-            checksums: 0,
+            still: true,
+            links: vec![Default::default(); 2],
         },
     };
     let me = SeatIndex(0);
@@ -133,7 +132,7 @@ fn the_run_is_over_once_it_is_over_on_every_seat() {
 fn a_table_of_one_plays_as_the_simulator() {
     let mut start = lobby();
     start.players.truncate(1);
-    let mut sim = Sim::begin((), &start).expect("the run begins");
+    let mut sim = Sim::begin(&start).expect("the run begins");
     let mut table = SimTable::<V>::begin((), &start).expect("the run begins");
     for step in 0..20_000_usize {
         let seen = sim.observe().expect("the simulator observes");

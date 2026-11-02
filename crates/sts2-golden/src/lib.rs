@@ -131,7 +131,7 @@ pub fn oracle_or_explain<V: sts2_content_wire::WireContentVersion>(
     run: &str,
     start: &sts2_core::Start<V>,
 ) -> Cached<NoGame> {
-    let begun = sts2_core::Play::<V>::begin(
+    let begun = Cached::begin::<V>(
         FromTranscript {
             path: Path::new(env!("STS2_ORACLE_CACHE")).join(format!("{run}.jsonl")),
             inner: None,
