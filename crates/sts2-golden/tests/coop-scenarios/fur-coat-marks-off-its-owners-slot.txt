@@ -1,0 +1,11 @@
+# The Silent, in the second seat, holds Fur Coat. `new Rng(Owner, Id)`
+# seeds its marks with the run's seed, the owner's slot and the relic's
+# id, so the second seat marks other fights than the first would. Here
+# they take in the first-row fight at column two, whose enemies start at
+# one hit point.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"grant","relic":"FUR_COAT","target":1001,"seat":0}
+{"cmd":"choose_option","index":0,"seat":0}
+{"cmd":"choose_option","index":0,"seat":1}
+{"cmd":"travel","col":2,"row":1,"seat":0}
+{"cmd":"travel","col":2,"row":1,"seat":1}

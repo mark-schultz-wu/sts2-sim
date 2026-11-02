@@ -6,9 +6,6 @@ use sts2_core::{CardKind, EventHook, Fight, FightKind, HookEffect, Pile, PileAct
 use crate::behaviour::cards::Number;
 use crate::behaviour::paused::{Ask, Lent};
 
-/// Cards a play offers from a pile.
-type Cards<V> = smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>;
-
 /// One card, as a pick asks for it.
 const ONE: Selection = Selection::Exactly(nonmax::NonMaxUsize::ONE);
 use crate::generated::cards::{CardKeyword, CardRarity};
@@ -20,6 +17,68 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
 ) -> Played<V, K> {
     match card {
         __c0 if __c0 == V::Card::VOLLEY => volley::<V, _>(fight),
+        // `Lift`: its block on the ally it is pointed at.
+        __c0 if __c0 == V::Card::LIFT => {
+            let block = fight.resolve(sts2_core::Effect::GainBlock {
+                recipient: fight.target(),
+                amount: sts2_core::Amount::Var(V::CardVar::BLOCK),
+                scaling: sts2_core::Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Played::Done
+        }
+        // `Mimic`: its `CalculatedBlock`, worked out from the ally it is
+        // pointed at, on its owner.
+        __c0 if __c0 == V::Card::MIMIC => {
+            let block = fight.resolve(sts2_core::Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: sts2_core::Amount::Var(V::CardVar::CALCULATED_BLOCK),
+                scaling: sts2_core::Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Played::Done
+        }
+        // `Rally`: its block on each living player, its owner too.
+        __c0 if __c0 == V::Card::RALLY => {
+            for player in crate::behaviour::cards::teammates::<V, _>(fight) {
+                let block = fight.resolve(sts2_core::Effect::GainBlock {
+                    recipient: player,
+                    amount: sts2_core::Amount::Var(V::CardVar::BLOCK),
+                    scaling: sts2_core::Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Played::Done
+        }
+        // `HuddleUp`: its `Cards` drawn by each living player, its owner too,
+        // one after another.
+        __c0 if __c0 == V::Card::HUDDLE_UP => {
+            let cards = fight.var(V::CardVar::CARDS);
+            for player in crate::behaviour::cards::teammates::<V, _>(fight) {
+                fight.for_player(player, |fight| {
+                    fight.draw(cards);
+                });
+            }
+            Played::Done
+        }
+        // `BelieveInYou`: its energy to the ally it is pointed at.
+        __c0 if __c0 == V::Card::BELIEVE_IN_YOU => {
+            let energy = fight.var(V::CardVar::ENERGY);
+            let target = fight.target();
+            fight.for_player(target, |fight| fight.modify_energy(energy));
+            Played::Done
+        }
+        // `Coordinate`: its `StrengthPower` as Coordinate on the ally it is
+        // pointed at, which lends that much Strength for the turn.
+        __c0 if __c0 == V::Card::COORDINATE => {
+            let strength = fight.var(V::CardVar::STRENGTH_POWER);
+            fight.apply_power(
+                fight.target(),
+                V::Power::COORDINATE_POWER,
+                sts2_core::PowerAmount::Counted(strength),
+            );
+            Played::Done
+        }
         // `Scrawl`: cards drawn until the hand is full.
         __c0 if __c0 == V::Card::SCRAWL => {
             let room =
@@ -156,9 +215,10 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             if resumed!().fight.waiting() {
                 yield_!(Ask::Waiting);
             }
-            let offered: Cards<V> = seeker_strike_offer::<V, _>(resumed!().fight);
+            let offered = seeker_strike_offer::<V, _>(resumed!().fight);
             yield_!(Ask::AskingAmong {
-                cards: offered,
+                pile: Pile::Draw,
+                filter: crate::behaviour::CardFilter::OneOf(offered),
                 selection: ONE,
             });
             into_hand_taken::<V, K>(resumed!());
@@ -186,18 +246,18 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
         }
         // `SecretWeapon`: one Attack of the draw pile picked, into hand.
         __c0 if __c0 == V::Card::SECRET_WEAPON => {
-            let attacks: Cards<V> = of_kind_in_draw::<V, _>(resumed!().fight, CardKind::Attack);
             yield_!(Ask::AskingAmong {
-                cards: attacks,
+                pile: Pile::Draw,
+                filter: crate::behaviour::CardFilter::Kind(CardKind::Attack),
                 selection: ONE,
             });
             into_hand_taken::<V, K>(resumed!());
         }
         // `SecretTechnique`: one Skill of the draw pile picked, into hand.
         __c0 if __c0 == V::Card::SECRET_TECHNIQUE => {
-            let skills: Cards<V> = of_kind_in_draw::<V, _>(resumed!().fight, CardKind::Skill);
             yield_!(Ask::AskingAmong {
-                cards: skills,
+                pile: Pile::Draw,
+                filter: crate::behaviour::CardFilter::Kind(CardKind::Skill),
                 selection: ONE,
             });
             into_hand_taken::<V, K>(resumed!());
@@ -323,15 +383,6 @@ fn block<V: crate::Build, F: Fight<V>>(fight: &mut F, amount: Number) {
         scaling: Scaling::Dynamic,
     });
     fight.apply(block);
-}
-
-/// The cards of the draw pile of `kind`.
-fn of_kind_in_draw<V: crate::Build, F: Fight<V>>(fight: &F, kind: CardKind) -> Cards<V> {
-    fight
-        .cards_in(Pile::Draw)
-        .into_iter()
-        .filter(|&at| V::card_kind(fight.card_ident(at).card) == Some(kind))
-        .collect()
 }
 
 /// `CardPileCmd.Add` of the one a pick took, into hand.
@@ -571,7 +622,9 @@ fn dealt<V: crate::Build>(results: &sts2_core::AttackResults<V>) -> Number {
 
 /// `SeekerStrike`'s offer, once its attack is over: its `Cards` of the draw
 /// pile drawn off `CombatCardSelection`, in the pile's order.
-fn seeker_strike_offer<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Cards<V> {
+fn seeker_strike_offer<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+) -> smallvec::SmallVec<[sts2_core::CardId<V>; sts2_core::MAX_CARDS_IN_HAND]> {
     use sts2_core::RunStreamKinds as _;
 
     let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_SELECTION;
@@ -579,11 +632,7 @@ fn seeker_strike_offer<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Cards<V> 
     fight.stable_shuffle_cards(&mut shuffled, stream);
     let options = usize::try_from(fight.var(V::CardVar::CARDS)).expect("a few cards");
     shuffled.truncate(options);
-    fight
-        .cards_in(Pile::Draw)
-        .into_iter()
-        .filter(|card| shuffled.contains(card))
-        .collect()
+    shuffled.iter().map(|card| card.id()).collect()
 }
 
 /// The rest of `Jackpot`, once its attack is over: its `Cards` of the
@@ -654,7 +703,7 @@ pub(super) fn event_hook<V: crate::Build>(
     match (card, hook) {
         // `Bolas.BeforeHandDraw` and `ThrummingHatchet.BeforeHandDraw`: back
         // into hand, from wherever it is, once this copy finished a play in
-        // its owner's last turn. A fight here has one player.
+        // its owner's last turn.
         (__c0, EventHook::BeforeHandDraw { turn, .. })
             if (__c0 == V::Card::BOLAS || __c0 == V::Card::THRUMMING_HATCHET) =>
         {

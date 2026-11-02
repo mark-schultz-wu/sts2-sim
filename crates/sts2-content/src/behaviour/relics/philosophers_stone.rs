@@ -38,8 +38,13 @@ pub(super) fn event_hook<V: crate::Build>(
 }
 
 /// `ModifyMaxEnergy`: its energy, on every turn.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
+        // `player != base.Owner`: another player's number is left as it is.
+        ModifyHook::MaxEnergy { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::MaxEnergy { .. } => Modify::Added(V::Relic::PHILOSOPHERS_STONE_ENERGY),
         hook => unimplemented!("what PhilosophersStone does for {hook:?}"),
     }

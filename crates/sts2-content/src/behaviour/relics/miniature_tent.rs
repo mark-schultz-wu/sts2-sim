@@ -4,9 +4,14 @@
 use sts2_core::{DecisionHook, EventHook, HookResponse};
 
 /// `ShouldDisableRemainingRestSiteOptions`: no, for its owner.
-pub(super) fn decide_hook<V: crate::Build>(hook: DecisionHook<V>) -> HookResponse<bool> {
+pub(super) fn decide_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: DecisionHook<V>,
+) -> HookResponse<bool> {
     match hook {
-        DecisionHook::ShouldDisableRemainingRestSiteOptions => HookResponse::Decision(false),
+        DecisionHook::ShouldDisableRemainingRestSiteOptions { player } => {
+            HookResponse::Decision(player != owner)
+        }
         _ => HookResponse::DoesNotImplement,
     }
 }

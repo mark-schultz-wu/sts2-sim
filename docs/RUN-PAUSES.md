@@ -50,8 +50,9 @@ data, and not a function stopped part-way.
 3. **A room parks on the coroutine.** It holds the question shown and the
    paused `pickup`. The observation and the legal answers read the
    question, as they read `Asked::pickup` now.
-4. **A purchase is a coroutine.** `purchase` spends, obtains or removes,
-   and clears the shelf after, with Lord's Parasol's next shelf.
+4. **A purchase is the steps of a pickup.** A relic bought runs its
+   pickup, then a step that clears its shelf, and for Lord's Parasol goes
+   on from the next shelf. The card removal is a question a pickup asks.
    `Unfinished` goes.
 
 The run lent for a step is `&mut State`. The paused coroutine comes out
@@ -68,8 +69,14 @@ step, and no room holds it. `cargo xtask instructions` checks each step.
 Each step is one PR, with the golden replays, the census and
 `cargo xtask instructions` against the step before.
 
-1. **`pickup`.** `carry_out`, `Asked`, `rest`, `under`, `Then` and the
-   answer for each kind of `Pickup` become the coroutine. The rooms park
-   on it.
-2. **`purchase`.** The shop's `Unfinished` becomes the coroutine, which
-   delegates to `pickup` for a relic's.
+1. **`pickup`** (done). `carry_out` starts the coroutine, and `rest`,
+   `under` and the answer for each kind of `Pickup` went into it. The
+   rooms park on it. The shop's clone of a deck card is now the pickup's
+   own question, so `Unfinished::Pickup` went too. `yield_all!` starts a
+   delegate with nothing lent, so a pickup drives the pickups inside it a
+   step at a time.
+2. **Purchases** (done). A shop's purchase needs no coroutine of its own:
+   it is the steps of a pickup. `Then::Purchased` clears a shelf once its
+   relic's pickup is done, and Lord's Parasol's goes on from the next
+   shelf. `Pickup::CardRemoval` is the merchant's removal. `Unfinished`
+   and `finish_purchase` went.
