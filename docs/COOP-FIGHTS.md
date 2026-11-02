@@ -7,25 +7,32 @@ source, `target/decompiled/v0.111.0-1579942752/`.
 ## Where the simulator stands
 
 `cargo xtask coop --hunt` plays a simulator seat beside each game seat.
-Every seed matches each step through its first fight's opening. The run
-builds a fight of every player: their creatures first, their decks
-shuffled in seat order, and the monsters' health scaled. Each relic hears
-a draw or energy hook only for its own player, as each of the game's
-checks `player != Owner`. An `AnyPlayer` potion can be aimed at any
-player. A player who ends the turn waits with no moves until every player
-ends it. Then each phase of the turn's end runs for each player in seat
-order, and the side's hooks run once.
+Every seed matches each step through its first fight and its rewards. The run builds a fight of every player: their creatures
+first, their decks shuffled in seat order, and the monsters' health
+scaled. Each relic reads its own owner, as each of the game's compares
+with `Owner`. An `AnyPlayer` potion can be aimed at any player. A player
+who ends the turn waits with no moves until every player ends it. Then
+each phase of the turn's end runs for each player in seat order, and the
+side's hooks run once. A monster's attack hits every living player, the
+cards a move gives go to each, and an enemy's powered block is scaled. A
+card play that stops on a question waits at the front of its player's
+queue with its command frames. The other players act around it. A won
+fight hands each player back their health, and rolls each player's
+rewards in seat order before any is offered. A player who dies beside a
+living one loses their cards and sits out each turn. They come back at 1
+HP when the fight is won.
 
 What still assumes one player:
 
-- `Live::asking` holds one question, and `Live::deferred` one stack of
-  command frames.
+- `Live::asking` and `Live::deferred` hold the question and command
+  frames of the action in play. A question the turn loop asks belongs to
+  no player's queue.
 - A phase of the turn's end that waits on a question, and an extra turn,
   panic in a fight of several players.
-- A monster's move reaches one player (`Board::seat_of_several` panics).
-- A player's death beside a living one, cards given to several players,
-  and a potion thrown at another player panic.
-- Nothing scales monster block or powers yet.
+- A potion thrown at another player panics, and so does a player's death
+  inside their own card or potion beside a living one.
+- Nothing scales monster powers yet.
+- `FightView::player` panics in a fight of several players.
 - `monster.rs` reads seat 0's stream positions.
 
 ## The game's model
@@ -71,8 +78,8 @@ After `ReadyToBeginEnemyTurn` come each player's flush and
 **The enemies' turn.** A move's targets are every player creature, and an
 attack hits every living one (MonsterModel.cs:435-450,
 AttackCommand.cs:257-267, 557-559). A status card or debuff a move gives
-goes to every player. Thieving Hopper alone steals from the local player
-(ThievingHopper.cs:189), so each machine sees a different theft.
+goes to every player. Thieving Hopper steals a card from each living
+player. Only its animation reads the local player (ThievingHopper.cs:189).
 
 **Hooks.** Listeners are walked creature by creature: each player's
 powers, relics, potions, orbs and cards, in player order, then the
@@ -101,8 +108,8 @@ The simulator models one machine's view, as the rest of co-op does: seat
    potions and the turn's end go through the queues, with the action
    types, the gating and the cancellations.
 4. **Moves over several players.** A move's attacks and the cards and
-   powers it gives reach every living player. Thieving Hopper steals from
-   the seat's own player.
+   powers it gives reach every living player. Thieving Hopper steals a
+   card from each living player.
 5. **Death beside a living player.** The dead player's cards leave, it is
    readied, its listeners drop out, and a win revives it.
 
@@ -120,6 +127,5 @@ follow when a run's turn reaches a pause, and step 5 when a player dies.
 1. The game lets a player take back their end of turn
    (`UndoEndPlayerTurnAction`). The headless seats never offer it. The
    recommendation is to leave it out until a front end wants it.
-2. Thieving Hopper steals from a different player on each machine. The
-   recommendation is to model each seat's own view, as the merchant's
-   purchases already do, rather than one shared theft.
+2. Thieving Hopper steals a card from each living player, the same on
+   every machine. Only its animation reads the local player.

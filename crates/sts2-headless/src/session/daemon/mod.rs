@@ -13,9 +13,8 @@
 //! two it is talking to puts a socket in the vocabulary. That vocabulary exists
 //! to have no socket in it.
 //!
-//! So a caller holds a [`Session`](crate::Session) and drives it through
-//! [`Play`](sts2_core::Play), exactly as it drives an
-//! [`Oracle`](crate::Oracle) or a simulator. It never learns that any of this
+//! So a caller holds a [`Session`](crate::Session) and drives it exactly as it
+//! drives an [`Oracle`](crate::Oracle) or a simulator. It never learns that any of this
 //! is here.
 
 pub(crate) mod protocol;

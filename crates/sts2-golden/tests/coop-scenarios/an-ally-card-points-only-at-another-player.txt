@@ -1,0 +1,7 @@
+# The targeting screen points a card at any ally only at another living
+# player: not at its own player, and not at Osty. Believe In You is offered
+# at the Ironclad alone, and gives the Ironclad its energy.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"NECROBINDER"},{"character":"IRONCLAD"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":1,"seat":0}

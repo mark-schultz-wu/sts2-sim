@@ -11,9 +11,17 @@ use crate::ids::CardIds as _;
 /// `AddGeneratedCardsToCombat` of three Dazed into the draw pile, each at
 /// `CardPilePosition.Random`.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // `player != Owner`: another player's turn is not its owner's.
+    if let EventHook::BeforeHandDraw { player, .. } = hook
+        && player != owner
+    {
+        return;
+    }
     match hook {
         EventHook::BeforeHandDraw { turn: 1, .. } => asked.push(HookEffect::AddToDrawAtRandom {
             card: V::Card::DAZED,

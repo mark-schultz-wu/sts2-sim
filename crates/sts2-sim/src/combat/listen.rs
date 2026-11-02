@@ -58,11 +58,7 @@ pub(crate) fn owner<V: Rules>(
     match listener {
         Listener::Relic { seat, .. } => Some(seat),
         Listener::Power { owner, .. } => live.seat_of(owner),
-        Listener::Card { id } => live
-            .players
-            .seated()
-            .find(|(_, player)| player.cards.named(id).is_some())
-            .map(|(seat, _)| seat),
+        Listener::Card { id } => live.card_seat(id),
         Listener::Monster { .. } | Listener::Modifier { .. } => None,
     }
 }
@@ -311,6 +307,7 @@ pub(crate) enum Found<'a, V: Rules> {
         overrides: Overrides,
     },
     Potion {
+        seat: sts2_core::SeatIndex,
         potion: V::Potion,
         overrides: Overrides,
     },
@@ -398,7 +395,7 @@ fn listed<'a, V: Rules, S: Sought>(
     for (creature_at, creature) in live.creatures.iter().enumerate() {
         // `Contains`: a dead player's `DeactivateHooks` takes its own powers
         // out, as it does its belts, potions and cards.
-        if kinds.powers && !(live.lost && matches!(creature.model, Some(ModelId::Character(_)))) {
+        if kinds.powers && !live.deaf(creature) {
             for (at, held) in live.powers.of(creature.id).enumerate() {
                 let overrides = held.power().overrides();
                 if sought.sought_by(overrides) {
@@ -472,7 +469,11 @@ fn listed_potions<'a, V: Rules>(
     for &potion in live.players[seat].potions.held() {
         let overrides = sts2_core::PotionTable::overrides(potion);
         if overrides.intersects(hooks) {
-            found(Found::Potion { potion, overrides });
+            found(Found::Potion {
+                seat,
+                potion,
+                overrides,
+            });
         }
     }
 }
@@ -614,8 +615,7 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                             None => continue,
                         },
                     };
-                    if live.lost && matches!(fighter.model, Some(sts2_core::ModelId::Character(_)))
-                    {
+                    if live.deaf(fighter) {
                         continue;
                     }
                     let carrier = fighter.carrier();
@@ -623,6 +623,7 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                         Some(held) if held.instance == instance => Some(usize::from(at)),
                         _ => live.powers.place_of(owner, instance),
                     };
+                    let hook = live.as_heard_by(|| live.seat_of(owner), hook);
                     match at {
                         Some(at) => live.ask_power_as(Some(&*belts), carrier, at, hook, asked),
                         // Taken off since the walk began: asked as a model on
@@ -656,20 +657,23 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                 }
                 Snapped::Relic { seat, slot, relic } => {
                     // `Contains`: its owner is active for hooks.
-                    if live.lost {
+                    if live.players[seat].deaf {
                         continue;
                     }
                     if belts[seat].get(usize::from(slot)).map(|held| held.relic) != Some(relic) {
                         unimplemented!("the belt changing under a walk over {hook:?}")
                     }
                     let (state, belt) = belts[seat].state_beside(usize::from(slot));
-                    V::relic_event_hook(state, belt, hook, asked);
+                    let hook = live.as_heard_by(|| Some(seat), hook);
+                    V::relic_event_hook(state, belt, live.relic_owner(seat), hook, asked);
                     Listener::Relic { seat, slot }
                 }
                 Snapped::Card { seat, id } => {
                     // `Contains`: still in the fight, and its owner active for
                     // hooks.
-                    if live.lost || !ask_card(seat, live, id, hook, asked) {
+                    if live.players[seat].deaf
+                        || !ask_card(seat, live, id, live.as_heard_by(|| Some(seat), hook), asked)
+                    {
                         continue;
                     }
                     Listener::Card { id }
@@ -780,6 +784,23 @@ fn ask_card<V: Rules>(
     let Some(card) = live.players[seat].cards.named(id) else {
         return false;
     };
+    // A hook raised for one player reaches another player's card, which
+    // returns at once: each of the game's checks `player == Owner`.
+    if let EventHook::BeforeHandDraw { player, .. }
+    | EventHook::EnergyReset { player, .. }
+    | EventHook::EnergyResetLate { player, .. }
+    | EventHook::PlayerTurnStart { player, .. }
+    | EventHook::PlayerTurnStartLate { player, .. }
+    | EventHook::AutoPrePlayPhaseEarly { player, .. }
+    | EventHook::AutoPrePlayPhase { player, .. }
+    | EventHook::AutoPrePlayPhaseLate { player, .. }
+    | EventHook::AutoPostPlayPhase { player, .. }
+    | EventHook::StarsSpent { player, .. }
+    | EventHook::HandEmptied { player, .. } = hook
+        && player != seat.creature()
+    {
+        return false;
+    }
     let model_hook = hook
         .model_hook()
         .unwrap_or_else(|| unreachable!("{hook:?} is asked of one model, not raised"));
@@ -788,9 +809,10 @@ fn ask_card<V: Rules>(
         V::card_event_hook(
             ident.card,
             id,
+            seat.creature(),
             live.players[seat].cards.pile_of(id),
             &card,
-            live.history(),
+            live.history(seat.creature()),
             hook,
             asked,
         );
@@ -896,7 +918,11 @@ pub(crate) fn unblocked_damage_target<V: Rules>(
             pet_of: creature.owner,
             alive: creature.alive,
         };
-        let listener = held.listener(creature.carrier(), fight.live.history(), &onlookers);
+        let listener = held.listener(
+            creature.carrier(),
+            fight.live.history(creature.id),
+            &onlookers,
+        );
         if V::decide_hook(listener, hook).is_decision_and(|takes| takes) {
             chosen = creature.id;
         }
@@ -1025,7 +1051,11 @@ pub(crate) fn each<V: Rules>(
                 overrides,
                 ..
             } => ask(
-                held.listener(creature.carrier(), live.history(), &onlookers),
+                held.listener(
+                    creature.carrier(),
+                    live.history(creature.carrier().player),
+                    &onlookers,
+                ),
                 overrides,
             ),
             Found::Monster {
@@ -1052,9 +1082,17 @@ pub(crate) fn each<V: Rules>(
                 },
                 overrides,
             ),
-            Found::Potion { potion, overrides } => {
-                ask(sts2_core::Listener::Potion(potion), overrides)
-            }
+            Found::Potion {
+                seat,
+                potion,
+                overrides,
+            } => ask(
+                sts2_core::Listener::Potion {
+                    potion,
+                    owner: seat.creature(),
+                },
+                overrides,
+            ),
             Found::Card {
                 seat,
                 id,
@@ -1081,9 +1119,10 @@ pub(crate) fn each<V: Rules>(
                 let listener = sts2_core::Listener::Card {
                     card: ident.card,
                     id,
+                    owner: seat.creature(),
                     printed: &card,
                     pile: live.players[seat].cards.pile_of(id),
-                    history: live.history(),
+                    history: live.history(seat.creature()),
                 };
                 ask(listener, overrides);
             }
@@ -1130,35 +1169,59 @@ pub(crate) fn first_deciding<V: Rules>(
         .unwrap_or_else(|| unreachable!("{hook:?} is asked of one power, not raised"));
     let hooks = Overrides::of(model_hook);
     Kinds::hearing(fight.live, fight.belts, hooks)?;
+    first_of::<V>(fight, hooks, hook, answer).map(|(model, _)| model)
+}
+
+/// [`first_deciding`], with the seat whose belt holds the model where it is
+/// a relic.
+pub(crate) fn first_deciding_placed<V: Rules>(
+    fight: Walk<'_, V>,
+    hook: DecisionHook<V>,
+    answer: bool,
+) -> Option<(sts2_core::ModelId<V>, Option<sts2_core::SeatIndex>)> {
+    let model_hook = hook
+        .model_hook()
+        .unwrap_or_else(|| unreachable!("{hook:?} is asked of one power, not raised"));
+    let hooks = Overrides::of(model_hook);
+    Kinds::hearing(fight.live, fight.belts, hooks)?;
     first_of::<V>(fight, hooks, hook, answer)
 }
 
-/// [`first_deciding`] once something hears `hook`.
+/// [`first_deciding_placed`] once something hears `hook`.
 #[inline(never)]
 fn first_of<V: Rules>(
     fight: Walk<'_, V>,
     hooks: Overrides,
     hook: DecisionHook<V>,
     answer: bool,
-) -> Option<sts2_core::ModelId<V>> {
+) -> Option<(sts2_core::ModelId<V>, Option<sts2_core::SeatIndex>)> {
     let mut first = None;
     each::<V>(fight, hooks, |listener, _| {
         if first.is_none() && V::decide_hook(listener, hook).is_decision_and(|said| said == answer)
         {
             first = Some(match listener {
-                sts2_core::Listener::Power { power, .. } => sts2_core::ModelId::Power(power),
-                sts2_core::Listener::Monster { monster, .. } => {
-                    sts2_core::ModelId::Monster(monster)
+                sts2_core::Listener::Power { power, .. } => {
+                    (sts2_core::ModelId::Power(power), None)
                 }
-                sts2_core::Listener::Card { card, .. } => sts2_core::ModelId::Card(card),
-                sts2_core::Listener::Potion(potion) => sts2_core::ModelId::Potion(potion),
-                sts2_core::Listener::Modifier(modifier) => sts2_core::ModelId::Modifier(modifier),
+                sts2_core::Listener::Monster { monster, .. } => {
+                    (sts2_core::ModelId::Monster(monster), None)
+                }
+                sts2_core::Listener::Card { card, .. } => (sts2_core::ModelId::Card(card), None),
+                sts2_core::Listener::Potion { potion, .. } => {
+                    (sts2_core::ModelId::Potion(potion), None)
+                }
+                sts2_core::Listener::Modifier(modifier) => {
+                    (sts2_core::ModelId::Modifier(modifier), None)
+                }
                 // The relic whose model this is, which only its place on the
                 // belt names.
-                sts2_core::Listener::Relic { state, .. } => sts2_core::ModelId::Relic({
+                sts2_core::Listener::Relic { state, .. } => {
                     let (seat, slot) = super::relic::place_of::<V>(fight.belts, state);
-                    fight.belts[seat][slot].relic
-                }),
+                    (
+                        sts2_core::ModelId::Relic(fight.belts[seat][slot].relic),
+                        Some(seat),
+                    )
+                }
             });
         }
     });
@@ -1172,6 +1235,7 @@ fn first_of<V: Rules>(
 ///
 /// A relic that is not on the belt.
 pub(crate) fn ask_relic<V: Rules>(
+    live: &Live<V>,
     seat: sts2_core::SeatIndex,
     belts: &mut Belts<V>,
     relic: V::Relic,
@@ -1183,7 +1247,7 @@ pub(crate) fn ask_relic<V: Rules>(
         .expect("the relic asked is on the belt");
     let (state, belt) = belts[seat].state_beside(slot);
     let mut asked = sts2_core::HookEffects::new();
-    V::relic_event_hook(state, belt, hook, &mut asked);
+    V::relic_event_hook(state, belt, live.relic_owner(seat), hook, &mut asked);
     asked
 }
 
@@ -1202,6 +1266,37 @@ fn decides<V: Rules>(
     decided
 }
 
+/// `ReviveBeforeCombatEnd` for each player a won fight left dead:
+/// `CreatureCmd.Heal` of one hit point. `HealInternal` brings the player
+/// back with their hooks on again, and `AfterCurrentHpChanged` follows.
+pub(crate) fn revive_the_dead<V: Rules>(fighting: super::Fighting<'_, V>) {
+    let super::Fighting {
+        live,
+        streams,
+        belts,
+    } = fighting;
+    let ascension = live.ascension;
+    for seat in super::turn::seats(live) {
+        if live.player(seat).alive {
+            continue;
+        }
+        // `ActivateHooks`, as the heal brings the player back.
+        live.players[seat].deaf = false;
+        belts[seat].rehear();
+        live.players[seat].potions.rehear();
+        let mut board = super::board::Board::for_card(
+            seat,
+            live,
+            streams.combat(),
+            belts,
+            ascension,
+            None,
+            None,
+        );
+        sts2_core::Fight::heal(&mut board, seat.creature(), num_traits::one());
+    }
+}
+
 /// `AfterCombatEnd`, then `AfterCombatVictory`, raised on the fight's
 /// listeners once the fight is won. The run asks the deck's cards first.
 ///
@@ -1215,18 +1310,18 @@ fn decides<V: Rules>(
 ///
 /// A listener asking for anything else at the second, which nothing here
 /// carries out.
-pub(crate) fn combat_ended<V: Rules>(
-    seat: sts2_core::SeatIndex,
-    live: &mut Live<V>,
-    belts: &mut Belts<V>,
-) {
+pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, belts: &mut Belts<V>) {
+    // What no one player owns acts as the first.
+    let host = sts2_core::SeatIndex(0);
     // What a listener asks of the run, which carries it out as it leaves.
     let room = live.room();
     let mut walking = Walking::begin(live, belts, EventHook::CombatEnd { room });
-    while let Some((_, effect)) = walking
+    while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, live, belts))
+        .and_then(|walking| walking.next(host, live, belts))
     {
+        // Each listener acts for its owner.
+        let seat = owner::<V>(live, listener).unwrap_or(host);
         match effect {
             // `CreatureCmd.GainMaxHp` on the player's creature, which the
             // fight still holds: the maximum grows, and the health with it.
@@ -1239,25 +1334,18 @@ pub(crate) fn combat_ended<V: Rules>(
             // `RelicCmd.Melt`, at once: the relic it melts hears no hook the
             // fight raises after this one.
             HookEffect::MeltFirstWax => belts[seat].melt_first_wax(),
-            effect => live.leaving.push(effect),
+            effect => live.leaving.push((seat, effect)),
         }
     }
-    let early = |live: &mut Live<V>| EventHook::CombatVictoryEarly {
-        room,
-        player: {
-            let player = player_of(seat, live);
-            sts2_core::PlayerHealth {
-                hp: player.hp,
-                max_hp: player.max_hp,
-            }
-        },
-    };
+    let early = |_: &mut Live<V>| EventHook::CombatVictoryEarly { room };
     let hook = early(live);
     let mut walking = Walking::begin(live, belts, hook);
-    while let Some((_, effect)) = walking
+    while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, live, belts))
+        .and_then(|walking| walking.next(host, live, belts))
     {
+        // Each listener acts for its owner.
+        let seat = owner::<V>(live, listener).unwrap_or(host);
         match effect {
             // `CreatureCmd.Heal`, which caps at the maximum. The listeners
             // after it read the health it left.
@@ -1274,10 +1362,12 @@ pub(crate) fn combat_ended<V: Rules>(
         }
     }
     let mut walking = Walking::begin(live, belts, EventHook::CombatVictory { room });
-    while let Some((_, effect)) = walking
+    while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, live, belts))
+        .and_then(|walking| walking.next(host, live, belts))
     {
+        // Each listener acts for its owner.
+        let seat = owner::<V>(live, listener).unwrap_or(host);
         match effect {
             // `CreatureCmd.Heal`, which caps at the maximum.
             HookEffect::Heal(amount) => {
@@ -1288,7 +1378,7 @@ pub(crate) fn combat_ended<V: Rules>(
             // The deck and the belt are the run's, which carries these out as
             // it leaves.
             effect @ (HookEffect::UpgradeRandomDeckCards { .. }
-            | HookEffect::ReplaceRelic { .. }) => live.leaving.push(effect),
+            | HookEffect::ReplaceRelic { .. }) => live.leaving.push((seat, effect)),
             effect => unimplemented!("a listener asking for {effect:?} as a fight is won"),
         }
     }

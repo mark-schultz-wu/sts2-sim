@@ -24,24 +24,25 @@ pub(crate) fn drink<V: Rules>(
         belts,
     } = fighting;
     let ascension = live.ascension;
-    // An `AnyPlayer` potion acts on the player it is aimed at, and the
-    // potions here act on their drinker.
-    if let Some(target) = target
-        && target != seat.creature()
-        && super::turn::seats(live).any(|other| other.creature() == target)
-    {
-        unimplemented!("{potion:?} thrown at another player")
-    }
+    // A potion that names `Self`, or `AnyPlayer` with one player to aim at,
+    // is used on its drinker. Its own effect acts for the player it is aimed
+    // at, and its drinker applies what it applies.
+    let target = target.or_else(|| on_drinker::<V>(potion).then(|| seat.creature()));
+    let reaching = super::live::potion_reaching(live, seat, target);
     // `Hook.BeforePotionUsed`, which nothing that listens answers with more
     // than what it writes on itself.
-    let hook = sts2_core::EventHook::PotionUsing { target };
+    let hook = sts2_core::EventHook::PotionUsing {
+        player: seat.creature(),
+        target,
+    };
     if let Some((listener, effect)) = super::listen::first_answer::<V>(seat, live, belts, hook) {
         unimplemented!("{listener:?} asking for {effect:?} before a potion")
     }
     // `BeginCardOrPotionEffect`.
     live.players[seat].effect_depth += 1;
-    let mut board =
-        Board::for_card(seat, live, streams.combat(), belts, ascension, target, None).blocking();
+    let mut board = Board::for_card(seat, live, streams.combat(), belts, ascension, target, None)
+        .blocking()
+        .reaching(reaching);
     let used = V::on_use::<super::board::BoardKind<V>>(potion, &mut board);
     let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
@@ -64,8 +65,23 @@ pub(crate) fn drink<V: Rules>(
             asker: super::live::Asker::Potion(potion),
             target,
             ended,
+            branched: false,
+            chooser: None,
+            context: None,
         },
         used,
         true,
     )
+}
+
+/// Whether `potion` is used on its drinker where it is aimed at nobody. Its
+/// target type is `Self`, or `AnyPlayer`, which a run of one player aims at
+/// that player.
+fn on_drinker<V: Rules>(potion: V::Potion) -> bool {
+    use sts2_core::{PotionTable as _, TargetKinds as _};
+
+    let target = potion
+        .target()
+        .unwrap_or_else(|| V::computed_potion_target(potion, true));
+    target == V::TargetType::SELF || target == V::TargetType::ANY_PLAYER
 }
