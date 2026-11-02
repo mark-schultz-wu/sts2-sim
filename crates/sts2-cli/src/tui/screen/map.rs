@@ -9,7 +9,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use sts2_core::{Coord, Decision, Map, Play};
+use sts2_core::{Coord, Decision, Map};
 
 use crate::render::spelling;
 use crate::tui::app::App;
@@ -17,11 +17,9 @@ use crate::tui::theme;
 
 use super::titled;
 
-pub fn draw<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, map: &Map<V>)
+pub fn draw<V>(frame: &mut Frame, area: Rect, app: &App<V>, map: &Map<V>)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     let moves = app.moves();
     let rows = (moves.len() as u16 + 2).clamp(3, 8);

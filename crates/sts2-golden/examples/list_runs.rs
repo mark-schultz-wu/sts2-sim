@@ -6,7 +6,7 @@
 //! ```
 //!
 //! Each line is the seed, the character, the ascension and the modifiers
-//! (`-` for none), separated by tabs. That is everything `record_run` needs
+//! (`-` for none), separated by tabs. That is everything `sts2-run` needs
 //! to play the run again. The moves are the game's random picks from the
 //! seed, so a run played again picks the same ones while its lists match.
 

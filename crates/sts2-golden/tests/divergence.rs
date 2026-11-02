@@ -20,8 +20,8 @@ use sts2_core::Digested;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
-    Combat, Construct, Creature, Decided, Observed, Play, Playable, Position, Positions,
-    PowerAmount, Rules, Snapshot, Step,
+    Combat, Creature, Decided, Observed, Playable, Position, Positions, PowerAmount, Rules,
+    Snapshot, Step,
 };
 use sts2_golden::{golden_dir, oracle_or_explain, recording};
 
@@ -30,7 +30,7 @@ type V = V0_107_1;
 /// One run: the steps to replay, and how far they are known to get.
 struct Golden<V: sts2_content_wire::WireContentVersion> {
     name: String,
-    /// What the run was started with, which `Play::begin` takes and no step
+    /// What the run was started with, which `begin` takes and no step
     /// spells.
     start: sts2_core::Start<V>,
     steps: Vec<Step<V>>,
@@ -89,11 +89,11 @@ fn replay<V: Rules + sts2_content_wire::WireContentVersion>(
 ) -> (usize, Option<Stopped>) {
     let mut oracle = oracle_or_explain(&golden.name, &golden.start);
 
-    // Starting is not a step. `Play::begin` takes it, and is the one thing
+    // Starting is not a step. `begin` takes it, and is the one thing
     // with a single result: a run that did not start has nothing to report
     // from. A simulator that cannot even begin has got nowhere.
     let begun = panic::catch_unwind(AssertUnwindSafe(|| {
-        sts2_sim::Sim::<V>::begin((), &golden.start)
+        sts2_sim::Sim::<V>::begin(&golden.start)
     }));
     let mut sim = match begun {
         Ok(Ok(sim)) => sim,
@@ -114,7 +114,7 @@ fn replay<V: Rules + sts2_content_wire::WireContentVersion>(
 fn compare<V: Rules + sts2_content_wire::WireContentVersion, E: std::fmt::Display>(
     stepped: std::thread::Result<Result<sts2_sim::run::Settled<V>, E>>,
     sim: &mut sts2_sim::Sim<V>,
-    oracle: &mut impl Construct<V, Error = impl std::fmt::Display>,
+    oracle: &mut sts2_headless::Cached<sts2_golden::NoGame>,
     step: &Step<V>,
     at: usize,
     golden: &Golden<V>,
@@ -148,7 +148,7 @@ fn compare<V: Rules + sts2_content_wire::WireContentVersion, E: std::fmt::Displa
     // A decision says what it decided; where it left the run is the second
     // question, and comparing two implementations means asking both.
     let want = oracle
-        .observe()
+        .observe::<V>()
         .unwrap_or_else(|e| panic!("{}: step {at}: {e}", golden.name));
     // The simulator's half is hashed off the run itself, which builds nothing.
     // Its report is built only once the two disagree, to name the fields.
