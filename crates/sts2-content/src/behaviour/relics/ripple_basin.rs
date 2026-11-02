@@ -3,8 +3,6 @@
 use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect};
 
-use crate::generated::runstate::CombatSide;
-
 /// Whether one of its owner's attacks finished a play this turn, which
 /// `BeforeSideTurnEnd` reads off `CardPlaysFinished`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -13,28 +11,29 @@ pub struct State {
 }
 
 /// `BeforeSideTurnEnd` on its owner's side: its block, unpowered, where no
-/// attack of its owner's finished a play this turn. A fight here has one
-/// player, whose plays are all its owner's.
+/// attack of its owner's finished a play this turn.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::CardPlayed { card, .. }
-            if <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Attack) =>
+        EventHook::CardPlayed { card, player, .. }
+            if player == owner
+                && <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Attack) =>
         {
             state.attacked = true;
         }
-        EventHook::BeforeSideTurnEnd {
-            side: CombatSide::Player,
-            ..
-        } if !state.attacked => asked.push(HookEffect::GainBlock(V::Relic::RIPPLE_BASIN_BLOCK)),
-        EventHook::BeforeSideTurnStart {
-            side: CombatSide::Player,
-            ..
+        EventHook::BeforeSideTurnEnd { participants, .. }
+            if participants.contains(owner) && !state.attacked =>
+        {
+            asked.push(HookEffect::GainBlock(V::Relic::RIPPLE_BASIN_BLOCK))
         }
-        | EventHook::CombatEnd { .. } => state.attacked = false,
+        EventHook::BeforeSideTurnStart { participants, .. } if participants.contains(owner) => {
+            state.attacked = false
+        }
+        EventHook::CombatEnd { .. } => state.attacked = false,
         _ => {}
     }
 }

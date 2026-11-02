@@ -31,8 +31,10 @@ impl<V: crate::Build> EventBehavior<V> for DenseVegetation {
     type State = State;
 
     /// Its HP check is for a run of more than one player.
-    fn allowed(&self, _run: &impl EventView<V>) -> bool {
-        true
+    /// Any run of one player. With several, each player has more health
+    /// than its `HpLoss`, which the run asks of every player.
+    fn allowed(&self, run: &impl EventView<V>) -> bool {
+        !run.multiplayer() || i64::from(run.hp()) > i64::from(HP_LOSS)
     }
 
     /// `CalculateVars`: `Rng.NextInt(61, 100)` is the gold. The heal it
@@ -58,6 +60,11 @@ impl<V: crate::Build> EventBehavior<V> for DenseVegetation {
             Page::Rest => &[(V::EventOption::DENSE_VEGETATION_REST_FIGHT, false)],
         };
         crate::behaviour::events::page::<V>(V::Event::DENSE_VEGETATION, options, state.chosen)
+    }
+
+    /// `WillKillPlayer`, for `TrudgeOn`: its hit point loss.
+    fn kills(&self, state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        matches!(state.page, Page::Initial) && option == 0 && run.hp() <= HP_LOSS
     }
 
     /// `TrudgeOn`: the damage, then the gold, which finishes the event.

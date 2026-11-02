@@ -10,16 +10,22 @@ use crate::ids::{EnchantmentIds as _, RelicIds as _, RestSiteOptionIds};
 /// `CookRestSiteOption`'s `_cardsToRemove`.
 const COOK_CARDS: usize = 2;
 
-/// `HEAL` and `SMITH`, and what `TryModifyRestSiteOptions` adds.
+/// `HEAL` and `SMITH`, `MEND` in a run of several players, and what
+/// `TryModifyRestSiteOptions` adds.
 ///
-/// `MEND` is the second player's, and a run here has one player.
 /// `IterateHookListeners` walks the deck ahead of the belt, so each
 /// Byrdonis Egg adds `HATCH` before any relic adds its option.
-pub(crate) fn offered<V: crate::Build>(added: &[V::RestSiteOption]) -> Vec<V::RestSiteOption> {
+pub(crate) fn offered<V: crate::Build>(
+    players: usize,
+    added: &[V::RestSiteOption],
+) -> Vec<V::RestSiteOption> {
     let mut offered = vec![
         <V::RestSiteOption as RestSiteOptionIds>::HEAL,
         <V::RestSiteOption as RestSiteOptionIds>::SMITH,
     ];
+    if players > 1 {
+        offered.push(<V::RestSiteOption as RestSiteOptionIds>::MEND);
+    }
     offered.extend_from_slice(added);
     offered
 }

@@ -18,7 +18,7 @@ use crate::Coord;
 ///
 /// Three commands the real game accepts are absent. `start` is not a move
 /// within a run, so it is [`Start`](crate::Start) and reaches an implementation
-/// through [`Play::begin`](crate::Play::begin). `observe` reports state without
+/// through [`RunTable::begin`](crate::RunTable::begin). `observe` reports state without
 /// advancing, and a deterministic game between commands cannot answer it twice
 /// differently. `quit` ends the session, not the run, so it is `Drop` on an
 /// implementation.
