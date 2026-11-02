@@ -903,6 +903,14 @@ pub(crate) fn observe_event<V: crate::Build>(
     crate::behaviour::events::observe::<V>(state, run)
 }
 
+pub(crate) fn event_kills<V: crate::Build>(
+    state: &V::EventState,
+    option: u8,
+    run: &impl sts2_core::EventView<V>,
+) -> bool {
+    crate::behaviour::events::kills::<V>(state, option, run)
+}
+
 pub(crate) fn choose_event<V: crate::Build, R: sts2_core::rng::GameRng>(
     state: &mut V::EventState,
     option: u8,
