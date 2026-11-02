@@ -3,8 +3,6 @@
 
 use sts2_core::{CardKind, EventHook, HookEffect};
 
-use crate::generated::runstate::CombatSide;
-
 /// `WasUsedThisTurn` and `CardBeingPlayed`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct State<V: crate::Build> {
@@ -50,11 +48,10 @@ pub(super) fn event_hook<V: crate::Build>(
             state.used = true;
             state.playing = None;
         }
-        EventHook::BeforeSideTurnStart {
-            side: CombatSide::Player,
-            ..
+        EventHook::BeforeSideTurnStart { participants, .. } if participants.contains(owner) => {
+            state.used = false
         }
-        | EventHook::CombatEnd { .. } => state.used = false,
+        EventHook::CombatEnd { .. } => state.used = false,
         _ => {}
     }
 }

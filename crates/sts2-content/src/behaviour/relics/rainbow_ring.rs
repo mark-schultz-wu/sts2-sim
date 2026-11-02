@@ -4,7 +4,6 @@
 use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect, PowerAmount};
 
-use crate::generated::runstate::CombatSide;
 use crate::ids::PowerIds as _;
 
 /// Whether an attack, a skill and a power have been played this turn, and
@@ -49,11 +48,10 @@ pub(super) fn event_hook<V: crate::Build>(
                 state.activated = true;
             }
         }
-        EventHook::BeforeSideTurnStart {
-            side: CombatSide::Player,
-            ..
+        EventHook::BeforeSideTurnStart { participants, .. } if participants.contains(owner) => {
+            *state = State::default()
         }
-        | EventHook::CombatEnd { .. } => *state = State::default(),
+        EventHook::CombatEnd { .. } => *state = State::default(),
         _ => {}
     }
 }
