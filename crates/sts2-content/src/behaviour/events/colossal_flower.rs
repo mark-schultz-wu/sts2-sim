@@ -42,6 +42,11 @@ impl<V: crate::Build> EventBehavior<V> for ColossalFlower {
         )
     }
 
+    /// `WillKillPlayer`, for `ReachDeeper` and `ObtainPollinousCore`: the dig's damage.
+    fn kills(&self, state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 1 && run.hp() <= DAMAGE[state.digs]
+    }
+
     /// The first option takes the current prize's gold and finishes the
     /// event. The second deals this dig's damage and digs once more, or on
     /// the last page deals it and obtains Pollinous Core.

@@ -16,7 +16,10 @@ pub(super) fn event_hook<V: crate::Build>(
                 asked.push(HookEffect::GainMaxHp(V::Relic::DARKSTONE_PERIAPT_MAX_HP));
             }
         }
-        EventHook::CardChangedPiles { .. } | EventHook::Obtained { .. } => {}
+        // `card.Owner == base.Owner`: another player's card does nothing.
+        EventHook::AddedToDeck { .. }
+        | EventHook::CardChangedPiles { .. }
+        | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what DarkstonePeriapt does for {hook:?}"),
     }
 }
