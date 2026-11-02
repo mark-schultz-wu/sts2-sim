@@ -376,30 +376,57 @@ fn mark_inline(cfg: &mut Cfg) {
 /// `analyze_cfg::removed_statements`). A cycle is a loop, whose header
 /// stays a variant.
 ///
+/// Only the path that does not suspend needs the copy. A path that
+/// resumed from a yield came through the dispatch loop already, so it can
+/// reach the join as a variant. A block is hot where the entry reaches it
+/// without passing a resume point. Where some edges into a join are hot
+/// and some are not, each hot edge gets a copy and the others keep the
+/// join. Where every edge is hot, the first keeps it and each later one
+/// gets a copy.
+///
 /// The pass repeats to a fixed point, since a copied tree adds
 /// predecessors to the joins below it. A budget of copied statements
-/// bounds the growth: a chain of joins doubles at each step, and past
-/// the budget a join stays a variant.
+/// bounds the growth. The hot edges come first: since the resumed paths
+/// take no copies then, a chain of joins with a yield before each grows by
+/// one copy of each tree. What the budget has left then goes to every
+/// edge, as fewer variants make a smaller state enum to compile. There a
+/// chain of joins doubles at each step, and past the budget a join stays
+/// a variant.
 fn duplicate_joins(cfg: &mut Cfg) {
     let total: usize = cfg.blocks.iter().map(|b| b.stmts.len() + 1).sum();
     let mut budget = (total * JOIN_BUDGET_FACTOR).max(JOIN_BUDGET_FLOOR);
+    // The hot edges first, then every edge with what the budget has left.
+    let mut hot_only = true;
     loop {
         let preds = pred_edge_counts(cfg);
         let jump_target = jump_targets(cfg);
         let cyclic = on_cycles(cfg);
+        let hot = hot_blocks(cfg);
+        let hot_preds = hot_pred_edge_counts(cfg, &hot);
         let candidate = (0..cfg.blocks.len()).find_map(|b| {
             if b == cfg.entry || preds[b] < 2 || cfg.blocks[b].resume_point || jump_target[b] {
                 return None;
             }
+            if hot_only && hot_preds[b] == 0 {
+                return None;
+            }
             let tree = join_tree(cfg, &preds, &jump_target, &cyclic, b)?;
             let size: usize = tree.iter().map(|&t| cfg.blocks[t].stmts.len() + 1).sum();
-            let cost = size * (preds[b] - 1);
-            (cost <= budget).then_some((b, tree, cost))
+            let all_hot = !hot_only || hot_preds[b] == preds[b];
+            let copies = if all_hot { preds[b] - 1 } else { hot_preds[b] };
+            let cost = size * copies;
+            (cost <= budget).then_some((b, tree, cost, all_hot))
         });
-        let Some((b, tree, cost)) = candidate else { break };
+        let Some((b, tree, cost, all_hot)) = candidate else {
+            if std::mem::replace(&mut hot_only, false) {
+                continue;
+            }
+            break;
+        };
         budget -= cost;
-        // Keep the first edge into `b`; point each later one at a copy
-        // of the whole tree.
+        // Where every edge into `b` is hot, keep the first and point each
+        // later one at a copy of the whole tree. Otherwise each hot edge
+        // gets a copy, and the resumed ones keep `b`.
         let mut seen = false;
         for p in 0..cfg.blocks.len() {
             let mut term = std::mem::replace(
@@ -410,10 +437,13 @@ fn duplicate_joins(cfg: &mut Cfg) {
                 if *slot != b {
                     continue;
                 }
-                if !std::mem::replace(&mut seen, true) {
-                    continue;
+                let copied = match all_hot {
+                    true => std::mem::replace(&mut seen, true),
+                    false => hot[p],
+                };
+                if copied {
+                    *slot = copy_tree(cfg, &tree);
                 }
-                *slot = copy_tree(cfg, &tree);
             }
             cfg.blocks[p].terminator = term;
         }
@@ -600,6 +630,37 @@ fn on_cycles(cfg: &Cfg) -> Vec<bool> {
 }
 
 /// Predecessor edge counts, opaque-jump edges included.
+/// The blocks the entry reaches without passing a resume point: the path
+/// that does not suspend.
+fn hot_blocks(cfg: &Cfg) -> Vec<bool> {
+    let mut hot = vec![false; cfg.blocks.len()];
+    let mut stack = vec![cfg.entry];
+    while let Some(b) = stack.pop() {
+        if std::mem::replace(&mut hot[b], true) {
+            continue;
+        }
+        for s in cfg.successors(b) {
+            if !hot[s] && !cfg.blocks[s].resume_point {
+                stack.push(s);
+            }
+        }
+    }
+    hot
+}
+
+/// How many edges into each block come from `hot` blocks.
+fn hot_pred_edge_counts(cfg: &Cfg, hot: &[bool]) -> Vec<usize> {
+    let mut counts = vec![0; cfg.blocks.len()];
+    for (b, &is_hot) in hot.iter().enumerate() {
+        if is_hot {
+            for s in cfg.successors(b) {
+                counts[s] += 1;
+            }
+        }
+    }
+    counts
+}
+
 fn pred_edge_counts(cfg: &Cfg) -> Vec<usize> {
     let mut counts = vec![0usize; cfg.blocks.len()];
     for b in 0..cfg.blocks.len() {

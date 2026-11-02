@@ -58,6 +58,11 @@ impl<V: crate::Build> EventBehavior<V> for AbyssalBaths {
         crate::behaviour::events::page::<V>(V::Event::ABYSSAL_BATHS, &options, state.chosen)
     }
 
+    /// `WillKillPlayer`, for `Immerse` and `Linger`: the damage, less the maximum the dip gives.
+    fn kills(&self, state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 0 && run.hp() <= state.damage - MAX_HP
+    }
+
     /// `Immerse` and `Linger`: `OnImmerse`, its Max HP and then its damage,
     /// one more next time, and the bath page again. `Abstain` heals, and
     /// `ExitBaths` leaves. Each of those finishes the event.
