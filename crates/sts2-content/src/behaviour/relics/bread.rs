@@ -5,19 +5,20 @@ use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-use crate::generated::runstate::CombatSide;
 
 /// `AfterSideTurnStart`: its energy lost on its owner's first turn. A
 /// relic's owner is the player, and a fight here has one.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     if let EventHook::SideTurnStart {
-        side: CombatSide::Player,
+        participants,
         turn: 1,
         ..
     } = hook
+        && participants.contains(owner)
     {
         asked.push(HookEffect::LoseEnergy(V::Relic::BREAD_LOSE_ENERGY));
     }
