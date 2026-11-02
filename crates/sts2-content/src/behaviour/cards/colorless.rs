@@ -1,118 +1,83 @@
 //! The colorless cards the generator leaves to a hand port.
 
-use sts2_core::{CardKind, EventHook, Fight, HookEffect, Pile, PileAct, Played, Selection};
+use crate::behaviour::Played;
+use sts2_core::{CardKind, EventHook, Fight, FightKind, HookEffect, Pile, PileAct, Selection};
 
 use crate::behaviour::cards::Number;
+use crate::behaviour::paused::{Ask, Lent};
+
+/// One card, as a pick asks for it.
+const ONE: Selection = Selection::Exactly(nonmax::NonMaxUsize::ONE);
 use crate::generated::cards::{CardKeyword, CardRarity};
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 
-/// `Catastrophe`: its `Cards` times, a card of the draw pile auto-played.
-/// Each is the first of the playable ones `StableShuffle`d off the shuffle
-/// stream, or of the whole pile where none is playable.
-///
-/// A card it plays that asks stands the loop still. `left` is how many it
-/// still has to play once that card's play is over.
-fn catastrophe<V: crate::Build, F: Fight<V>>(fight: &mut F, left: Number) -> Played<V> {
-    use sts2_core::RunStreamKinds as _;
-
-    let stream = <V as sts2_core::ContentVersion>::RunRngType::SHUFFLE;
-    for played in 1..=left {
-        let mut playable: Vec<_> = fight
-            .cards_in(Pile::Draw)
-            .into_iter()
-            .filter(|&at| !fight.card_keyword(at, CardKeyword::Unplayable))
-            .collect();
-        fight.stable_shuffle_cards(&mut playable, stream);
-        let chosen = match playable.first() {
-            Some(&card) => Some(card),
-            None => {
-                let mut every = fight.cards_in(Pile::Draw);
-                fight.stable_shuffle_cards(&mut every, stream);
-                every.first().copied()
-            }
-        };
-        if let Some(card) = chosen {
-            fight.auto_play_card(card);
-        }
-        if fight.waiting() {
-            let left = u8::try_from(left - played).expect("a few cards left to play");
-            return Played::Waiting {
-                at: crate::behaviour::cards::Resume::Colorless(Resume::CatastropheLeft(left))
-                    .into(),
-            };
-        }
-    }
-    Played::Done
-}
-
-pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Played<V> {
+pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
+    card: V::Card,
+    fight: &mut K::Fight<'a>,
+) -> Played<V, K> {
     match card {
         __c0 if __c0 == V::Card::VOLLEY => volley::<V, _>(fight),
-        __c0 if __c0 == V::Card::CATASTROPHE => {
-            catastrophe::<V, _>(fight, fight.var(V::CardVar::CARDS))
-        }
-        // `HandOfGreed`: its damage to the target, then its `Gold` where a
-        // result says `WasTargetKilled` of a target whose death, read before
-        // the hit, triggers Fatal.
-        __c0 if __c0 == V::Card::HAND_OF_GREED => {
-            use sts2_core::{Amount, Effect, Scaling};
-
-            let target = fight.target();
-            let fatal = fight.death_triggers_fatal(target);
-            let results = fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(V::CardVar::DAMAGE),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
+        // `Lift`: its block on the ally it is pointed at.
+        __c0 if __c0 == V::Card::LIFT => {
+            let block = fight.resolve(sts2_core::Effect::GainBlock {
+                recipient: fight.target(),
+                amount: sts2_core::Amount::Var(V::CardVar::BLOCK),
+                scaling: sts2_core::Scaling::Dynamic,
             });
-            if fight.waiting() {
-                return wait::<V>(Resume::HandOfGreedHit { fatal });
-            }
-            hand_of_greed_hit::<V, _>(fight, fatal, &results)
+            fight.apply(block);
+            Played::Done
         }
-        // `Fisticuffs`: its damage to the target, then as much block as the
-        // hit dealt, overkill included.
-        __c0 if __c0 == V::Card::FISTICUFFS => {
-            use sts2_core::{Amount, Effect, Scaling};
-
-            let target = fight.target();
-            let results = fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(V::CardVar::DAMAGE),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
+        // `Mimic`: its `CalculatedBlock`, worked out from the ally it is
+        // pointed at, on its owner.
+        __c0 if __c0 == V::Card::MIMIC => {
+            let block = fight.resolve(sts2_core::Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: sts2_core::Amount::Var(V::CardVar::CALCULATED_BLOCK),
+                scaling: sts2_core::Scaling::Dynamic,
             });
-            if fight.waiting() {
-                return wait::<V>(Resume::FisticuffsHit);
-            }
-            fisticuffs_hit::<V, _>(fight, &results)
+            fight.apply(block);
+            Played::Done
         }
-        // `SecretTechnique`: one skill of the draw pile picked, into hand.
-        // `SeekerStrike`: its damage to the target, then one of three cards of
-        // the draw pile, `StableShuffle`d off `CombatCardSelection`, into hand.
-        __c0 if __c0 == V::Card::SEEKER_STRIKE => {
-            use sts2_core::{Amount, Effect, Scaling};
-
-            let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(V::CardVar::DAMAGE),
-                    scaling: Scaling::Dynamic,
+        // `Rally`: its block on each living player, its owner too.
+        __c0 if __c0 == V::Card::RALLY => {
+            for player in crate::behaviour::cards::teammates::<V, _>(fight) {
+                let block = fight.resolve(sts2_core::Effect::GainBlock {
+                    recipient: player,
+                    amount: sts2_core::Amount::Var(V::CardVar::BLOCK),
+                    scaling: sts2_core::Scaling::Dynamic,
                 });
-                fight.apply(attack);
-            });
-            if fight.waiting() {
-                return wait::<V>(Resume::SeekerStrikeHit);
+                fight.apply(block);
             }
-            seeker_strike_hit::<V, _>(fight)
+            Played::Done
+        }
+        // `HuddleUp`: its `Cards` drawn by each living player, its owner too,
+        // one after another.
+        __c0 if __c0 == V::Card::HUDDLE_UP => {
+            let cards = fight.var(V::CardVar::CARDS);
+            for player in crate::behaviour::cards::teammates::<V, _>(fight) {
+                fight.for_player(player, |fight| {
+                    fight.draw(cards);
+                });
+            }
+            Played::Done
+        }
+        // `BelieveInYou`: its energy to the ally it is pointed at.
+        __c0 if __c0 == V::Card::BELIEVE_IN_YOU => {
+            let energy = fight.var(V::CardVar::ENERGY);
+            let target = fight.target();
+            fight.for_player(target, |fight| fight.modify_energy(energy));
+            Played::Done
+        }
+        // `Coordinate`: its `StrengthPower` as Coordinate on the ally it is
+        // pointed at, which lends that much Strength for the turn.
+        __c0 if __c0 == V::Card::COORDINATE => {
+            let strength = fight.var(V::CardVar::STRENGTH_POWER);
+            fight.apply_power(
+                fight.target(),
+                V::Power::COORDINATE_POWER,
+                sts2_core::PowerAmount::Counted(strength),
+            );
+            Played::Done
         }
         // `Scrawl`: cards drawn until the hand is full.
         __c0 if __c0 == V::Card::SCRAWL => {
@@ -120,27 +85,6 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
                 sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
             fight.draw(Number::try_from(room).expect("a hand's room fits a game number"));
             Played::Done
-        }
-        // `Jackpot`: its damage to the target, then its `Cards` of the
-        // character's pool that cost nothing, each `NextItem` off
-        // `CombatCardGeneration` and upgraded where Jackpot is, into hand.
-        __c0 if __c0 == V::Card::JACKPOT => {
-            use sts2_core::{Amount, Effect, Scaling};
-
-            let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let hit = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(V::CardVar::DAMAGE),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(hit);
-            });
-            if fight.waiting() {
-                return wait::<V>(Resume::JackpotHit);
-            }
-            jackpot_hit::<V, _>(fight)
         }
         // `TheBomb`: its `Turns` of The Bomb on its owner, then its
         // `BombDamage` written on the instance.
@@ -156,54 +100,6 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
                 state.set_bomb_damage(damage)
             });
             Played::Done
-        }
-        // `Discovery`: three distinct cards of the character's pool, off
-        // `CombatCardGeneration`, of which its owner takes one into hand,
-        // free this turn, or none.
-        __c0 if __c0 == V::Card::DISCOVERY => {
-            let mut pool =
-                <V as sts2_core::Rules>::combat_cards(fight.character(), fight.multiplayer())
-                    .to_vec();
-            let stream = <crate::generated::runstate::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_GENERATION;
-            let offered: [sts2_core::CardIdent<V>; sts2_core::CHOICES] = fight
-                .generate_cards(&mut pool, stream)
-                .unwrap_or_else(|_| unimplemented!("a pool offering fewer than three"));
-            Played::Choosing {
-                offered: offered.into_iter().collect(),
-                skippable: true,
-                at: crate::behaviour::cards::Resume::Colorless(Resume::DiscoveryChoice).into(),
-            }
-        }
-        // `SecretWeapon`: one Attack of the draw pile picked, into hand.
-        __c0 if __c0 == V::Card::SECRET_WEAPON => {
-            let attacks = fight
-                .cards_in(Pile::Draw)
-                .into_iter()
-                .filter(|&at| V::card_kind(fight.card_ident(at).card) == Some(CardKind::Attack))
-                .collect();
-            Played::AskingAmong {
-                cards: attacks,
-                selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-                at: crate::behaviour::cards::Resume::Colorless(Resume::SecretWeaponTakes).into(),
-            }
-        }
-        __c0 if __c0 == V::Card::SECRET_TECHNIQUE => {
-            let skills = fight
-                .cards_in(Pile::Draw)
-                .into_iter()
-                .filter(|&at| V::card_kind(fight.card_ident(at).card) == Some(CardKind::Skill))
-                .collect();
-            Played::AskingAmong {
-                cards: skills,
-                selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-                at: crate::behaviour::cards::Resume::Colorless(Resume::SecretTechniqueTakes).into(),
-            }
-        }
-        // `Shockwave`: its `Power` of Weak, then of Vulnerable, on each enemy
-        // that can be hit, one enemy at a time.
-        __c0 if __c0 == V::Card::SHOCKWAVE => {
-            let held = crate::behaviour::cards::Held::of(&fight.hittable_opponents());
-            shockwave::<V, _>(fight, held, 0)
         }
         // `Alchemize`: a potion made off `CombatPotionGeneration` among those
         // a fight can make, procured.
@@ -231,41 +127,392 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
             );
             Played::Done
         }
-        __c0 if __c0 == V::Card::RESTLESSNESS => restlessness::<V, _>(fight),
         __c0 if __c0 == V::Card::IMPATIENCE => impatience::<V, _>(fight),
         __c0 if __c0 == V::Card::ANOINTED => anointed::<V, _>(fight),
-        // `FromHand` for up to its `Cards`, each then exhausted.
-        __c0 if __c0 == V::Card::PURITY => match nonmax::NonMaxUsize::new(cards::<V, _>(fight)) {
-            Some(count) => Played::Asking {
-                pile: Pile::Hand,
-                selection: Selection::UpTo(count),
-                at: crate::behaviour::cards::Resume::Colorless(Resume::PurityExhausts).into(),
-            },
-            None => Played::Done,
-        },
-        // `ThinkingAhead`: its `Cards` drawn, then one card of the hand onto
-        // the top of the draw pile.
-        __c0 if __c0 == V::Card::THINKING_AHEAD => {
-            fight.draw(fight.var(V::CardVar::CARDS));
-            Played::Asking {
-                pile: Pile::Hand,
-                selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-                at: crate::behaviour::cards::Resume::Colorless(Resume::ThinkingAheadPutBack).into(),
-            }
-        }
         __c0 if __c0 == V::Card::JACK_OF_ALL_TRADES => jack_of_all_trades::<V, _>(fight),
-        __c0 if __c0 == V::Card::BEAT_DOWN => beat_down::<V, _>(fight),
-        __c0 if __c0 == V::Card::SPLASH => splash::<V, _>(fight),
         __c0 if __c0 == V::Card::HIDDEN_GEM => hidden_gem::<V, _>(fight),
         __c0 if __c0 == V::Card::OMNISLICE => omnislice::<V, _>(fight),
-        card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
+        __c0 if __c0 == V::Card::CATASTROPHE
+            || __c0 == V::Card::HAND_OF_GREED
+            || __c0 == V::Card::FISTICUFFS
+            || __c0 == V::Card::SEEKER_STRIKE
+            || __c0 == V::Card::JACKPOT
+            || __c0 == V::Card::DISCOVERY
+            || __c0 == V::Card::SECRET_WEAPON
+            || __c0 == V::Card::SECRET_TECHNIQUE
+            || __c0 == V::Card::SHOCKWAVE
+            || __c0 == V::Card::PURITY
+            || __c0 == V::Card::THINKING_AHEAD
+            || __c0 == V::Card::BEAT_DOWN
+            || __c0 == V::Card::SPLASH
+            || __c0 == V::Card::RESTLESSNESS =>
+        {
+            start::<V, K>(card, fight)
+        }
+        card => crate::behaviour::cards::generated::<V, K>(card, fight),
     }
+}
+
+/// A colorless card's play that can stop on a question: from its start to
+/// its end, yielding each question it stops on. Each step is lent the fight,
+/// and after a question the answer.
+#[diapause::coroutine(yield = Ask<V>, resume = for<'f, 'a> Lent<'f, 'a, V, K>)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
+    match card {
+        // `Catastrophe`: its `Cards` times, a card of the draw pile
+        // auto-played. Each is the first of the playable ones
+        // `StableShuffle`d off the shuffle stream, or of the whole pile where
+        // none is playable. A card it plays that asks stands the loop still.
+        __c0 if __c0 == V::Card::CATASTROPHE => {
+            let plays: Number = resumed!().fight.var(V::CardVar::CARDS);
+            for _ in 0..plays {
+                catastrophe_play::<V, _>(resumed!().fight);
+                if resumed!().fight.waiting() {
+                    yield_!(Ask::Waiting);
+                }
+            }
+        }
+        // `HandOfGreed`: its damage to the target, then its `Gold` where a
+        // result says `WasTargetKilled` of a target whose death, read before
+        // the hit, triggers Fatal.
+        __c0 if __c0 == V::Card::HAND_OF_GREED => {
+            let fatal: bool = {
+                let fight = &mut *resumed!().fight;
+                fight.death_triggers_fatal(fight.target())
+            };
+            let mut killed: bool = strike::<V, _>(resumed!().fight)
+                .iter()
+                .any(|result| result.killed);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+                killed = resumed!()
+                    .fight
+                    .waited_attack_results()
+                    .iter()
+                    .any(|result| result.killed);
+            }
+            if fatal && killed {
+                let fight = &mut *resumed!().fight;
+                fight.gain_gold(fight.var(V::CardVar::GOLD));
+            }
+        }
+        // `Fisticuffs`: its damage to the target, then as much block as the
+        // hit dealt, overkill included.
+        __c0 if __c0 == V::Card::FISTICUFFS => {
+            let mut hit: Number = dealt::<V>(&strike::<V, _>(resumed!().fight));
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+                hit = dealt::<V>(&resumed!().fight.waited_attack_results());
+            }
+            block::<V, _>(resumed!().fight, hit);
+        }
+        // `SeekerStrike`: its damage to the target, then one of three cards
+        // of the draw pile, `StableShuffle`d off `CombatCardSelection`, into
+        // hand.
+        __c0 if __c0 == V::Card::SEEKER_STRIKE => {
+            strike::<V, _>(resumed!().fight);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            let offered = seeker_strike_offer::<V, _>(resumed!().fight);
+            yield_!(Ask::AskingAmong {
+                pile: Pile::Draw,
+                filter: crate::behaviour::CardFilter::OneOf(offered),
+                selection: ONE,
+            });
+            into_hand_taken::<V, K>(resumed!());
+        }
+        // `Jackpot`: its damage to the target, then its `Cards` of the
+        // character's pool that cost nothing, each `NextItem` off
+        // `CombatCardGeneration` and upgraded where Jackpot is, into hand.
+        __c0 if __c0 == V::Card::JACKPOT => {
+            strike::<V, _>(resumed!().fight);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            jackpot_hit::<V, _>(resumed!().fight);
+        }
+        // `Discovery`: three distinct cards of the character's pool, off
+        // `CombatCardGeneration`, of which its owner takes one into hand,
+        // free this turn, or none.
+        __c0 if __c0 == V::Card::DISCOVERY => {
+            let offered: sts2_core::Offered<V> = discovery_offer::<V, _>(resumed!().fight);
+            yield_!(Ask::Choosing {
+                offered,
+                skippable: true,
+            });
+            free_into_hand::<V, K>(resumed!());
+        }
+        // `SecretWeapon`: one Attack of the draw pile picked, into hand.
+        __c0 if __c0 == V::Card::SECRET_WEAPON => {
+            yield_!(Ask::AskingAmong {
+                pile: Pile::Draw,
+                filter: crate::behaviour::CardFilter::Kind(CardKind::Attack),
+                selection: ONE,
+            });
+            into_hand_taken::<V, K>(resumed!());
+        }
+        // `SecretTechnique`: one Skill of the draw pile picked, into hand.
+        __c0 if __c0 == V::Card::SECRET_TECHNIQUE => {
+            yield_!(Ask::AskingAmong {
+                pile: Pile::Draw,
+                filter: crate::behaviour::CardFilter::Kind(CardKind::Skill),
+                selection: ONE,
+            });
+            into_hand_taken::<V, K>(resumed!());
+        }
+        // `Shockwave`: its `Power` of Weak, then of Vulnerable, on each enemy
+        // that can be hit, one enemy at a time. A question left before one
+        // waits, and the amount is read again after.
+        __c0 if __c0 == V::Card::SHOCKWAVE => {
+            let held: crate::behaviour::cards::Held =
+                crate::behaviour::cards::Held::of(&resumed!().fight.hittable_opponents());
+            let count: usize = held.creatures().count();
+            let mut amount: Number = resumed!().fight.var(V::CardVar::POWER);
+            for at in 0..count {
+                if resumed!().fight.waiting() {
+                    yield_!(Ask::Waiting);
+                    amount = resumed!().fight.var(V::CardVar::POWER);
+                }
+                let target = held.creatures().nth(at).expect("one of those held");
+                let fight = &mut *resumed!().fight;
+                let power = sts2_core::PowerAmount::Counted(amount);
+                fight.apply_power(target, V::Power::WEAK_POWER, power);
+                fight.apply_power(target, V::Power::VULNERABLE_POWER, power);
+            }
+        }
+        // `Purity`: `FromHand` for up to its `Cards`, each then exhausted.
+        __c0 if __c0 == V::Card::PURITY => {
+            let most: Option<nonmax::NonMaxUsize> =
+                nonmax::NonMaxUsize::new(cards::<V, _>(resumed!().fight));
+            if let Some(count) = most {
+                yield_!(Ask::Asking {
+                    pile: Pile::Hand,
+                    selection: Selection::UpTo(count),
+                });
+                let Lent { fight, taken } = resumed!();
+                fight.act_on(
+                    PileAct::Exhaust,
+                    crate::behaviour::paused::selected::<V>(taken).as_slice(),
+                );
+            }
+        }
+        // `ThinkingAhead`: its `Cards` drawn, then one card of the hand onto
+        // the top of the draw pile, as `CardPileCmd.Add`.
+        __c0 if __c0 == V::Card::THINKING_AHEAD => {
+            let fight = &mut *resumed!().fight;
+            fight.draw(fight.var(V::CardVar::CARDS));
+            yield_!(Ask::Asking {
+                pile: Pile::Hand,
+                selection: ONE,
+            });
+            let Lent { fight, taken } = resumed!();
+            fight.act_on(
+                PileAct::OntoDrawTop,
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
+            );
+        }
+        // `BeatDown`: up to its `Cards` of the discard pile's playable
+        // Attacks, each auto-played. Its plays wait together on a question
+        // the last left.
+        __c0 if __c0 == V::Card::BEAT_DOWN => {
+            beat_down_plays::<V, _>(resumed!().fight);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+        }
+        // `Splash`: three distinct Attacks of the other characters' pools,
+        // off `CombatCardGeneration` and upgraded where Splash is. Its owner
+        // takes one into hand, free this turn, or none.
+        __c0 if __c0 == V::Card::SPLASH => {
+            let offered: sts2_core::Offered<V> = splash_offer::<V, _>(resumed!().fight);
+            yield_!(Ask::Choosing {
+                offered,
+                skippable: true,
+            });
+            free_into_hand::<V, K>(resumed!());
+        }
+        // `Restlessness`: with no other card in hand, its `Cards` drawn one
+        // at a time, then its `Energy`. It stands in the play pile as it
+        // runs. The game's loop reads its count before each pass. A shuffle
+        // inside a draw can ask, and the rest waits for it.
+        __c0 if __c0 == V::Card::RESTLESSNESS => {
+            if resumed!().fight.cards_in(Pile::Hand).is_empty() {
+                let mut pass: Number = 0;
+                while pass < resumed!().fight.var(V::CardVar::CARDS) {
+                    pass += 1;
+                    resumed!().fight.draw(1);
+                    if resumed!().fight.waiting() {
+                        yield_!(Ask::Waiting);
+                    }
+                }
+                let fight = &mut *resumed!().fight;
+                fight.modify_energy(fight.var(V::CardVar::ENERGY));
+            }
+        }
+        card => unreachable!("{card:?} never stops on a question"),
+    }
+}
+
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Colorless);
+
+/// Its damage to the target, as one attack, and the attack's results.
+fn strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> sts2_core::AttackResults<V> {
+    use sts2_core::{Amount, Effect, Scaling};
+
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(V::CardVar::DAMAGE),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    })
+}
+
+/// `amount` of block onto its owner.
+fn block<V: crate::Build, F: Fight<V>>(fight: &mut F, amount: Number) {
+    use sts2_core::{Amount, Effect, Scaling};
+
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Number(amount),
+        scaling: Scaling::Dynamic,
+    });
+    fight.apply(block);
+}
+
+/// `CardPileCmd.Add` of the one a pick took, into hand.
+fn into_hand_taken<V: crate::Build, K: FightKind<V>>(lent: &mut Lent<'_, '_, V, K>) {
+    let Lent { fight, taken } = lent;
+    fight.act_on(
+        PileAct::IntoHand,
+        crate::behaviour::paused::selected::<V>(taken).as_slice(),
+    );
+}
+
+/// `SetToFreeThisTurn`, then `CardPileCmd.AddGeneratedCardToCombat` into
+/// hand, of the one a choice took.
+fn free_into_hand<V: crate::Build, K: FightKind<V>>(lent: &mut Lent<'_, '_, V, K>) {
+    let Lent { fight, taken } = lent;
+    if let Some(chosen) = crate::behaviour::paused::chosen::<V>(taken) {
+        for at in fight.add_generated_cards(chosen, Pile::Hand, 1) {
+            crate::behaviour::free_this_turn(&mut **fight, at);
+        }
+    }
+}
+
+/// One of `Catastrophe`'s plays, an auto-play of one card of the draw pile.
+/// It is the first of the playable ones `StableShuffle`d off the shuffle
+/// stream, or of the whole pile where none is playable.
+fn catastrophe_play<V: crate::Build, F: Fight<V>>(fight: &mut F) {
+    use sts2_core::RunStreamKinds as _;
+
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::SHUFFLE;
+    let mut playable: Vec<_> = fight
+        .cards_in(Pile::Draw)
+        .into_iter()
+        .filter(|&at| !fight.card_keyword(at, CardKeyword::Unplayable))
+        .collect();
+    fight.stable_shuffle_cards(&mut playable, stream);
+    let chosen = match playable.first() {
+        Some(&card) => Some(card),
+        None => {
+            let mut every = fight.cards_in(Pile::Draw);
+            fight.stable_shuffle_cards(&mut every, stream);
+            every.first().copied()
+        }
+    };
+    if let Some(card) = chosen {
+        fight.auto_play_card(card);
+    }
+}
+
+/// `BeatDown`'s plays: up to its `Cards` of the discard pile's playable
+/// Attacks, `StableShuffle`d off `Shuffle`, each auto-played. One aimed at
+/// one enemy draws its enemy off `CombatTargets` as its play begins. None
+/// plays once the fight is ending.
+///
+/// It takes the list first, and plays each where it stands by its turn.
+///
+/// # Panics
+///
+/// A card no pile holds by its turn.
+fn beat_down_plays<V: crate::Build, F: Fight<V>>(fight: &mut F) {
+    use sts2_core::{RunStreamKinds as _, TargetKinds as _};
+
+    let mut attacks: Vec<_> = fight
+        .cards_in(Pile::Discard)
+        .into_iter()
+        .filter(|&at| V::card_kind(fight.card_ident(at).card) == Some(CardKind::Attack))
+        .filter(|&at| !fight.card_keyword(at, CardKeyword::Unplayable))
+        .collect();
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::SHUFFLE;
+    fight.stable_shuffle_cards(&mut attacks, stream);
+    attacks.truncate(cards::<V, _>(fight));
+    for card in attacks {
+        if fight.over_or_ending() {
+            break;
+        }
+        let card = crate::behaviour::cards::standing::<V, _>(fight, card)
+            .unwrap_or_else(|| unimplemented!("Beat Down playing a card no pile holds"));
+        let aimed = fight.card_target_type(fight.card_ident(card))
+            == <V as sts2_core::ContentVersion>::TargetType::ANY_ENEMY;
+        if aimed {
+            fight.auto_play_card_at_random(card);
+        } else {
+            fight.auto_play_card(card);
+        }
+    }
+}
+
+/// `Discovery`'s offer: three distinct cards of the character's pool, off
+/// `CombatCardGeneration`.
+fn discovery_offer<V: crate::Build, F: Fight<V>>(fight: &mut F) -> sts2_core::Offered<V> {
+    let mut pool =
+        <V as sts2_core::Rules>::combat_cards(fight.character(), fight.multiplayer()).to_vec();
+    let stream = <crate::generated::runstate::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_GENERATION;
+    let offered: [sts2_core::CardIdent<V>; sts2_core::CHOICES] = fight
+        .generate_cards(&mut pool, stream)
+        .unwrap_or_else(|_| unimplemented!("a pool offering fewer than three"));
+    offered.into_iter().collect()
+}
+
+/// `Splash`'s offer: three distinct Attacks of the other characters' pools,
+/// off `CombatCardGeneration` and upgraded where Splash is.
+///
+/// The pools run in `UnlockState.CharacterCardPools`' order, every
+/// character unlocked, each narrowed for combat.
+fn splash_offer<V: crate::Build, F: Fight<V>>(fight: &mut F) -> sts2_core::Offered<V> {
+    use sts2_core::RunStreamKinds as _;
+
+    let (own, multiplayer) = (fight.character(), fight.multiplayer());
+    let mut attacks: Vec<_> = <V as crate::build::Lists>::ALL_CHARACTERS
+        .iter()
+        .copied()
+        .filter(|&character| character != own)
+        .flat_map(|character| V::combat_cards(character, multiplayer).iter().copied())
+        .filter(|&card| V::card_kind(card) == Some(CardKind::Attack))
+        .collect();
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
+    let mut offered: [sts2_core::CardIdent<V>; sts2_core::CHOICES] = fight
+        .generate_cards(&mut attacks, stream)
+        .unwrap_or_else(|_| unimplemented!("other pools offering fewer than three Attacks"));
+    if fight.upgraded() {
+        for card in &mut offered {
+            card.upgrade = 1;
+        }
+    }
+    offered.into_iter().collect()
 }
 
 /// `Omnislice`: its damage to the target, then what that hit dealt, block
 /// and overkill included, to each other enemy that can be hit, unpowered.
 /// Both are hits of one attack.
-fn omnislice<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn omnislice<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::{Amount, Effect, Scaling};
 
     let target = fight.target();
@@ -298,51 +545,6 @@ fn omnislice<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
-/// `BeatDown`: up to its `Cards` of the discard pile's playable Attacks,
-/// `StableShuffle`d off `Shuffle`, each auto-played. One aimed at one enemy
-/// draws its enemy off `CombatTargets` as its play begins. None plays once
-/// the fight is ending.
-///
-/// It takes the list first, and plays each where it stands by its turn. A
-/// question stands the rest still.
-///
-/// # Panics
-///
-/// A card no pile holds by its turn.
-fn beat_down<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use sts2_core::{RunStreamKinds as _, TargetKinds as _};
-
-    let mut attacks: Vec<_> = fight
-        .cards_in(Pile::Discard)
-        .into_iter()
-        .filter(|&at| V::card_kind(fight.card_ident(at).card) == Some(CardKind::Attack))
-        .filter(|&at| !fight.card_keyword(at, CardKeyword::Unplayable))
-        .collect();
-    let stream = <V as sts2_core::ContentVersion>::RunRngType::SHUFFLE;
-    fight.stable_shuffle_cards(&mut attacks, stream);
-    attacks.truncate(cards::<V, _>(fight));
-    for card in attacks {
-        if fight.over_or_ending() {
-            break;
-        }
-        let card = crate::behaviour::cards::standing::<V, _>(fight, card)
-            .unwrap_or_else(|| unimplemented!("Beat Down playing a card no pile holds"));
-        let aimed = fight.card_target_type(fight.card_ident(card))
-            == <V as sts2_core::ContentVersion>::TargetType::ANY_ENEMY;
-        if aimed {
-            fight.auto_play_card_at_random(card);
-        } else {
-            fight.auto_play_card(card);
-        }
-    }
-    if fight.waiting() {
-        return Played::Waiting {
-            at: crate::behaviour::cards::Resume::Colorless(Resume::BeatDownPlayed).into(),
-        };
-    }
-    Played::Done
-}
-
 /// `HiddenGem`: its `Replay` added to one card of the draw pile, drawn off
 /// `CombatCardSelection`. The card can be played, is no Curse or Quest, and
 /// has no replays yet. Attacks, Skills and Powers go first, and any other
@@ -351,7 +553,7 @@ fn beat_down<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// # Panics
 ///
 /// A card whose type the fight works out.
-fn hidden_gem<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn hidden_gem<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::{RunStreamKinds as _, Writing};
 
     let kind = |fight: &F, at| {
@@ -387,42 +589,9 @@ fn hidden_gem<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
-/// `Splash`: three distinct Attacks of the other characters' pools, off
-/// `CombatCardGeneration` and upgraded where Splash is. Its owner takes one
-/// into hand, free this turn, or none.
-///
-/// The pools run in `UnlockState.CharacterCardPools`' order, every
-/// character unlocked, each narrowed for combat.
-fn splash<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use sts2_core::RunStreamKinds as _;
-
-    let (own, multiplayer) = (fight.character(), fight.multiplayer());
-    let mut attacks: Vec<_> = <V as crate::build::Lists>::ALL_CHARACTERS
-        .iter()
-        .copied()
-        .filter(|&character| character != own)
-        .flat_map(|character| V::combat_cards(character, multiplayer).iter().copied())
-        .filter(|&card| V::card_kind(card) == Some(CardKind::Attack))
-        .collect();
-    let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
-    let mut offered: [sts2_core::CardIdent<V>; sts2_core::CHOICES] = fight
-        .generate_cards(&mut attacks, stream)
-        .unwrap_or_else(|_| unimplemented!("other pools offering fewer than three Attacks"));
-    if fight.upgraded() {
-        for card in &mut offered {
-            card.upgrade = 1;
-        }
-    }
-    Played::Choosing {
-        offered: offered.into_iter().collect(),
-        skippable: true,
-        at: crate::behaviour::cards::Resume::Colorless(Resume::SplashChoice).into(),
-    }
-}
-
 /// `JackOfAllTrades`: `GetDistinctForCombat` of its `Cards` of colorless
 /// cards other than itself, off `CombatCardGeneration`, into hand.
-fn jack_of_all_trades<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn jack_of_all_trades<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::RunStreamKinds as _;
 
     let mut pool: Vec<_> = V::combat_colorless_cards(fight.multiplayer())
@@ -443,117 +612,19 @@ fn jack_of_all_trades<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> 
     Played::Done
 }
 
-/// Where a colorless card stopped inside its own play.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume {
-    /// `Purity`, after the cards picked from hand to exhaust.
-    PurityExhausts,
-    /// `ThinkingAhead`, after the card picked from hand to put back.
-    ThinkingAheadPutBack,
-    /// `SecretTechnique`, after the skill picked from the draw pile.
-    SecretTechniqueTakes,
-    /// `SeekerStrike`, after the card picked from the three it offered.
-    SeekerStrikeTakes,
-    /// `SecretWeapon`, after the Attack picked from the draw pile.
-    SecretWeaponTakes,
-    /// `Discovery`, after the card chosen from the three it offered.
-    DiscoveryChoice,
-    /// `Splash`, after the Attack chosen from the three it offered.
-    SplashChoice,
-    /// `BeatDown`, once the last card it played has its answer.
-    BeatDownPlayed,
-    /// `Catastrophe`, once a card it played has its answer, with this many
-    /// cards still to play.
-    CatastropheLeft(u8),
-    /// `Restlessness`, once the question inside its draw on `pass` is
-    /// answered.
-    RestlessnessDrew {
-        pass: u8,
-    },
-    /// After a question inside the card's attack was answered.
-    FisticuffsHit,
-    SeekerStrikeHit,
-    JackpotHit,
-    /// `HandOfGreed`, whose kill counts where `fatal` says.
-    HandOfGreedHit {
-        fatal: bool,
-    },
-    /// `Shockwave`, after a question inside one target's Vulnerable. `held`
-    /// is the enemies it took, and `at` the one to go on from.
-    Shockwave {
-        held: crate::behaviour::cards::Held,
-        at: u8,
-    },
-}
-
-/// The rest of the play waits at `at`, where a command left a question and
-/// more commands follow.
-fn wait<V: crate::Build>(at: Resume) -> Played<V> {
-    Played::Waiting {
-        at: crate::behaviour::cards::Resume::Colorless(at).into(),
-    }
-}
-
-/// The rest of a play that stopped on a choice, once the player chose.
-pub(super) fn resume_chosen<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    at: Resume,
-    chosen: Option<sts2_core::CardIdent<V>>,
-) -> Played<V> {
-    match at {
-        // `SetToFreeThisTurn`, then `CardPileCmd.AddGeneratedCardToCombat`
-        // into hand.
-        Resume::DiscoveryChoice | Resume::SplashChoice => {
-            if let Some(card) = chosen {
-                for at in fight.add_generated_cards(card, Pile::Hand, 1) {
-                    crate::behaviour::free_this_turn(fight, at);
-                }
-            }
-            Played::Done
-        }
-        at => unreachable!("{at:?} stops on a pick of a pile"),
-    }
-}
-
-/// The rest of a play that waited on a card it auto-played.
-/// The rest of `HandOfGreed`, once its attack is over: its gold where
-/// `results` killed a target whose death, read before the hit, triggers
-/// Fatal.
-fn hand_of_greed_hit<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    fatal: bool,
-    results: &sts2_core::AttackResults<V>,
-) -> Played<V> {
-    if fatal && results.iter().any(|result| result.killed) {
-        fight.gain_gold(fight.var(V::CardVar::GOLD));
-    }
-    Played::Done
-}
-
-/// The rest of `Fisticuffs`, once its attack is over: as much block as
-/// `results` dealt.
-fn fisticuffs_hit<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    results: &sts2_core::AttackResults<V>,
-) -> Played<V> {
-    use sts2_core::{Amount, Effect, Scaling};
-
-    let dealt = results
+/// What the hits of an attack dealt, overkill included.
+fn dealt<V: crate::Build>(results: &sts2_core::AttackResults<V>) -> Number {
+    results
         .iter()
         .map(|result| result.total + result.overkill)
-        .sum();
-    let block = fight.resolve(Effect::GainBlock {
-        recipient: fight.actor(),
-        amount: Amount::Number(dealt),
-        scaling: Scaling::Dynamic,
-    });
-    fight.apply(block);
-    Played::Done
+        .sum()
 }
 
-/// The rest of `SeekerStrike`, once its attack is over: its `Cards` of the
-/// draw pile drawn off `CombatCardSelection`, one of them picked.
-fn seeker_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+/// `SeekerStrike`'s offer, once its attack is over: its `Cards` of the draw
+/// pile drawn off `CombatCardSelection`, in the pile's order.
+fn seeker_strike_offer<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+) -> smallvec::SmallVec<[sts2_core::CardId<V>; sts2_core::MAX_CARDS_IN_HAND]> {
     use sts2_core::RunStreamKinds as _;
 
     let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_SELECTION;
@@ -561,21 +632,12 @@ fn seeker_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.stable_shuffle_cards(&mut shuffled, stream);
     let options = usize::try_from(fight.var(V::CardVar::CARDS)).expect("a few cards");
     shuffled.truncate(options);
-    let cards = fight
-        .cards_in(Pile::Draw)
-        .into_iter()
-        .filter(|card| shuffled.contains(card))
-        .collect();
-    Played::AskingAmong {
-        cards,
-        selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-        at: crate::behaviour::cards::Resume::Colorless(Resume::SeekerStrikeTakes).into(),
-    }
+    shuffled.iter().map(|card| card.id()).collect()
 }
 
 /// The rest of `Jackpot`, once its attack is over: its `Cards` of the
 /// character's free cards into hand, upgraded once Jackpot is.
-fn jackpot_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn jackpot_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     use sts2_core::{CardTable as _, Cost};
 
     let free: Vec<_> =
@@ -595,75 +657,6 @@ fn jackpot_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
         };
         fight.add_generated_cards(card, Pile::Hand, 1);
     }
-    Played::Done
-}
-
-/// `Shockwave`'s Weak and Vulnerable on each of `held` from the one at `from`
-/// on. A question left before one waits.
-fn shockwave<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    held: crate::behaviour::cards::Held,
-    from: u8,
-) -> Played<V> {
-    let amount = sts2_core::PowerAmount::Counted(fight.var(V::CardVar::POWER));
-    for (at, target) in held.creatures().enumerate().skip(usize::from(from)) {
-        if fight.waiting() {
-            let at = u8::try_from(at).expect("a fight's creatures fit a u8");
-            return wait::<V>(Resume::Shockwave { held, at });
-        }
-        fight.apply_power(target, V::Power::WEAK_POWER, amount);
-        fight.apply_power(target, V::Power::VULNERABLE_POWER, amount);
-    }
-    Played::Done
-}
-
-pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
-    match at {
-        Resume::CatastropheLeft(left) => catastrophe::<V, _>(fight, Number::from(left)),
-        Resume::RestlessnessDrew { pass } => restlessness_draws::<V, _>(fight, pass),
-        Resume::BeatDownPlayed => Played::Done,
-        Resume::FisticuffsHit => {
-            let results = fight.waited_attack_results();
-            fisticuffs_hit::<V, _>(fight, &results)
-        }
-        Resume::SeekerStrikeHit => seeker_strike_hit::<V, _>(fight),
-        Resume::JackpotHit => jackpot_hit::<V, _>(fight),
-        Resume::HandOfGreedHit { fatal } => {
-            let results = fight.waited_attack_results();
-            hand_of_greed_hit::<V, _>(fight, fatal, &results)
-        }
-        Resume::Shockwave { held, at } => shockwave::<V, _>(fight, held, at),
-        at => unreachable!("{at:?} stops on a pick, not on a card it played"),
-    }
-}
-
-pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    at: Resume,
-    chosen: sts2_core::SelectedCards<V>,
-) -> Played<V> {
-    match at {
-        Resume::PurityExhausts => {
-            fight.act_on(PileAct::Exhaust, chosen.as_slice());
-            Played::Done
-        }
-        Resume::CatastropheLeft(_) => unreachable!("Catastrophe waits, and picks nothing"),
-        Resume::DiscoveryChoice | Resume::SplashChoice => {
-            unreachable!("{at:?} chooses, and picks nothing")
-        }
-        Resume::BeatDownPlayed => unreachable!("Beat Down waits, and picks nothing"),
-        // `CardPileCmd.Add` of the one taken, into hand.
-        Resume::SecretTechniqueTakes | Resume::SeekerStrikeTakes | Resume::SecretWeaponTakes => {
-            fight.act_on(PileAct::IntoHand, chosen.as_slice());
-            Played::Done
-        }
-        // `CardPileCmd.Add` onto the top of the draw pile.
-        Resume::ThinkingAheadPutBack => {
-            fight.act_on(PileAct::OntoDrawTop, chosen.as_slice());
-            Played::Done
-        }
-        at => unreachable!("{at:?} waits on a question, not a pick"),
-    }
 }
 
 /// The card's `Cards`, as a count.
@@ -672,7 +665,7 @@ fn cards<V: crate::Build, F: Fight<V>>(fight: &F) -> usize {
 }
 
 /// `Impatience`: its `Cards` drawn, with no attack in hand.
-fn impatience<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn impatience<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let attack = fight
         .cards_in(Pile::Hand)
         .into_iter()
@@ -685,7 +678,7 @@ fn impatience<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Anointed`: the rare cards in the draw pile, `TakeRandom` off
 /// `CombatCardSelection` for as many as the hand has room for, into hand.
-fn anointed<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn anointed<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::CardTable as _;
 
     let room = sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
@@ -696,30 +689,6 @@ fn anointed<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
         .collect();
     let taken = fight.take_random_cards(&mut rares, room);
     fight.act_on(PileAct::IntoHand, &taken);
-    Played::Done
-}
-
-/// `Restlessness`: with no other card in hand, its `Cards` drawn one at a
-/// time, then its `Energy`. It stands in the play pile as it runs.
-fn restlessness<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
-    if !fight.cards_in(Pile::Hand).is_empty() {
-        return Played::Done;
-    }
-    restlessness_draws::<V, _>(fight, 0)
-}
-
-/// `Restlessness` from its draw after `pass`, then its energy. The game's
-/// loop reads its count before each pass. A shuffle inside a draw can ask,
-/// and the rest waits for it.
-fn restlessness_draws<V: crate::Build, F: Fight<V>>(fight: &mut F, mut pass: u8) -> Played<V> {
-    while Number::from(pass) < fight.var(V::CardVar::CARDS) {
-        pass += 1;
-        fight.draw(1);
-        if fight.waiting() {
-            return wait::<V>(Resume::RestlessnessDrew { pass });
-        }
-    }
-    fight.modify_energy(fight.var(V::CardVar::ENERGY));
     Played::Done
 }
 
@@ -734,7 +703,7 @@ pub(super) fn event_hook<V: crate::Build>(
     match (card, hook) {
         // `Bolas.BeforeHandDraw` and `ThrummingHatchet.BeforeHandDraw`: back
         // into hand, from wherever it is, once this copy finished a play in
-        // its owner's last turn. A fight here has one player.
+        // its owner's last turn.
         (__c0, EventHook::BeforeHandDraw { turn, .. })
             if (__c0 == V::Card::BOLAS || __c0 == V::Card::THRUMMING_HATCHET) =>
         {
@@ -751,7 +720,7 @@ pub(super) fn event_hook<V: crate::Build>(
 
 /// `Volley`: its damage once for each energy its X spent, each hit at an
 /// enemy drawn at random.
-fn volley<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn volley<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::{Amount, Effect, Scaling};
 
     let hits = fight.x_value();

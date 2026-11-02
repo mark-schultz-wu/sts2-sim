@@ -1,9 +1,10 @@
 //! The potions every character's pool draws from.
 
+use crate::behaviour::Played;
 use crate::vars::PotionVars as _;
 use sts2_core::{
     Amount, CardTable as _, Change, CostPool, CreatureView as _, Effect, Fight, Lasting, Pile,
-    PileAct, Played, PowerAmount, RunStreamKinds as _, Scaling,
+    PileAct, PowerAmount, RunStreamKinds as _, Scaling,
 };
 
 use crate::behaviour::potions::Number;
@@ -19,27 +20,15 @@ const DUPLICATION: Number = 1;
 /// `SneckoOil.NextEnergyCost`'s bound: `CombatEnergyCosts.NextInt(4)`.
 const SNECKO_OIL_COSTS: u8 = 4;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume {
-    /// A potion offering three cards, one of which goes into hand free this
-    /// turn.
-    FreeCardChoice,
-    /// `LiquidMemories`, after the card picked from the discard pile.
-    LiquidMemories,
-    /// `DropletOfPrecognition`, after the card picked from the draw pile.
-    DropletOfPrecognition,
-    /// `GamblersBrew`, after the cards picked from hand to discard.
-    GamblersBrew,
-    /// `TouchOfInsanity`, after the card picked to make free.
-    TouchOfInsanity,
-}
-
 /// What one of the shared potions does when it is drunk.
 ///
 /// # Panics
 ///
 /// A potion of this pool nobody has ported.
-pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
+pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
+    potion: V::Potion,
+    fight: &mut K::Fight<'a>,
+) -> Played<V, K> {
     match potion {
         // `CreatureCmd.Heal` on the creature it saved, by
         // `Math.Max(MaxHp * 0.3m, 1m)`, which `SetCurrentHpInternal`
@@ -58,7 +47,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         // block is unpowered, which no block listener this build fields reads.
         __c0 if __c0 == V::Potion::BLOCK_POTION => {
             let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
+                recipient: fight.target(),
                 amount: Amount::Number(V::Potion::BLOCK_POTION_BLOCK),
                 scaling: Scaling::Static,
             });
@@ -67,7 +56,8 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         // `AnyPlayer` again.
         __c0 if __c0 == V::Potion::GIGANTIFICATION_POTION => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::GIGANTIFICATION_POWER,
                 PowerAmount::Counted(V::Potion::GIGANTIFICATION_POTION_GIGANTIFICATION_POWER),
             );
@@ -75,7 +65,8 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         // `AnyPlayer`, which a run with one player points at that player.
         __c0 if __c0 == V::Potion::DEXTERITY_POTION => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::DEXTERITY_POWER,
                 PowerAmount::Counted(V::Potion::DEXTERITY_POTION_DEXTERITY_POWER),
             );
@@ -83,7 +74,8 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         // `AnyPlayer` again.
         __c0 if __c0 == V::Potion::STRENGTH_POTION => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::STRENGTH_POWER,
                 PowerAmount::Counted(V::Potion::STRENGTH_POTION_STRENGTH_POWER),
             );
@@ -91,7 +83,8 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         // `AnyPlayer`, and `SpeedPotionPower` lends the Dexterity.
         __c0 if __c0 == V::Potion::SPEED_POTION => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::SPEED_POTION_POWER,
                 PowerAmount::Counted(V::Potion::SPEED_POTION_DEXTERITY_POWER),
             );
@@ -133,7 +126,8 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         // `AnyPlayer` again.
         __c0 if __c0 == V::Potion::LUCKY_TONIC => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::BUFFER_POWER,
                 PowerAmount::Counted(V::Potion::LUCKY_TONIC_BUFFER_POWER),
             );
@@ -151,22 +145,6 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
             }
             Played::Done
         }
-        __c0 if __c0 == V::Potion::POWER_POTION => free_card_of::<V, _>(
-            fight,
-            crate::behaviour::character_cards(fight, CardKind::Power),
-        ),
-        __c0 if __c0 == V::Potion::ATTACK_POTION => free_card_of::<V, _>(
-            fight,
-            crate::behaviour::character_cards(fight, CardKind::Attack),
-        ),
-        __c0 if __c0 == V::Potion::SKILL_POTION => free_card_of::<V, _>(
-            fight,
-            crate::behaviour::character_cards(fight, CardKind::Skill),
-        ),
-        __c0 if __c0 == V::Potion::COLORLESS_POTION => free_card_of::<V, _>(
-            fight,
-            V::combat_colorless_cards(fight.multiplayer()).to_vec(),
-        ),
         // `CreatureCmd.Damage` on the target, unpowered and from the player.
         __c0 if __c0 == V::Potion::FIRE_POTION => {
             let target = fight.target();
@@ -204,7 +182,8 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         __c0 if __c0 == V::Potion::CLARITY => {
             fight.draw(V::Potion::CLARITY_CARDS);
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::CLARITY_POWER,
                 PowerAmount::Counted(V::Potion::CLARITY_CLARITY_POWER),
             );
@@ -212,28 +191,32 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         // `FlexPotionPower` lends the Strength.
         __c0 if __c0 == V::Potion::FLEX_POTION => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::FLEX_POTION_POWER,
                 PowerAmount::Counted(V::Potion::FLEX_POTION_STRENGTH_POWER),
             );
             Played::Done
         }
         __c0 if __c0 == V::Potion::STABLE_SERUM => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::RETAIN_HAND_POWER,
                 PowerAmount::Counted(V::Potion::STABLE_SERUM_REPEAT),
             );
             Played::Done
         }
         __c0 if __c0 == V::Potion::HEART_OF_IRON => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::PLATING_POWER,
                 PowerAmount::Counted(V::Potion::HEART_OF_IRON_PLATING_POWER),
             );
             Played::Done
         }
         __c0 if __c0 == V::Potion::LIQUID_BRONZE => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::THORNS_POWER,
                 PowerAmount::Counted(V::Potion::LIQUID_BRONZE_THORNS_POWER),
             );
@@ -257,14 +240,14 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         // `AnyPlayer`: twice what its block stands at, unpowered.
         __c0 if __c0 == V::Potion::FORTIFIER => {
-            let actor = fight.actor();
+            let target = fight.target();
             let block = fight
                 .creatures()
-                .find(|creature| creature.id() == actor)
+                .find(|creature| creature.id() == target)
                 .map(|creature| creature.block())
                 .expect("the player drinking stands in the fight");
             let gained = fight.resolve(Effect::GainBlock {
-                recipient: actor,
+                recipient: target,
                 amount: Amount::Number(block * 2),
                 scaling: Scaling::Static,
             });
@@ -273,18 +256,21 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         // `AnyPlayer` again, for each of these.
         __c0 if __c0 == V::Potion::FYSH_OIL => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::STRENGTH_POWER,
                 PowerAmount::Counted(V::Potion::FYSH_OIL_STRENGTH_POWER),
             );
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::DEXTERITY_POWER,
                 PowerAmount::Counted(V::Potion::FYSH_OIL_STRENGTH_POWER),
             );
             Played::Done
         }
         __c0 if __c0 == V::Potion::MAZALETHS_GIFT => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::RITUAL_POWER,
                 PowerAmount::Counted(V::Potion::MAZALETHS_GIFT_RITUAL_POWER),
             );
@@ -292,14 +278,16 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         __c0 if __c0 == V::Potion::RADIANT_TINCTURE => {
             fight.modify_energy(V::Potion::RADIANT_TINCTURE_ENERGY);
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::RADIANCE_POWER,
                 PowerAmount::Counted(V::Potion::RADIANT_TINCTURE_RADIANCE_POWER),
             );
             Played::Done
         }
         __c0 if __c0 == V::Potion::REGEN_POTION => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::REGEN_POWER,
                 PowerAmount::Counted(V::Potion::REGEN_POTION_REGEN_POWER),
             );
@@ -311,7 +299,8 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
             Played::Done
         }
         __c0 if __c0 == V::Potion::DUPLICATOR => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::DUPLICATION_POWER,
                 PowerAmount::Counted(DUPLICATION),
             );
@@ -336,46 +325,6 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         // Its belt is the run's, which `on_use_on_run` fills.
         __c0 if __c0 == V::Potion::ENTROPIC_BREW => Played::Done,
-        // One card from the discard pile, free this turn, into hand.
-        __c0 if __c0 == V::Potion::LIQUID_MEMORIES => Played::Asking {
-            pile: Pile::Discard,
-            selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
-            at: crate::behaviour::potions::Resume::Shared(Resume::LiquidMemories).into(),
-        },
-        // Any number of cards from hand, discarded, and as many drawn.
-        // `Self`: one card of the hand that costs energy or stars, with its
-        // own modifiers or with every one.
-        __c0 if __c0 == V::Potion::TOUCH_OF_INSANITY => {
-            let costs = |cost| matches!(cost, sts2_core::Cost::Fixed(cost) if cost.get() > 0);
-            let cards = fight
-                .cards_in(Pile::Hand)
-                .into_iter()
-                .filter(|&card| {
-                    let (energy, stars) = fight.card_costs(card, false);
-                    let (all_energy, all_stars) = fight.card_costs(card, true);
-                    costs(energy) || costs(stars) || costs(all_energy) || costs(all_stars)
-                })
-                .collect();
-            Played::AskingAmong {
-                cards,
-                selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
-                at: crate::behaviour::potions::Resume::Shared(Resume::TouchOfInsanity).into(),
-            }
-        }
-        __c0 if __c0 == V::Potion::GAMBLERS_BREW => Played::Asking {
-            pile: Pile::Hand,
-            selection: sts2_core::Selection::UpTo(
-                nonmax::NonMaxUsize::new(crate::behaviour::potions::ANY_NUMBER)
-                    .expect("a count below the maximum"),
-            ),
-            at: crate::behaviour::potions::Resume::Shared(Resume::GamblersBrew).into(),
-        },
-        // One card from the draw pile into hand.
-        __c0 if __c0 == V::Potion::DROPLET_OF_PRECOGNITION => Played::Asking {
-            pile: Pile::Draw,
-            selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
-            at: crate::behaviour::potions::Resume::Shared(Resume::DropletOfPrecognition).into(),
-        },
         // `HittableEnemies`, taken once: Weak on every one, then Vulnerable
         // on every one. The game reads each amount off the other's var, and
         // both are one.
@@ -401,12 +350,13 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         // Turn at the same amount, from the drinker.
         __c0 if __c0 == V::Potion::SHIP_IN_A_BOTTLE => {
             let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
+                recipient: fight.target(),
                 amount: Amount::Number(V::Potion::SHIP_IN_A_BOTTLE_BLOCK),
                 scaling: Scaling::Static,
             });
             fight.apply(block);
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::BLOCK_NEXT_TURN_POWER,
                 PowerAmount::Counted(V::Potion::SHIP_IN_A_BOTTLE_BLOCK),
             );
@@ -448,77 +398,148 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         // `CreatureCmd.GainMaxHp` on its target by its `MaxHpVar(5)`. A fight
         // here has one player, who drinks it.
         __c0 if __c0 == V::Potion::FRUIT_JUICE => {
-            fight.gain_max_hp(fight.actor(), V::Potion::FRUIT_JUICE_MAX_HP);
+            fight.gain_max_hp(fight.target(), V::Potion::FRUIT_JUICE_MAX_HP);
             Played::Done
+        }
+        __c0 if __c0 == V::Potion::POWER_POTION
+            || __c0 == V::Potion::ATTACK_POTION
+            || __c0 == V::Potion::SKILL_POTION
+            || __c0 == V::Potion::COLORLESS_POTION
+            || __c0 == V::Potion::LIQUID_MEMORIES
+            || __c0 == V::Potion::TOUCH_OF_INSANITY
+            || __c0 == V::Potion::GAMBLERS_BREW
+            || __c0 == V::Potion::DROPLET_OF_PRECOGNITION =>
+        {
+            start::<V, K>(potion, fight)
         }
         potion => unimplemented!("what {potion:?} does when it is drunk"),
     }
 }
 
-/// `PowerPotion`, `AttackPotion`, `SkillPotion` and `ColorlessPotion`: three
-/// distinct cards of `cards`, off `CombatCardGeneration`. The player takes one
-/// into hand, free this turn, or none.
-fn free_card_of<V: crate::Build, F: Fight<V>>(fight: &mut F, mut cards: Vec<V::Card>) -> Played<V> {
+/// A shared potion that stops on a question: from its use to its end,
+/// yielding each question it stops on. Each step is lent the fight, and
+/// after a question the answer.
+#[diapause::coroutine(
+    yield = crate::behaviour::paused::Ask<V>,
+    resume = for<'f, 'a> crate::behaviour::paused::Lent<'f, 'a, V, K>
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<V: crate::Build, K: sts2_core::FightKind<V>>(potion: V::Potion) {
+    match potion {
+        // `PowerPotion`, `AttackPotion`, `SkillPotion` and
+        // `ColorlessPotion`: three distinct cards of the character's Powers,
+        // Attacks or Skills, or of the colorless cards, off
+        // `CombatCardGeneration`. The player takes one into hand, free this
+        // turn, or none.
+        __c0 if __c0 == V::Potion::POWER_POTION
+            || __c0 == V::Potion::ATTACK_POTION
+            || __c0 == V::Potion::SKILL_POTION
+            || __c0 == V::Potion::COLORLESS_POTION =>
+        {
+            let offered: sts2_core::Offered<V> = free_card_offer::<V, _>(resumed!().fight, potion);
+            yield_!(crate::behaviour::paused::Ask::Choosing {
+                offered,
+                skippable: true,
+            });
+            let crate::behaviour::paused::Lent { fight, taken } = resumed!();
+            if let Some(card) = crate::behaviour::paused::chosen::<V>(taken) {
+                for at in fight.add_generated_cards(card, Pile::Hand, 1) {
+                    crate::behaviour::free_this_turn(&mut **fight, at);
+                }
+            }
+        }
+        // `LiquidMemories`: one card from the discard pile, free this turn,
+        // into hand: `SetToFreeThisTurn`, then `CardPileCmd.Add` into hand.
+        __c0 if __c0 == V::Potion::LIQUID_MEMORIES => {
+            yield_!(crate::behaviour::paused::Ask::Asking {
+                pile: Pile::Discard,
+                selection: ONE,
+            });
+            let crate::behaviour::paused::Lent { fight, taken } = resumed!();
+            let picked = crate::behaviour::paused::selected::<V>(taken);
+            for &at in picked.as_slice() {
+                crate::behaviour::free_this_turn(&mut **fight, at);
+            }
+            fight.act_on(PileAct::IntoHand, picked.as_slice());
+        }
+        // `TouchOfInsanity`: one card of the hand that costs energy or stars,
+        // with its own modifiers or with every one, then
+        // `SetToFreeThisCombat`: both costs at nothing for the rest of the
+        // fight.
+        __c0 if __c0 == V::Potion::TOUCH_OF_INSANITY => {
+            yield_!(crate::behaviour::paused::Ask::AskingAmong {
+                pile: Pile::Hand,
+                filter: crate::behaviour::CardFilter::CostsEnergyOrStars,
+                selection: ONE,
+            });
+            let crate::behaviour::paused::Lent { fight, taken } = resumed!();
+            for &card in crate::behaviour::paused::selected::<V>(taken).as_slice() {
+                for pool in [CostPool::Energy, CostPool::Star] {
+                    fight.modify_card(card, Change::SetCost(pool, 0), Lasting::ThisFight);
+                }
+            }
+        }
+        // `GamblersBrew`: any number of cards from hand, then
+        // `CardCmd.DiscardAndDraw` for as many as were picked.
+        __c0 if __c0 == V::Potion::GAMBLERS_BREW => {
+            yield_!(crate::behaviour::paused::Ask::Asking {
+                pile: Pile::Hand,
+                selection: sts2_core::Selection::UpTo(
+                    nonmax::NonMaxUsize::new(crate::behaviour::potions::ANY_NUMBER)
+                        .expect("a count below the maximum"),
+                ),
+            });
+            let crate::behaviour::paused::Lent { fight, taken } = resumed!();
+            let picked = crate::behaviour::paused::selected::<V>(taken);
+            let count = Number::try_from(picked.as_slice().len())
+                .expect("a hand's size fits a game number");
+            fight.discard_and_draw(picked.as_slice(), count);
+        }
+        // `DropletOfPrecognition`: one card from the draw pile into hand.
+        __c0 if __c0 == V::Potion::DROPLET_OF_PRECOGNITION => {
+            yield_!(crate::behaviour::paused::Ask::Asking {
+                pile: Pile::Draw,
+                selection: ONE,
+            });
+            let crate::behaviour::paused::Lent { fight, taken } = resumed!();
+            fight.act_on(
+                PileAct::IntoHand,
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
+            );
+        }
+        potion => unreachable!("{potion:?} never stops on a question"),
+    }
+}
+
+crate::behaviour::paused::paused_play!(V::Potion, crate::behaviour::potions::Resume::Shared);
+
+/// One card, as a pick asks for it.
+const ONE: sts2_core::Selection = sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE);
+
+/// The offer of `PowerPotion`, `AttackPotion`, `SkillPotion` or
+/// `ColorlessPotion`: three distinct cards off `CombatCardGeneration`, of the
+/// character's Powers, Attacks or Skills, or of the colorless cards.
+fn free_card_offer<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    potion: V::Potion,
+) -> sts2_core::Offered<V> {
+    let mut cards = match potion {
+        __c0 if __c0 == V::Potion::POWER_POTION => {
+            crate::behaviour::character_cards(fight, CardKind::Power)
+        }
+        __c0 if __c0 == V::Potion::ATTACK_POTION => {
+            crate::behaviour::character_cards(fight, CardKind::Attack)
+        }
+        __c0 if __c0 == V::Potion::SKILL_POTION => {
+            crate::behaviour::character_cards(fight, CardKind::Skill)
+        }
+        _ => V::combat_colorless_cards(fight.multiplayer()).to_vec(),
+    };
     let offered: [_; sts2_core::CHOICES] = fight
         .generate_cards(
             &mut cards,
             <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,
         )
         .unwrap_or_else(|_| unimplemented!("a pool of {} cards offering three", cards.len()));
-    Played::Choosing {
-        offered: offered.into_iter().collect(),
-        skippable: true,
-        at: crate::behaviour::potions::Resume::Shared(Resume::FreeCardChoice).into(),
-    }
-}
-
-pub(super) fn resume<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    at: Resume,
-    answer: sts2_core::Taken<V>,
-) -> Played<V> {
-    match (at, answer) {
-        (Resume::FreeCardChoice, sts2_core::Taken::Chosen(chosen)) => {
-            if let Some(card) = chosen {
-                for at in fight.add_generated_cards(card, Pile::Hand, 1) {
-                    crate::behaviour::free_this_turn(fight, at);
-                }
-            }
-            Played::Done
-        }
-        // `SetToFreeThisTurn`, then `CardPileCmd.Add` into hand.
-        (Resume::LiquidMemories, sts2_core::Taken::Selected(picked)) => {
-            for &at in picked.as_slice() {
-                crate::behaviour::free_this_turn(fight, at);
-            }
-            fight.act_on(PileAct::IntoHand, picked.as_slice());
-            Played::Done
-        }
-        // `SetToFreeThisCombat`: both costs at nothing for the rest of the
-        // fight.
-        (Resume::TouchOfInsanity, sts2_core::Taken::Selected(picked)) => {
-            for &card in picked.as_slice() {
-                for pool in [sts2_core::CostPool::Energy, sts2_core::CostPool::Star] {
-                    fight.modify_card(
-                        card,
-                        sts2_core::Change::SetCost(pool, 0),
-                        sts2_core::Lasting::ThisFight,
-                    );
-                }
-            }
-            Played::Done
-        }
-        // `CardCmd.DiscardAndDraw` for as many as were picked.
-        (Resume::GamblersBrew, sts2_core::Taken::Selected(picked)) => {
-            let count = Number::try_from(picked.as_slice().len())
-                .expect("a hand's size fits a game number");
-            fight.discard_and_draw(picked.as_slice(), count);
-            Played::Done
-        }
-        (Resume::DropletOfPrecognition, sts2_core::Taken::Selected(picked)) => {
-            fight.act_on(PileAct::IntoHand, picked.as_slice());
-            Played::Done
-        }
-        (at, answer) => unimplemented!("{at:?} resumed with {answer:?}"),
-    }
+    offered.into_iter().collect()
 }

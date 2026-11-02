@@ -6,7 +6,6 @@
 
 pub mod cli;
 pub mod control;
-pub mod coverage;
 #[cfg(test)]
 pub(crate) mod fixture;
 pub mod id;

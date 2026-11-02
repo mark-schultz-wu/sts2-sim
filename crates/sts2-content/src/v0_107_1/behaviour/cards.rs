@@ -1,7 +1,8 @@
 //! The cards whose rules this build ports for itself, which the shared cards
 //! hand over through [`crate::build::OwnRules`].
 
-use sts2_core::{Fight, Played, PowerAmount};
+use crate::behaviour::Played;
+use sts2_core::{Fight, PowerAmount};
 
 use super::super::V0_107_1 as V;
 use super::super::generated::cards::{CardVar, Cards, IroncladCard, SilentCard};
@@ -11,7 +12,10 @@ type Number = i32;
 
 /// What a card of this build's own does when it is played, or nothing for a
 /// shared one.
-pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<V>> {
+pub(crate) fn on_play<'a, K: sts2_core::FightKind<V>>(
+    card: Cards,
+    fight: &mut K::Fight<'a>,
+) -> Option<Played<V, K>> {
     Some(match card {
         // `ExpectAFight`: its calculated energy, then No Energy Gain on its
         // owner.

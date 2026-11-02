@@ -16,10 +16,9 @@ let mut game: Oracle<V> = Oracle::launch(Config::new(dir))?;
 let answered = game.play(&Decision::Start { seed, character, ascension, modifiers })?;
 ```
 
-`Oracle` implements the two traits in `sts2-core`. `Play` sends one decision.
-`Construct` builds a position that ordinary play takes an hour to reach. Those
-two traits are all that a caller needs to drive a run, and a simulator will
-implement the same two.
+`Oracle` plays one decision, and builds a position that ordinary play takes an
+hour to reach. `OracleTable` is the run table over it, `sts2_core::RunTable`,
+which every way of playing a run drives. `docs/RUNNERS.md` says how.
 
 When the `Oracle` value drops, the socket closes. The game sees that and stops. A
 client that dies does not leave a game process behind. There is no `quit`
@@ -196,16 +195,16 @@ seat.
 
 ## Reaching a game somebody else launched
 
-`Session` is the second implementation of `Play` in this crate, with the same
-game behind it. `Oracle` owns a child process and dies with it. A `Session`
+`Session` is the second way this crate drives a game, with the same game behind
+it. `Oracle` owns a child process and dies with it. A `Session`
 reaches one that a daemon holds, so `sts2 play-card 0` can be a whole
 process and still land in a run forty decisions deep.
 
 A front end holds that type and not a socket, because the socket is a fact about
 the oracle. The game boots in seconds and keeps every bit of run state, so it
 has to outlive one command. A simulator is a struct in the caller's own address
-space and outlives nothing. A front end written against `Play` does not have to
-know which of those it has, and that is the whole point of the trait.
+space and outlives nothing. A front end that plays a `RunTable`, here a
+`HeldTable` over the session, does not have to know which of those it has.
 
 One connection per command, not one held open. The daemon serves one client at a
 time, because the game is a single state machine. A held connection is a client
@@ -220,15 +219,15 @@ at once.
 
 ## Co-op seats
 
-`GameSeat` implements `sts2_core::Seat`, the co-op counterpart of `Play`. A
-co-op run has one game process for each seat, and the games talk over ENet as
+`GameSeat` is one seat's game, and `LobbyTable` is the run table that holds
+them all. A co-op run has one game process for each seat, and the games talk over ENet as
 the game's own co-op does. Seat 0 hosts. The others join it on the port that
 `SeatHost` names, and try again until the host listens.
 
 The mod's `peers` names each player by net id. The host is always 1, and the
 client at seat `k` is `1000 + k`. `GameSeat` reads `peers` back into seat
-order. `sts2_core::Coop` decides which seat acts next, from what each seat
-reports.
+order. `LobbyTable` waits for every seat to catch up, and the runner decides
+which seat acts next, from what each seat reports.
 
 `cargo xtask coop` plays co-op runs at random on v0.111.0. Build v0.107.1
 cannot play co-op, because it answers the other seats' card choices on the

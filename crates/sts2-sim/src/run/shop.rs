@@ -32,8 +32,9 @@ pub(super) struct Merchant<'a, V: Rules> {
     /// `RelicModel.IsAllowed` reads.
     pub(super) floor: usize,
     pub(super) character: V::Character,
-    /// Whether the run has several players, whose pools deal the co-op cards.
-    pub(super) multiplayer: bool,
+    /// How many players the run has. Several deal the co-op cards, and
+    /// `RelicModel.IsAllowed` reads it.
+    pub(super) players: usize,
     /// `ModifyMerchantCardPool`'s character, whose cards a character shelf
     /// offers after its own.
     pub(super) added: Option<V::Character>,
@@ -157,7 +158,7 @@ impl<V: Rules> Merchant<'_, V> {
                         let card = self.pick(
                             seat,
                             unpicked(
-                                V::merchant_colorless_cards(rarity, self.multiplayer),
+                                V::merchant_colorless_cards(rarity, self.players > 1),
                                 on_shelves,
                             ),
                         );
@@ -181,6 +182,7 @@ impl<V: Rules> Merchant<'_, V> {
                     rarity,
                     self.dealt_relics,
                     self.floor,
+                    self.players,
                     V::Relic::allowed_in_shops,
                 );
                 self.dealt_relics.push(relic);
@@ -266,7 +268,7 @@ impl<V: Rules> Merchant<'_, V> {
             let card = self.pick(
                 seat,
                 unpicked(
-                    V::merchant_colorless_cards(rarity, self.multiplayer),
+                    V::merchant_colorless_cards(rarity, self.players > 1),
                     &picked,
                 ),
             );
@@ -282,7 +284,7 @@ impl<V: Rules> Merchant<'_, V> {
     /// `ModifyMerchantCardPool` adds the added character's cards, every one,
     /// after them.
     fn shelf(&self, kind: CardKind, rarity: RewardRarity, picked: &[V::Card]) -> Vec<V::Card> {
-        let multiplayer = self.multiplayer;
+        let multiplayer = self.players > 1;
         let mut cards = unpicked(
             V::merchant_cards(self.character, kind, rarity, multiplayer),
             picked,
@@ -369,6 +371,7 @@ impl<V: Rules> Merchant<'_, V> {
                 rarity,
                 self.dealt_relics,
                 self.floor,
+                self.players,
                 V::Relic::allowed_in_shops,
             );
             self.dealt_relics.push(relic);

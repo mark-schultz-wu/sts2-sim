@@ -48,7 +48,7 @@ pub(super) fn kingly_punch<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 /// hits.
 pub(super) fn radiate<V: crate::Build, F: sts2_core::Fight<V>>(
     fight: &mut F,
-) -> sts2_core::Played<V> {
+) -> crate::behaviour::Played<V, F::Kind> {
     let hits = fight.var(V::CardVar::CALCULATED_HITS);
     fight.attack(sts2_core::Scaling::Dynamic, |fight| {
         for _ in 0..hits {
@@ -67,14 +67,14 @@ pub(super) fn radiate<V: crate::Build, F: sts2_core::Fight<V>>(
             });
         }
     });
-    sts2_core::Played::Done
+    crate::behaviour::Played::Done
 }
 
 /// `LunarBlast`: its `Damage` at its target, once for each of its
 /// `CalculatedHits`.
 pub(super) fn lunar_blast<V: crate::Build, F: sts2_core::Fight<V>>(
     fight: &mut F,
-) -> sts2_core::Played<V> {
+) -> crate::behaviour::Played<V, F::Kind> {
     let hits = fight.var(V::CardVar::CALCULATED_HITS);
     let target = fight.target();
     fight.attack(sts2_core::Scaling::Dynamic, |fight| {
@@ -88,5 +88,5 @@ pub(super) fn lunar_blast<V: crate::Build, F: sts2_core::Fight<V>>(
             fight.apply(attack);
         }
     });
-    sts2_core::Played::Done
+    crate::behaviour::Played::Done
 }

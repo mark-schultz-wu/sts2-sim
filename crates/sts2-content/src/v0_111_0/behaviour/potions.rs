@@ -1,7 +1,8 @@
 //! The potions whose rules this build ports for itself, which the shared
 //! potions hand over through [`crate::build::OwnRules`].
 
-use sts2_core::{CreatureView as _, Fight, Played, PowerAmount};
+use crate::behaviour::Played;
+use sts2_core::{CreatureView as _, Fight, PowerAmount};
 
 use super::super::V0_111_0 as V;
 use super::super::generated::potions::Potion;
@@ -14,19 +15,21 @@ const AMBERGRIS_HEAL_PERCENT: i32 = 50;
 /// What a potion of this build's own does when it is drunk in a fight.
 ///
 /// `Ambergris`: `CreatureCmd.Heal` of its target by half its maximum, then
-/// one `AmbergrisPower` on it, from its drinker. Its target is any player,
-/// and a fight here has one.
-pub(crate) fn own_potion_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Option<Played<V>> {
+/// one `AmbergrisPower` on it, from its drinker. Its target is any player.
+pub(crate) fn own_potion_use<F: Fight<V>>(
+    potion: Potion,
+    fight: &mut F,
+) -> Option<Played<V, F::Kind>> {
     match potion {
         Potion::Ambergris => {
-            let actor = fight.actor();
+            let target = fight.target();
             let max_hp: i32 = fight
                 .creatures()
-                .find(|creature| creature.id() == actor)
+                .find(|creature| creature.id() == target)
                 .map(|creature| creature.max_hp())
-                .expect("the player drinking stands in the fight");
-            fight.heal(actor, max_hp * AMBERGRIS_HEAL_PERCENT / 100);
-            fight.apply_to_actor(Power::AmbergrisPower, PowerAmount::Counted(1));
+                .expect("the player it is aimed at stands in the fight");
+            fight.heal(target, max_hp * AMBERGRIS_HEAL_PERCENT / 100);
+            fight.apply_power(target, Power::AmbergrisPower, PowerAmount::Counted(1));
             Some(Played::Done)
         }
         _ => None,

@@ -5,282 +5,28 @@
 
 use super::super::cards::{CardKeyword, CardVar, NecrobinderCard};
 use super::super::powers::Power;
-use sts2_core::{Amount, Change, CostPool, Effect, Fight, Played, PowerAmount, Scaling};
+use crate::behaviour::paused::{Ask, Lent};
+use sts2_core::{Amount, Change, CostPool, Effect, Fight, FightKind, PowerAmount, Scaling};
 
 type V = super::super::super::V0_111_0;
 
-/// `OnPlay` from the command at `from` on, for every card whose
-/// statements the dump matched. A command that leaves a question
-/// waiting stands the rest still, as the game's `await` does, and
-/// the play comes back as `Err` with the command to go on from.
+/// `OnPlay` of a card whose play is one command, which never stands
+/// still on a question. `None` for a card with more, which [`paused`]
+/// plays.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn play_from<F: Fight<V>>(
-    card: NecrobinderCard,
-    fight: &mut F,
-    from: u8,
-) -> Result<Played<V>, u8> {
+pub fn play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Option<()> {
     match card {
-        NecrobinderCard::Afterlife => {
-            if from == 0 {
-                fight.summon_osty(fight.var(CardVar::Summon));
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::BansheesCry => {
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let targets = fight.opponents();
-                    fight.damage_command(|fight| {
-                        for target in targets {
-                            let attack = fight.resolve(Effect::Attack {
-                                dealer: fight.actor(),
-                                target,
-                                damage: Amount::Var(CardVar::Damage),
-                                scaling: Scaling::Dynamic,
-                            });
-                            fight.apply(attack);
-                        }
-                    });
-                });
-            }
-            Ok(Played::Done)
-        }
         // `call DamageCmd.Attack`
         NecrobinderCard::BlightStrike => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Bodyguard => {
-            if from == 0 {
-                fight.summon_osty(fight.var(CardVar::Summon));
-            }
-            Ok(Played::Done)
-        }
         // `if`
         NecrobinderCard::BoneShards => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::BorrowedTime => {
-            if from == 0 {
-                fight.modify_energy(fight.var(CardVar::Energy));
-                if fight.waiting() {
-                    return Err(1);
-                }
-            }
-            if from <= 1 {
-                fight.apply_to_actor(
-                    Power::BorrowedTimePower,
-                    PowerAmount::Counted(fight.power_var(CardVar::ExtraCost)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Bury => {
-            let target = fight.target();
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                });
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Cacophony => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::CacophonyPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::Damage)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Calcify => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::CalcifyPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::CalcifyPower)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::CallOfTheVoid => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::CallOfTheVoidPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::Cards)),
-                );
-            }
-            Ok(Played::Done)
-        }
         // `call CreatureCmd.Damage`
         NecrobinderCard::CaptureSpirit => unimplemented!("what {card:?} does when it is played"),
         // `call CardSelectCmd.FromCombatPile`
         NecrobinderCard::Cleanse => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Countdown => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::CountdownPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::CountdownPower)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::DanseMacabre => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::DanseMacabrePower,
-                    PowerAmount::Counted(fight.power_var(CardVar::DanseMacabrePower)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Deathbringer => {
-            if from == 0 {
-                fight.apply_to_opponents(
-                    Power::DoomPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::DoomPower)),
-                );
-                if fight.waiting() {
-                    return Err(1);
-                }
-            }
-            if from <= 1 {
-                fight.apply_to_opponents(
-                    Power::WeakPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
-                );
-            }
-            Ok(Played::Done)
-        }
         // `for`
         NecrobinderCard::DeathsDoor => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::DeathMarch => {
-            let target = fight.target();
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::CalculatedDamage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                });
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Debilitate => {
-            let target = fight.target();
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                });
-                if fight.waiting() {
-                    return Err(1);
-                }
-            }
-            if from <= 1 {
-                fight.apply_power(
-                    target,
-                    Power::DebilitatePower,
-                    PowerAmount::Counted(fight.power_var(CardVar::DebilitatePower)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Defend => {
-            if from == 0 {
-                let block = fight.resolve(Effect::GainBlock {
-                    recipient: fight.actor(),
-                    amount: Amount::Var(CardVar::Block),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(block);
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Defile => {
-            let target = fight.target();
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                });
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Defy => {
-            let target = fight.target();
-            if from == 0 {
-                let block = fight.resolve(Effect::GainBlock {
-                    recipient: fight.actor(),
-                    amount: Amount::Var(CardVar::Block),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(block);
-                if fight.waiting() {
-                    return Err(1);
-                }
-            }
-            if from <= 1 {
-                fight.apply_power(
-                    target,
-                    Power::WeakPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Delay => {
-            if from == 0 {
-                let block = fight.resolve(Effect::GainBlock {
-                    recipient: fight.actor(),
-                    amount: Amount::Var(CardVar::Block),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(block);
-                if fight.waiting() {
-                    return Err(1);
-                }
-            }
-            if from <= 1 {
-                fight.apply_to_actor(
-                    Power::EnergyNextTurnPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Demesne => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::DemesnePower,
-                    PowerAmount::Counted(fight.power_var(CardVar::Cards)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::DevourLife => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::DevourLifePower,
-                    PowerAmount::Counted(fight.power_var(CardVar::DevourLifePower)),
-                );
-            }
-            Ok(Played::Done)
-        }
         // `call ResolveEnergyXValue`
         NecrobinderCard::Dirge => unimplemented!("what {card:?} does when it is played"),
         // `call PileType.Discard.GetPile`
@@ -291,54 +37,12 @@ pub fn play_from<F: Fight<V>>(
         NecrobinderCard::Eidolon => unimplemented!("what {card:?} does when it is played"),
         // `foreach`
         NecrobinderCard::EndOfDays => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::EnfeeblingTouch => {
-            let target = fight.target();
-            if from == 0 {
-                fight.apply_power(
-                    target,
-                    Power::EnfeeblingTouchPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss)),
-                );
-            }
-            Ok(Played::Done)
-        }
         // `call DamageCmd.Attack`
         NecrobinderCard::Eradicate => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Fear => {
-            let target = fight.target();
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                });
-                if fight.waiting() {
-                    return Err(1);
-                }
-            }
-            if from <= 1 {
-                fight.apply_power(
-                    target,
-                    Power::VulnerablePower,
-                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
-                );
-            }
-            Ok(Played::Done)
-        }
         // `if`
         NecrobinderCard::Fetch => unimplemented!("what {card:?} does when it is played"),
         // `if`
         NecrobinderCard::Flatten => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::ForbiddenGrimoire => {
-            if from == 0 {
-                fight.apply_to_actor(Power::ForbiddenGrimoirePower, PowerAmount::Counted(1));
-            }
-            Ok(Played::Done)
-        }
         // `call PowerCmd.Apply`
         NecrobinderCard::Friendship => unimplemented!("what {card:?} does when it is played"),
         // `call CombatState.GetTeammatesOf`
@@ -349,339 +53,601 @@ pub fn play_from<F: Fight<V>>(
         NecrobinderCard::GraveWarden => unimplemented!("what {card:?} does when it is played"),
         // `call cardPlay.Target.GetPowerAmount`
         NecrobinderCard::Hang => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Haunt => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::HauntPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::HpLoss)),
-                );
-            }
-            Ok(Played::Done)
-        }
         // `overrides IsPlayable`
         NecrobinderCard::HighFive => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Invoke => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::SummonNextTurnPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::Summon)),
-                );
-                if fight.waiting() {
-                    return Err(1);
-                }
-            }
-            if from <= 1 {
-                fight.apply_to_actor(
-                    Power::EnergyNextTurnPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
-                );
-            }
-            Ok(Played::Done)
-        }
         // `call CombatState.PlayerCreatures.Where`
         NecrobinderCard::LegionOfBone => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Lethality => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::LethalityPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::LethalityPower)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Melancholy => {
-            if from == 0 {
-                let block = fight.resolve(Effect::GainBlock {
-                    recipient: fight.actor(),
-                    amount: Amount::Var(CardVar::Block),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(block);
-            }
-            Ok(Played::Done)
-        }
         // `statement`
         NecrobinderCard::Misery => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::NecroMastery => {
-            if from == 0 {
-                fight.summon_osty(fight.var(CardVar::Summon));
-                if fight.waiting() {
-                    return Err(1);
-                }
-            }
-            if from <= 1 {
-                fight.apply_to_actor(Power::NecroMasteryPower, PowerAmount::Counted(1));
-            }
-            Ok(Played::Done)
-        }
         // `foreach`
         NecrobinderCard::NegativePulse => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Neurosurge => {
-            if from == 0 {
-                fight.modify_energy(fight.var(CardVar::Energy));
-                if fight.waiting() {
-                    return Err(1);
-                }
-            }
-            if from <= 1 {
-                fight.draw(fight.var(CardVar::Cards));
-                if fight.waiting() {
-                    return Err(2);
-                }
-            }
-            if from <= 2 {
-                fight.apply_to_actor(
-                    Power::NeurosurgePower,
-                    PowerAmount::Counted(fight.power_var(CardVar::NeurosurgePower)),
-                );
-            }
-            Ok(Played::Done)
-        }
         // `call PowerCmd.Apply`
         NecrobinderCard::NoEscape => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Oblivion => {
-            let target = fight.target();
-            if from == 0 {
-                fight.apply_power(
-                    target,
-                    Power::OblivionPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::DoomPower)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Pagestorm => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::PagestormPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::Cards)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Parse => {
-            if from == 0 {
-                fight.draw(fight.var(CardVar::Cards));
-            }
-            Ok(Played::Done)
-        }
         // `if`
         NecrobinderCard::Poke => unimplemented!("what {card:?} does when it is played"),
         // `if`
         NecrobinderCard::Protector => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::PullAggro => {
-            if from == 0 {
-                fight.summon_osty(fight.var(CardVar::Summon));
-                if fight.waiting() {
-                    return Err(1);
-                }
-            }
-            if from <= 1 {
-                let block = fight.resolve(Effect::GainBlock {
-                    recipient: fight.actor(),
-                    amount: Amount::Var(CardVar::Block),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(block);
-            }
-            Ok(Played::Done)
-        }
         // `call DamageCmd.Attack`
         NecrobinderCard::PullFromBelow => unimplemented!("what {card:?} does when it is played"),
         // `call PowerCmd.Apply`
         NecrobinderCard::Putrefy => unimplemented!("what {card:?} does when it is played"),
         // `if`
         NecrobinderCard::Rattle => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Reanimate => {
-            if from == 0 {
-                fight.summon_osty(fight.var(CardVar::Summon));
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Reap => {
-            let target = fight.target();
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                });
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::ReaperForm => {
-            if from == 0 {
-                fight.apply_to_actor(Power::ReaperFormPower, PowerAmount::Counted(1));
-            }
-            Ok(Played::Done)
-        }
         // `call Soul.Create`
         NecrobinderCard::Reave => unimplemented!("what {card:?} does when it is played"),
         // `if`
         NecrobinderCard::RightHandHand => unimplemented!("what {card:?} does when it is played"),
         // `if`
         NecrobinderCard::Sacrifice => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Scourge => {
+        // `call CardSelectCmd.FromHand`
+        NecrobinderCard::SculptingStrike => unimplemented!("what {card:?} does when it is played"),
+        // `call CardSelectCmd.FromCombatPile`
+        NecrobinderCard::Seance => unimplemented!("what {card:?} does when it is played"),
+        // `call Soul.Create`
+        NecrobinderCard::Severance => unimplemented!("what {card:?} does when it is played"),
+        // `call PowerCmd.Apply`
+        NecrobinderCard::SharedFate => unimplemented!("what {card:?} does when it is played"),
+        // `if`
+        NecrobinderCard::SicEm => unimplemented!("what {card:?} does when it is played"),
+        // `if`
+        NecrobinderCard::Snap => unimplemented!("what {card:?} does when it is played"),
+        // `call CreatureCmd.Heal`
+        NecrobinderCard::Spur => unimplemented!("what {card:?} does when it is played"),
+        // `if`
+        NecrobinderCard::Squeeze => unimplemented!("what {card:?} does when it is played"),
+        // `call BuffFromPlay`
+        NecrobinderCard::TheScythe => unimplemented!("what {card:?} does when it is played"),
+        // `call CardSelectCmd.FromHand`
+        NecrobinderCard::Transfigure => unimplemented!("what {card:?} does when it is played"),
+        // `call CreateClone`
+        NecrobinderCard::Undeath => unimplemented!("what {card:?} does when it is played"),
+        // `if`
+        NecrobinderCard::Unleash => unimplemented!("what {card:?} does when it is played"),
+        NecrobinderCard::Afterlife => {
+            fight.summon_osty(fight.var(CardVar::Summon));
+            Some(())
+        }
+        NecrobinderCard::BansheesCry => {
+            fight.attack(Scaling::Dynamic, |fight| {
+                let targets = fight.opponents();
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        let attack = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(attack);
+                    }
+                });
+            });
+            Some(())
+        }
+        NecrobinderCard::Bodyguard => {
+            fight.summon_osty(fight.var(CardVar::Summon));
+            Some(())
+        }
+        NecrobinderCard::Bury => {
             let target = fight.target();
-            if from == 0 {
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Some(())
+        }
+        NecrobinderCard::Cacophony => {
+            fight.apply_to_actor(
+                Power::CacophonyPower,
+                PowerAmount::Counted(fight.power_var(CardVar::Damage)),
+            );
+            Some(())
+        }
+        NecrobinderCard::Calcify => {
+            fight.apply_to_actor(
+                Power::CalcifyPower,
+                PowerAmount::Counted(fight.power_var(CardVar::CalcifyPower)),
+            );
+            Some(())
+        }
+        NecrobinderCard::CallOfTheVoid => {
+            fight.apply_to_actor(
+                Power::CallOfTheVoidPower,
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
+            );
+            Some(())
+        }
+        NecrobinderCard::Countdown => {
+            fight.apply_to_actor(
+                Power::CountdownPower,
+                PowerAmount::Counted(fight.power_var(CardVar::CountdownPower)),
+            );
+            Some(())
+        }
+        NecrobinderCard::DanseMacabre => {
+            fight.apply_to_actor(
+                Power::DanseMacabrePower,
+                PowerAmount::Counted(fight.power_var(CardVar::DanseMacabrePower)),
+            );
+            Some(())
+        }
+        NecrobinderCard::DeathMarch => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Some(())
+        }
+        NecrobinderCard::Defend => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Some(())
+        }
+        NecrobinderCard::Defile => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Some(())
+        }
+        NecrobinderCard::Demesne => {
+            fight.apply_to_actor(
+                Power::DemesnePower,
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
+            );
+            Some(())
+        }
+        NecrobinderCard::DevourLife => {
+            fight.apply_to_actor(
+                Power::DevourLifePower,
+                PowerAmount::Counted(fight.power_var(CardVar::DevourLifePower)),
+            );
+            Some(())
+        }
+        NecrobinderCard::EnfeeblingTouch => {
+            let target = fight.target();
+            fight.apply_power(
+                target,
+                Power::EnfeeblingTouchPower,
+                PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss)),
+            );
+            Some(())
+        }
+        NecrobinderCard::ForbiddenGrimoire => {
+            fight.apply_to_actor(Power::ForbiddenGrimoirePower, PowerAmount::Counted(1));
+            Some(())
+        }
+        NecrobinderCard::Haunt => {
+            fight.apply_to_actor(
+                Power::HauntPower,
+                PowerAmount::Counted(fight.power_var(CardVar::HpLoss)),
+            );
+            Some(())
+        }
+        NecrobinderCard::Lethality => {
+            fight.apply_to_actor(
+                Power::LethalityPower,
+                PowerAmount::Counted(fight.power_var(CardVar::LethalityPower)),
+            );
+            Some(())
+        }
+        NecrobinderCard::Melancholy => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Some(())
+        }
+        NecrobinderCard::Oblivion => {
+            let target = fight.target();
+            fight.apply_power(
+                target,
+                Power::OblivionPower,
+                PowerAmount::Counted(fight.power_var(CardVar::DoomPower)),
+            );
+            Some(())
+        }
+        NecrobinderCard::Pagestorm => {
+            fight.apply_to_actor(
+                Power::PagestormPower,
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
+            );
+            Some(())
+        }
+        NecrobinderCard::Parse => {
+            fight.draw(fight.var(CardVar::Cards));
+            Some(())
+        }
+        NecrobinderCard::Reanimate => {
+            fight.summon_osty(fight.var(CardVar::Summon));
+            Some(())
+        }
+        NecrobinderCard::Reap => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Some(())
+        }
+        NecrobinderCard::ReaperForm => {
+            fight.apply_to_actor(Power::ReaperFormPower, PowerAmount::Counted(1));
+            Some(())
+        }
+        NecrobinderCard::SentryMode => {
+            fight.apply_to_actor(
+                Power::SentryModePower,
+                PowerAmount::Counted(fight.power_var(CardVar::SentryModePower)),
+            );
+            Some(())
+        }
+        NecrobinderCard::Shroud => {
+            fight.apply_to_actor(
+                Power::ShroudPower,
+                PowerAmount::Counted(fight.power_var(CardVar::Block)),
+            );
+            Some(())
+        }
+        NecrobinderCard::SleightOfFlesh => {
+            fight.apply_to_actor(
+                Power::SleightOfFleshPower,
+                PowerAmount::Counted(fight.power_var(CardVar::SleightOfFleshPower)),
+            );
+            Some(())
+        }
+        NecrobinderCard::Soulbound => {
+            let target = fight.target();
+            fight.apply_power(target, Power::SoulboundPower, PowerAmount::Counted(1));
+            Some(())
+        }
+        NecrobinderCard::SoulStorm => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Some(())
+        }
+        NecrobinderCard::Sow => {
+            fight.attack(Scaling::Dynamic, |fight| {
+                let targets = fight.opponents();
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        let attack = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(attack);
+                    }
+                });
+            });
+            Some(())
+        }
+        NecrobinderCard::SpiritOfAsh => {
+            fight.apply_to_actor(
+                Power::SpiritOfAshPower,
+                PowerAmount::Counted(fight.power_var(CardVar::BlockOnExhaust)),
+            );
+            Some(())
+        }
+        NecrobinderCard::Strike => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Some(())
+        }
+        NecrobinderCard::TimesUp => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Some(())
+        }
+        NecrobinderCard::Underworld => {
+            fight.apply_to_actor(Power::UnderworldPower, PowerAmount::Counted(1));
+            Some(())
+        }
+        NecrobinderCard::Wisp => {
+            fight.modify_energy(fight.var(CardVar::Energy));
+            Some(())
+        }
+        NecrobinderCard::BorrowedTime
+        | NecrobinderCard::Deathbringer
+        | NecrobinderCard::Debilitate
+        | NecrobinderCard::Defy
+        | NecrobinderCard::Delay
+        | NecrobinderCard::Fear
+        | NecrobinderCard::Invoke
+        | NecrobinderCard::NecroMastery
+        | NecrobinderCard::Neurosurge
+        | NecrobinderCard::PullAggro
+        | NecrobinderCard::Scourge
+        | NecrobinderCard::Veilpiercer => None,
+    }
+}
+
+/// `OnPlay` of a card whose play is more than one command, from its
+/// start to its end. A command that leaves a question waiting stands
+/// the rest still, as the game's `await` does. Each step is lent the
+/// fight, and after a question the answer.
+#[diapause::coroutine(yield = Ask<V>, resume = for<'f, 'a> Lent<'f, 'a, V, K>)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<K: FightKind<V>>(card: NecrobinderCard) {
+    match card {
+        NecrobinderCard::BorrowedTime => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.modify_energy(fight.var(CardVar::Energy));
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_actor(
+                    Power::BorrowedTimePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::ExtraCost)),
+                );
+            }
+        }
+        NecrobinderCard::Deathbringer => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_opponents(
+                    Power::DoomPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::DoomPower)),
+                );
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_opponents(
+                    Power::WeakPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
+                );
+            }
+        }
+        NecrobinderCard::Debilitate => {
+            let target: sts2_core::CombatId = resumed!().fight.target();
+            {
+                let fight = &mut *resumed!().fight;
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                });
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_power(
+                    target,
+                    Power::DebilitatePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::DebilitatePower)),
+                );
+            }
+        }
+        NecrobinderCard::Defy => {
+            let target: sts2_core::CombatId = resumed!().fight.target();
+            {
+                let fight = &mut *resumed!().fight;
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_power(
+                    target,
+                    Power::WeakPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
+                );
+            }
+        }
+        NecrobinderCard::Delay => {
+            {
+                let fight = &mut *resumed!().fight;
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_actor(
+                    Power::EnergyNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
+                );
+            }
+        }
+        NecrobinderCard::Fear => {
+            let target: sts2_core::CombatId = resumed!().fight.target();
+            {
+                let fight = &mut *resumed!().fight;
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                });
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_power(
+                    target,
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+        }
+        NecrobinderCard::Invoke => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_actor(
+                    Power::SummonNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Summon)),
+                );
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_actor(
+                    Power::EnergyNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
+                );
+            }
+        }
+        NecrobinderCard::NecroMastery => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.summon_osty(fight.var(CardVar::Summon));
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_actor(Power::NecroMasteryPower, PowerAmount::Counted(1));
+            }
+        }
+        NecrobinderCard::Neurosurge => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.modify_energy(fight.var(CardVar::Energy));
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.apply_to_actor(
+                    Power::NeurosurgePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::NeurosurgePower)),
+                );
+            }
+        }
+        NecrobinderCard::PullAggro => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.summon_osty(fight.var(CardVar::Summon));
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+        }
+        NecrobinderCard::Scourge => {
+            let target: sts2_core::CombatId = resumed!().fight.target();
+            {
+                let fight = &mut *resumed!().fight;
                 fight.apply_power(
                     target,
                     Power::DoomPower,
                     PowerAmount::Counted(fight.power_var(CardVar::DoomPower)),
                 );
-                if fight.waiting() {
-                    return Err(1);
-                }
             }
-            if from <= 1 {
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
                 fight.draw(fight.var(CardVar::Cards));
             }
-            Ok(Played::Done)
         }
-        // `call CardSelectCmd.FromHand`
-        NecrobinderCard::SculptingStrike => unimplemented!("what {card:?} does when it is played"),
-        // `call CardSelectCmd.FromCombatPile`
-        NecrobinderCard::Seance => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::SentryMode => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::SentryModePower,
-                    PowerAmount::Counted(fight.power_var(CardVar::SentryModePower)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        // `call Soul.Create`
-        NecrobinderCard::Severance => unimplemented!("what {card:?} does when it is played"),
-        // `call PowerCmd.Apply`
-        NecrobinderCard::SharedFate => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Shroud => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::ShroudPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::Block)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        // `if`
-        NecrobinderCard::SicEm => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::SleightOfFlesh => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::SleightOfFleshPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::SleightOfFleshPower)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        // `if`
-        NecrobinderCard::Snap => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Soulbound => {
-            let target = fight.target();
-            if from == 0 {
-                fight.apply_power(target, Power::SoulboundPower, PowerAmount::Counted(1));
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::SoulStorm => {
-            let target = fight.target();
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::CalculatedDamage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                });
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::Sow => {
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let targets = fight.opponents();
-                    fight.damage_command(|fight| {
-                        for target in targets {
-                            let attack = fight.resolve(Effect::Attack {
-                                dealer: fight.actor(),
-                                target,
-                                damage: Amount::Var(CardVar::Damage),
-                                scaling: Scaling::Dynamic,
-                            });
-                            fight.apply(attack);
-                        }
-                    });
-                });
-            }
-            Ok(Played::Done)
-        }
-        NecrobinderCard::SpiritOfAsh => {
-            if from == 0 {
-                fight.apply_to_actor(
-                    Power::SpiritOfAshPower,
-                    PowerAmount::Counted(fight.power_var(CardVar::BlockOnExhaust)),
-                );
-            }
-            Ok(Played::Done)
-        }
-        // `call CreatureCmd.Heal`
-        NecrobinderCard::Spur => unimplemented!("what {card:?} does when it is played"),
-        // `if`
-        NecrobinderCard::Squeeze => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Strike => {
-            let target = fight.target();
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                });
-            }
-            Ok(Played::Done)
-        }
-        // `call BuffFromPlay`
-        NecrobinderCard::TheScythe => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::TimesUp => {
-            let target = fight.target();
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::CalculatedDamage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                });
-            }
-            Ok(Played::Done)
-        }
-        // `call CardSelectCmd.FromHand`
-        NecrobinderCard::Transfigure => unimplemented!("what {card:?} does when it is played"),
-        // `call CreateClone`
-        NecrobinderCard::Undeath => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Underworld => {
-            if from == 0 {
-                fight.apply_to_actor(Power::UnderworldPower, PowerAmount::Counted(1));
-            }
-            Ok(Played::Done)
-        }
-        // `if`
-        NecrobinderCard::Unleash => unimplemented!("what {card:?} does when it is played"),
         NecrobinderCard::Veilpiercer => {
-            let target = fight.target();
-            if from == 0 {
+            let target: sts2_core::CombatId = resumed!().fight.target();
+            {
+                let fight = &mut *resumed!().fight;
                 fight.attack(Scaling::Dynamic, |fight| {
                     let attack = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
@@ -691,21 +657,16 @@ pub fn play_from<F: Fight<V>>(
                     });
                     fight.apply(attack);
                 });
-                if fight.waiting() {
-                    return Err(1);
-                }
             }
-            if from <= 1 {
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
                 fight.apply_to_actor(Power::VeilpiercerPower, PowerAmount::Counted(1));
             }
-            Ok(Played::Done)
         }
-        NecrobinderCard::Wisp => {
-            if from == 0 {
-                fight.modify_energy(fight.var(CardVar::Energy));
-            }
-            Ok(Played::Done)
-        }
+        card => unreachable!("{card:?} is not a play of more than one command"),
     }
 }
 

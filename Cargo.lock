@@ -568,6 +568,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "diapause"
+version = "0.2.0"
+dependencies = [
+ "diapause-macro",
+]
+
+[[package]]
+name = "diapause-macro"
+version = "0.2.0"
+dependencies = [
+ "diapause-macro-core",
+ "proc-macro2",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "diapause-macro-core"
+version = "0.2.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1921,6 +1946,7 @@ dependencies = [
  "sts2-content-wire",
  "sts2-core",
  "sts2-headless",
+ "sts2-run",
  "sts2-sim",
  "thiserror 2.0.20",
 ]
@@ -1929,6 +1955,7 @@ dependencies = [
 name = "sts2-content"
 version = "0.1.0"
 dependencies = [
+ "diapause",
  "nonmax",
  "num-traits",
  "serde",
@@ -1977,6 +2004,7 @@ dependencies = [
  "sts2-content-wire",
  "sts2-core",
  "sts2-headless",
+ "sts2-run",
  "sts2-sim",
  "thiserror 2.0.20",
 ]
@@ -1997,11 +2025,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sts2-run"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "num-traits",
+ "serde",
+ "serde_json",
+ "sts2-content",
+ "sts2-content-wire",
+ "sts2-core",
+ "sts2-headless",
+ "sts2-sim",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "sts2-sim"
 version = "0.1.0"
 dependencies = [
  "bitfield-struct",
  "clap",
+ "diapause",
  "indexmap",
  "nonmax",
  "num-traits",

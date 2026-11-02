@@ -1,0 +1,26 @@
+[package]
+name = "diapause"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Coroutines/generators for stable Rust via code transformation — no async, no Pin, no allocation, no unsafe code"
+readme = "../README.md"
+keywords = ["coroutine", "generator", "yield", "state-machine", "no-std"]
+categories = ["rust-patterns", "no-std", "no-std::no-alloc"]
+
+[features]
+default = ["alloc"]
+# Enables `yield_all!(box sub)` / `yield_all_resume!(box sub, rv)` boxed
+# delegation and the `Coroutine` forwarding impl for `Box<C>`. Disable
+# for no-alloc targets; nothing else in the crate allocates.
+alloc = []
+
+[dependencies]
+diapause-macro = { path = "../diapause-macro", version = "0.2.0" }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+trybuild = "1"

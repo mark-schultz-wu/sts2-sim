@@ -61,10 +61,11 @@ impl crate::build::OwnRules for V {
 
     fn own_relic_event_hook(
         state: &mut crate::behaviour::relics::State<V>,
+        owner: sts2_core::CombatId,
         hook: sts2_core::EventHook<V>,
         asked: &mut sts2_core::HookEffects<V>,
     ) {
-        relics::own_relic_event_hook(state, hook, asked);
+        relics::own_relic_event_hook(state, owner, hook, asked);
     }
 
     fn own_card_hooks(_card: <V as sts2_core::ContentVersion>::Card) -> bool {
@@ -73,42 +74,33 @@ impl crate::build::OwnRules for V {
 
     fn own_card_event_hook(
         _card: <V as sts2_core::ContentVersion>::Card,
+        _id: sts2_core::CardId<V>,
+        _owner: sts2_core::CombatId,
+        _history: sts2_core::History<'_, V>,
         _hook: sts2_core::EventHook<V>,
         _asked: &mut sts2_core::HookEffects<V>,
     ) -> Option<()> {
         None
     }
 
-    fn own_card_result_pile(
+    fn own_card_fields(
         _card: <V as sts2_core::ContentVersion>::Card,
-        _base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>> {
+    ) -> Option<crate::behaviour::cards::Fields> {
         None
     }
 
-    fn own_card_play<F: sts2_core::Fight<V>>(
-        card: <V as sts2_core::ContentVersion>::Card,
-        fight: &mut F,
-    ) -> Option<sts2_core::Played<V>> {
-        cards::on_play(card, fight)
+    fn own_card_result_pile(
+        _card: <V as sts2_core::ContentVersion>::Card,
+        _base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
+    ) -> Option<sts2_core::HookResponse<sts2_core::CardResult>> {
+        None
     }
 
-    fn own_card_play_from<F: sts2_core::Fight<V>>(
+    fn own_card_play<'a, K: sts2_core::FightKind<V>>(
         card: <V as sts2_core::ContentVersion>::Card,
-        _fight: &mut F,
-        from: u8,
-        _left: crate::behaviour::cards::Left<V>,
-    ) -> sts2_core::Played<V> {
-        unreachable!("{card:?} waited at {from} in a play this build has none of its own")
-    }
-
-    fn own_card_drew_from<F: sts2_core::Fight<V>>(
-        card: <V as sts2_core::ContentVersion>::Card,
-        _fight: &mut F,
-        from: u8,
-        _drew: &[sts2_core::CardId<V>],
-    ) -> sts2_core::Played<V> {
-        unreachable!("{card:?} drew at {from} in a play this build has none of its own")
+        fight: &mut K::Fight<'a>,
+    ) -> Option<crate::behaviour::Played<V, K>> {
+        cards::on_play::<K>(card, fight)
     }
 
     fn own_lends(
@@ -148,27 +140,27 @@ impl crate::build::OwnRules for V {
         }
     }
 
-    fn generated_play_from<F: sts2_core::Fight<V>>(
-        card: <V as sts2_core::ContentVersion>::Card,
-        fight: &mut F,
-        from: u8,
-    ) -> Result<sts2_core::Played<V>, u8> {
-        use super::generated::card_plays;
-        use super::generated::cards::Cards;
+    type Paused<K: sts2_core::FightKind<V>> = Paused<K>;
 
-        match card {
-            Cards::Ironclad(card) => card_plays::ironclad::play_from(card, fight, from),
-            Cards::Silent(card) => card_plays::silent::play_from(card, fight, from),
-            Cards::Regent(card) => card_plays::regent::play_from(card, fight, from),
-            Cards::Necrobinder(card) => card_plays::necrobinder::play_from(card, fight, from),
-            Cards::Defect(card) => card_plays::defect::play_from(card, fight, from),
-            Cards::Colorless(card) => card_plays::colorless::play_from(card, fight, from),
-            Cards::Curse(card) => card_plays::curse::play_from(card, fight, from),
-            Cards::Event(card) => card_plays::event::play_from(card, fight, from),
-            Cards::Quest(card) => card_plays::quest::play_from(card, fight, from),
-            Cards::Status(card) => card_plays::status::play_from(card, fight, from),
-            Cards::Token(card) => card_plays::token::play_from(card, fight, from),
-            Cards::Deprecated(card) => card_plays::deprecated::play_from(card, fight, from),
+    fn generated_play<'a, K: sts2_core::FightKind<V>>(
+        card: <V as sts2_core::ContentVersion>::Card,
+        fight: &mut K::Fight<'a>,
+    ) -> crate::behaviour::Played<V, K> {
+        super::generated::card_plays::play::<K>(card, fight)
+    }
+
+    fn resume_paused<'a, K: sts2_core::FightKind<V>>(
+        fight: &mut K::Fight<'a>,
+        paused: Self::Paused<K>,
+        taken: sts2_core::Taken<V>,
+    ) -> crate::behaviour::Played<V, K> {
+        match paused {
+            Paused::Generated(paused) => {
+                super::generated::card_plays::resume::<K>(fight, paused, taken)
+            }
+            Paused::Moves(paused) => {
+                super::generated::monster_moves::resume::<K>(fight, paused, taken)
+            }
         }
     }
 
@@ -196,35 +188,36 @@ impl crate::build::OwnRules for V {
     }
 
     /// No move is its own.
-    fn own_move<F: sts2_core::Fight<V>>(
+    fn own_move<'a, K: sts2_core::FightKind<V>>(
         _monster: <V as sts2_core::ContentVersion>::Monster,
         _move_id: <V as sts2_core::ContentVersion>::MoveId,
-        _step: u8,
-        _fight: &mut F,
-    ) -> Option<Option<u8>> {
+        _fight: &mut K::Fight<'a>,
+    ) -> Option<crate::behaviour::Played<V, K>> {
         None
     }
 
-    fn generated_move<F: sts2_core::Fight<V>>(
+    fn generated_move<'a, K: sts2_core::FightKind<V>>(
         monster: <V as sts2_core::ContentVersion>::Monster,
         move_id: <V as sts2_core::ContentVersion>::MoveId,
-        step: u8,
-        fight: &mut F,
-    ) -> Option<u8> {
-        use super::generated::monster_moves;
-        use crate::generated::monster_moves::Filed;
-
-        match monster_moves::filed(monster) {
-            Filed::Glory => monster_moves::glory::perform(monster, move_id, step, fight),
-            Filed::Hive => monster_moves::hive::perform(monster, move_id, step, fight),
-            Filed::Overgrowth => monster_moves::overgrowth::perform(monster, move_id, step, fight),
-            Filed::Shared => monster_moves::shared::perform(monster, move_id, step, fight),
-            Filed::Summoned => monster_moves::summoned::perform(monster, move_id, step, fight),
-            Filed::Underdocks => monster_moves::underdocks::perform(monster, move_id, step, fight),
-        }
+        fight: &mut K::Fight<'a>,
+    ) -> crate::behaviour::Played<V, K> {
+        super::generated::monster_moves::perform::<K>(monster, move_id, fight)
     }
 
-    /// No power's death is its own.
+    fn own_orb_passive<F: sts2_core::Fight<V>>(
+        _orb: &mut sts2_core::Channelled<V>,
+        _fight: &mut F,
+    ) -> Option<()> {
+        None
+    }
+
+    fn own_orb_evoke<F: sts2_core::Fight<V>>(
+        _orb: &sts2_core::Channelled<V>,
+        _fight: &mut F,
+    ) -> Option<sts2_core::Opponents> {
+        None
+    }
+
     fn own_power_death<F: sts2_core::Fight<V>>(
         _power: <V as sts2_core::ContentVersion>::Power,
         _holder: sts2_core::CombatId,
@@ -282,10 +275,10 @@ impl crate::build::OwnRules for V {
         powers::own_power_decide_hook(power, amount, held, state, hook)
     }
 
-    fn own_potion_use<F: sts2_core::Fight<V>>(
+    fn own_potion_use<'a, K: sts2_core::FightKind<V>>(
         potion: <V as sts2_core::ContentVersion>::Potion,
-        fight: &mut F,
-    ) -> Option<sts2_core::Played<V>> {
+        fight: &mut K::Fight<'a>,
+    ) -> Option<crate::behaviour::Played<V, K>> {
         potions::own_potion_use(potion, fight)
     }
 
@@ -314,6 +307,7 @@ impl crate::build::OwnRules for V {
 
     fn own_shared_relic_modify_hook(
         _state: &crate::behaviour::relics::State<V>,
+        _owner: sts2_core::CombatId,
         _hook: sts2_core::ModifyHook<V>,
     ) -> Option<sts2_core::Modify<i32>> {
         None
@@ -321,6 +315,7 @@ impl crate::build::OwnRules for V {
 
     fn own_shared_relic_event_hook(
         _state: &mut crate::behaviour::relics::State<V>,
+        _owner: sts2_core::CombatId,
         _hook: sts2_core::EventHook<V>,
         _asked: &mut sts2_core::HookEffects<V>,
     ) -> Option<()> {
@@ -333,5 +328,27 @@ impl crate::build::OwnRules for V {
         in_fight: bool,
     ) -> Option<sts2_core::HookEffects<V>> {
         potions::own_potion_use_on_run(potion, run, in_fight)
+    }
+}
+
+/// A play or a move of this build's standing still on a question. Its own
+/// plays and moves never stop, so each is one of its generated ones.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Paused<K: sts2_core::FightKind<V>> {
+    /// One of its generated plays.
+    Generated(super::generated::card_plays::Paused<K>),
+    /// One of its generated moves.
+    Moves(super::generated::monster_moves::Paused<K>),
+}
+
+impl<K: sts2_core::FightKind<V>> From<super::generated::monster_moves::Paused<K>> for Paused<K> {
+    fn from(paused: super::generated::monster_moves::Paused<K>) -> Self {
+        Paused::Moves(paused)
+    }
+}
+
+impl<K: sts2_core::FightKind<V>> From<super::generated::card_plays::Paused<K>> for Paused<K> {
+    fn from(paused: super::generated::card_plays::Paused<K>) -> Self {
+        Paused::Generated(paused)
     }
 }

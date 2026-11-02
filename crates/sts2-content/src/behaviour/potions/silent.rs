@@ -1,7 +1,8 @@
 //! The potions only the Silent's pool draws.
 
+use crate::behaviour::Played;
 use crate::vars::PotionVars as _;
-use sts2_core::{CardIdent, Change, Fight, Lasting, Pile, Played, PowerAmount};
+use sts2_core::{CardIdent, Change, Fight, Lasting, Pile, PowerAmount};
 
 use crate::ids::{CardIds as _, PotionIds as _, PowerIds as _};
 
@@ -10,7 +11,10 @@ use crate::ids::{CardIds as _, PotionIds as _, PowerIds as _};
 /// # Panics
 ///
 /// A potion of this pool nobody has ported.
-pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
+pub(super) fn on_use<V: crate::Build, F: Fight<V>>(
+    potion: V::Potion,
+    fight: &mut F,
+) -> Played<V, F::Kind> {
     match potion {
         // `AnyEnemy`.
         __c0 if __c0 == V::Potion::POISON_POTION => {
@@ -36,7 +40,8 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         // `AnyPlayer`: its Intangible on the player drinking it.
         __c0 if __c0 == V::Potion::GHOST_IN_A_JAR => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::INTANGIBLE_POWER,
                 PowerAmount::Counted(V::Potion::GHOST_IN_A_JAR_INTANGIBLE_POWER),
             );

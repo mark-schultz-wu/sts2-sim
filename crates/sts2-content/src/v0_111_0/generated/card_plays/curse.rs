@@ -4,36 +4,34 @@
 //! Source: `dumps/card_plays.txt`, build v0.111.0 (41cef1ea), assembly 1579942752.
 
 use super::super::cards::CurseCard;
-use sts2_core::{Change, Fight, Played};
+use sts2_core::{Change, Fight};
 
 type V = super::super::super::V0_111_0;
 
-/// `OnPlay` from the command at `from` on, for every card whose
-/// statements the dump matched. A command that leaves a question
-/// waiting stands the rest still, as the game's `await` does, and
-/// the play comes back as `Err` with the command to go on from.
+/// `OnPlay`, for every card whose statements the dump matched. Each
+/// is one command, which never stands still on a question.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn play_from<F: Fight<V>>(card: CurseCard, _fight: &mut F, _from: u8) -> Result<Played<V>, u8> {
+pub fn play<F: Fight<V>>(card: CurseCard, _fight: &mut F) {
     match card {
-        CurseCard::AscendersBane => Ok(Played::Done),
-        CurseCard::BadLuck => Ok(Played::Done),
-        CurseCard::Clumsy => Ok(Played::Done),
-        CurseCard::CurseOfTheBell => Ok(Played::Done),
-        CurseCard::Debt => Ok(Played::Done),
-        CurseCard::Decay => Ok(Played::Done),
-        CurseCard::Doubt => Ok(Played::Done),
-        CurseCard::Enthralled => Ok(Played::Done),
-        CurseCard::Folly => Ok(Played::Done),
-        CurseCard::Greed => Ok(Played::Done),
-        CurseCard::Guilty => Ok(Played::Done),
-        CurseCard::Injury => Ok(Played::Done),
-        CurseCard::Normality => Ok(Played::Done),
-        CurseCard::PoorSleep => Ok(Played::Done),
-        CurseCard::Regret => Ok(Played::Done),
-        CurseCard::Shame => Ok(Played::Done),
-        CurseCard::SporeMind => Ok(Played::Done),
-        CurseCard::Writhe => Ok(Played::Done),
+        CurseCard::AscendersBane => {}
+        CurseCard::BadLuck => {}
+        CurseCard::Clumsy => {}
+        CurseCard::CurseOfTheBell => {}
+        CurseCard::Debt => {}
+        CurseCard::Decay => {}
+        CurseCard::Doubt => {}
+        CurseCard::Enthralled => {}
+        CurseCard::Folly => {}
+        CurseCard::Greed => {}
+        CurseCard::Guilty => {}
+        CurseCard::Injury => {}
+        CurseCard::Normality => {}
+        CurseCard::PoorSleep => {}
+        CurseCard::Regret => {}
+        CurseCard::Shame => {}
+        CurseCard::SporeMind => {}
+        CurseCard::Writhe => {}
     }
 }
 

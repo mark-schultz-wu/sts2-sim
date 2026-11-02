@@ -1,0 +1,10 @@
+# Underworld puts Doom on what a teammate's powered hit damaged: the damage
+# times its stack. Its owner's own Strike adds none.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"UNDERWORLD","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":null,"seat":0}
+{"cmd":"grant","card":"STRIKE_IRONCLAD","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":2,"seat":0}
+{"cmd":"grant","card":"STRIKE_SILENT","target":1001,"seat":0}
+{"cmd":"play_card","index":7,"target":2,"seat":1}
