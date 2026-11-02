@@ -15,22 +15,21 @@ const AMBERGRIS_HEAL_PERCENT: i32 = 50;
 /// What a potion of this build's own does when it is drunk in a fight.
 ///
 /// `Ambergris`: `CreatureCmd.Heal` of its target by half its maximum, then
-/// one `AmbergrisPower` on it, from its drinker. Its target is any player,
-/// and a fight here has one.
+/// one `AmbergrisPower` on it, from its drinker. Its target is any player.
 pub(crate) fn own_potion_use<F: Fight<V>>(
     potion: Potion,
     fight: &mut F,
 ) -> Option<Played<V, F::Kind>> {
     match potion {
         Potion::Ambergris => {
-            let actor = fight.actor();
+            let target = fight.target();
             let max_hp: i32 = fight
                 .creatures()
-                .find(|creature| creature.id() == actor)
+                .find(|creature| creature.id() == target)
                 .map(|creature| creature.max_hp())
-                .expect("the player drinking stands in the fight");
-            fight.heal(actor, max_hp * AMBERGRIS_HEAL_PERCENT / 100);
-            fight.apply_to_actor(Power::AmbergrisPower, PowerAmount::Counted(1));
+                .expect("the player it is aimed at stands in the fight");
+            fight.heal(target, max_hp * AMBERGRIS_HEAL_PERCENT / 100);
+            fight.apply_power(target, Power::AmbergrisPower, PowerAmount::Counted(1));
             Some(Played::Done)
         }
         _ => None,

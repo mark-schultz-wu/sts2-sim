@@ -20,13 +20,13 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         // `AnyPlayer`: a fifth of its maximum, which `SetCurrentHpInternal`
         // truncates.
         __c0 if __c0 == V::Potion::BLOOD_POTION => {
-            let actor = fight.actor();
+            let target = fight.target();
             let max_hp: Number = fight
                 .creatures()
-                .find(|creature| creature.id() == actor)
+                .find(|creature| creature.id() == target)
                 .map(|creature| Number::from(creature.max_hp()))
                 .expect("the player drinking stands in the fight");
-            fight.heal(actor, max_hp * V::Potion::BLOOD_POTION_HEAL_PERCENT / 100);
+            fight.heal(target, max_hp * V::Potion::BLOOD_POTION_HEAL_PERCENT / 100);
             Played::Done
         }
         __c0 if __c0 == V::Potion::ASHWATER => start::<V, K>(potion, fight),
