@@ -234,6 +234,20 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
             fight.write_deck_version(crate::behaviour::cards::DeckWrite::BuffFromPlay(increase));
             Played::Done
         }
+        // `EnergySurge`: its energy to each living player, its owner too.
+        __c0 if __c0 == V::Card::ENERGY_SURGE => {
+            let energy = fight.var(V::CardVar::ENERGY);
+            for player in crate::behaviour::cards::teammates::<V, _>(fight) {
+                fight.for_player(player, |fight| fight.modify_energy(energy));
+            }
+            Played::Done
+        }
+        // `Ignition`: a Plasma orb channelled for the ally it is pointed at.
+        __c0 if __c0 == V::Card::IGNITION => {
+            let target = fight.target();
+            fight.for_player(target, |fight| fight.channel(V::Orb::PLASMA_ORB));
+            Played::Done
+        }
         // `HelixDrill`: its damage to the target, once for each hit it works
         // out, as `Barrage` does.
         __c0 if __c0 == V::Card::BARRAGE || __c0 == V::Card::HELIX_DRILL => barrage::<V, _>(fight),

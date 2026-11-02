@@ -1,0 +1,14 @@
+# The Ironclad plays Headbutt, whose pick waits on the Ironclad's discard
+# pile. The Regent plays Outrage meanwhile, and its clone joins that
+# discard pile. `CardSelectCmd.FromCombatPile` keeps the cards it listed,
+# so the grid does not offer the clone.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"REGENT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"end_turn","seat":0}
+{"cmd":"end_turn","seat":1}
+{"cmd":"grant","card":"HEADBUTT","target":1,"seat":0}
+{"cmd":"grant","card":"OUTRAGE","target":1001,"seat":0}
+{"cmd":"play_card","index":5,"target":2,"seat":0}
+{"cmd":"play_card","index":5,"target":2,"seat":1}
+{"cmd":"answer","pick":0,"seat":0}
+{"cmd":"answer","done":true,"seat":0}

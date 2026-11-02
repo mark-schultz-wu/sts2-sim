@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use sts2_core::Digested;
 
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::{ContentVersion, Section, Snapshot};
+use sts2_core::{ContentVersion, Snapshot};
 use sts2_golden::scenario::{Expected, Seen, Stamp, Step};
 use sts2_golden::suite::read_suite;
 
@@ -129,7 +129,7 @@ fn the_simulator_reaches_the_positions_the_game_reaches() {
         let walked = walk(name, recorded.steps(), |step| {
             stepped(sim.step(step), || sim.observe())
         });
-        if let Some(why) = compare(steps, &walked) {
+        if let Some(why) = sts2_golden::scenario::parted(steps, &walked, 1) {
             wrong.push(format!("{name}: {why}"));
         }
     }
@@ -149,38 +149,4 @@ fn the_simulator_reaches_the_positions_the_game_reaches() {
         "the answers came from another build; run `just scenarios`"
     );
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
-}
-
-/// Where a scenario parted, named by section, or as `question`.
-///
-/// Only the parts are named. What the game said is a hash and nothing more, so
-/// a failure says which part moved and leaves the simulator to print its own.
-fn compare(want: &[Step], got: &[Seen]) -> Option<String> {
-    if want.len() != got.len() {
-        return Some(format!(
-            "{} steps recorded, {} played",
-            want.len(),
-            got.len()
-        ));
-    }
-
-    let mut standing: BTreeMap<Section, sts2_core::Digest> = BTreeMap::new();
-    let mut asked = None;
-    for (at, (step, seen)) in want.iter().zip(got).enumerate() {
-        standing.extend(step.moved.iter().copied());
-        asked = step.question.or(asked);
-        let mut named: Vec<&str> = seen
-            .sections
-            .iter()
-            .filter(|(section, now)| standing.get(section) != Some(now))
-            .map(|(section, _)| section.name())
-            .collect();
-        if asked != Some(seen.question) {
-            named.push("question");
-        }
-        if !named.is_empty() {
-            return Some(format!("step {at} differs in {}", named.join(", ")));
-        }
-    }
-    None
 }
