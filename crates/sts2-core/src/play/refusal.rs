@@ -133,6 +133,9 @@ pub enum Reason<V: ContentVersion> {
     WrongOptionTarget { target: Option<crate::SeatIndex> },
     /// An event option the run has not unlocked.
     OptionLocked,
+    /// An event option that kills the player who chooses it, which a run of
+    /// several players refuses.
+    OptionWouldKill,
     /// This chest has already been answered.
     AlreadyAnswered,
     /// A shop entry that will not sell.

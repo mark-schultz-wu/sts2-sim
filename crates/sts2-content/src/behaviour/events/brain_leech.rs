@@ -40,6 +40,11 @@ impl<V: crate::Build> EventBehavior<V> for BrainLeech {
         )
     }
 
+    /// `WillKillPlayer`, for `Rip`: its hit point loss.
+    fn kills(&self, _state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 1 && run.hp() <= RIP_HP_LOSS
+    }
+
     /// `ShareKnowledge`: five cards of the character's pool at regular odds,
     /// and one of them into the deck. `Rip`: the damage, then a card reward
     /// of three colourless cards. Each finishes the event.

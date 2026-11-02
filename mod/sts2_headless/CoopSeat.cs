@@ -15,6 +15,10 @@ namespace Sts2Headless;
 /// <item><c>STS2_COOP_ROLE</c>: <c>host</c> or <c>client</c>.</item>
 /// <item><c>STS2_COOP_PORT</c>: the port the host listens on.</item>
 /// <item><c>STS2_COOP_NETID</c>: a client's net id.</item>
+/// <item><c>STS2_COOP_JOIN_AFTER</c>: a file the client waits for before it
+/// joins, which the client before it writes.</item>
+/// <item><c>STS2_COOP_JOINED</c>: a file the client writes once it has
+/// joined.</item>
 /// <item><c>STS2_COOP_PLAYERS</c>: how many seats the host waits for.</item>
 /// <item><c>STS2_COOP_CHARACTER</c> and <c>STS2_COOP_SEED</c>.</item>
 /// <item><c>STS2_COOP_WINS</c>: the runs the seat's profile has won with
@@ -38,7 +42,9 @@ internal static class CoopSeat
             Seats: int.Parse(Env("STS2_COOP_PLAYERS", "2")),
             Character: character,
             Seed: Env("STS2_COOP_SEED", "C000000001"),
-            Unlocks: UnlockState.all);
+            Unlocks: UnlockState.all,
+            JoinAfter: Environment.GetEnvironmentVariable("STS2_COOP_JOIN_AFTER"),
+            Joined: Environment.GetEnvironmentVariable("STS2_COOP_JOINED"));
         // TestMode turns the game's divergence check off, as StartRun notes,
         // and a co-op seat wants it most.
         return Net.Begin(session, run =>

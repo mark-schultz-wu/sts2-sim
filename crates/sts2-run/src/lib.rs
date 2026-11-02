@@ -285,6 +285,9 @@ where
         STEP.store(step, Ordering::Relaxed);
         let mut over = 0;
         let mut acting = None;
+        // A seat can throw a potion away while it waits on another, so one
+        // whose only moves are discards acts only where no seat has another.
+        let mut discarding = None;
         for offset in 0..seats {
             let seat = SeatIndex(u8::try_from((next + offset) % seats).expect("at most 256 seats"));
             let run_over = {
@@ -299,10 +302,21 @@ where
             }
             if acting.is_none() {
                 table.moves(seat, &mut moves)?;
-                if !moves.is_empty() {
-                    acting = Some(seat);
+                let discards = moves
+                    .iter()
+                    .all(|decision| matches!(decision, Decision::DiscardPotion { .. }));
+                match (moves.is_empty(), discards) {
+                    (true, _) => {}
+                    (false, false) => acting = Some(seat),
+                    (false, true) => discarding = discarding.or(Some(seat)),
                 }
             }
+        }
+        if acting.is_none()
+            && let Some(seat) = discarding
+        {
+            table.moves(seat, &mut moves)?;
+            acting = Some(seat);
         }
         let Some(seat) = acting else {
             if over < seats {
