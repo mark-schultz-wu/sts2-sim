@@ -5,12 +5,14 @@
 //! from its own legal list. A run that ends is fine. A refused move, an error a game
 //! logged, or seats that stall are findings, and are named.
 //!
-//! The runs that end go into `target/coop/runs.bin`, one file of recorded
-//! runs, as a hunt keeps its own.
+//! The runs that end go into `runs.bin` in the directory, `target/coop`
+//! unless `--dir` names another, which the command empties first. Two at
+//! once each name their own.
 //!
 //! ```text
 //! STS2_GAME_VERSION=v0.111.0 cargo xtask coop
 //! STS2_GAME_VERSION=v0.111.0 cargo xtask coop --runs 20 --characters IRONCLAD,SILENT,DEFECT
+//! STS2_GAME_VERSION=v0.111.0 cargo xtask coop --hunt --first-seed 3 --runs 1 --dir target/coop-a
 //! ```
 //!
 //! The build is `STS2_GAME_VERSION`'s. Only v0.111.0 plays co-op.
@@ -41,6 +43,10 @@ pub struct Args {
     /// Play the simulator beside the game, and stop each run where they part.
     #[arg(long)]
     hunt: bool,
+    /// Where the runs keep their files, which this empties first. A
+    /// relative path is under the workspace.
+    #[arg(long, default_value = "target/coop")]
+    dir: std::path::PathBuf,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -58,12 +64,12 @@ pub fn run(args: Args) -> Result<String, Error> {
         characters,
         width,
         hunt,
+        dir,
     } = args;
     let root = crate::workspace();
     let runner = crate::error::build_runner(&root)?;
     let build = crate::runner::game_build();
-    let merger = crate::error::build_example(&root, "merge_runs")?;
-    let scratch = root.join("target/coop");
+    let scratch = root.join(dir);
     let _ = std::fs::remove_dir_all(&scratch);
     crate::error::create_dir(&scratch)?;
 
@@ -89,7 +95,11 @@ pub fn run(args: Args) -> Result<String, Error> {
         .collect();
     let file = scratch.join("runs.bin");
     if !kept.is_empty() {
-        crate::error::status(Command::new(&merger).arg(&file).args(&kept))?;
+        crate::error::status(
+            Command::new(crate::error::merger(&root)?)
+                .arg(&file)
+                .args(&kept),
+        )?;
     }
     let mut out = String::new();
     for (at, went) in &went {
@@ -151,7 +161,7 @@ fn play_one(
     hunt: bool,
 ) -> Result<String, String> {
     let homes = scratch.join(seed);
-    let mut args = crate::runner::args([seed, characters, "--build", build]);
+    let mut args = crate::runner::args(["play", seed, characters, "--build", build]);
     args.extend(crate::runner::args([
         "--table",
         "game",
@@ -192,7 +202,13 @@ fn play_one(
         )
     };
     match verdict.end {
-        End::Won | End::Lost | End::Capped | End::Agreed | End::Parted => Ok(line(None)),
+        // Every machine's game logs the shared actions in the order it took
+        // them in, and every machine follows the host's.
+        End::Parted => Ok(line(Some(format!(
+            " (the host's order in {})",
+            homes.join("seat0/SlayTheSpire2/order.jsonl").display()
+        )))),
+        End::Won | End::Lost | End::Capped | End::Agreed => Ok(line(None)),
         End::Panicked | End::Refused => Ok(line(last)),
         _ => Err(format!("{} (moves in {})", line(last), log.display())),
     }

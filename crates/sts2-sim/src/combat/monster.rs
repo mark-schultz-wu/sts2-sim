@@ -63,10 +63,11 @@ fn monster_hps<V: Rules>(creatures: &[Fighter<V>]) -> SmallVec<[V::Health; CREAT
 /// `GenerateInternalCombatState`: the health each of an encounter's
 /// monsters rolls as a `Combat`-layout event builds its fight, in the order
 /// they stand. `CombatState.CreateCreature` rolls it off `Niche` against the
-/// ones before.
+/// ones before, then scales it for the players the fight already holds.
 pub(crate) fn roll_layout<V: Rules>(
     monsters: &[sts2_core::Spawned<V>],
     ascension: V::AscensionLevel,
+    scaling: Scaling,
     niche: &mut MegaRng,
 ) -> SmallVec<[V::Health; 2]> {
     let mut rolled: SmallVec<[V::Health; 2]> = SmallVec::new();
@@ -78,7 +79,7 @@ pub(crate) fn roll_layout<V: Rules>(
             &rolled,
             niche,
         );
-        rolled.push(hp);
+        rolled.push(scaling.health::<V>(hp));
     }
     rolled
 }
@@ -236,11 +237,9 @@ pub(crate) fn initialize<V: Rules>(
     ) in monsters.iter().enumerate()
     {
         let state = spawned_model(&monsters[index]);
-        // A fight an event built as it opened rolled its health then.
+        // A fight an event built as it opened rolled its health then, scaled
+        // already.
         let hp = match rolled.get(index) {
-            Some(_) if scaling.players > 1 => {
-                unimplemented!("health an event rolled in a fight of several players")
-            }
             Some(&hp) => hp,
             // `SetUniqueMonsterHpValue`, against the health of those standing
             // already, then `ScaleMonsterHpForMultiplayer`.

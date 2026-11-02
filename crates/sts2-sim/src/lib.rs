@@ -16,6 +16,6 @@ mod seats;
 mod stream;
 
 pub use combat::Error;
-pub use engine::{Sim, SimSeat, SimTable};
+pub use engine::{Sim, SimTable};
 pub use legal::Legal;
 pub use run::AtSeat;
