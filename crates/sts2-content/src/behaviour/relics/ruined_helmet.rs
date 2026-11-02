@@ -13,15 +13,18 @@ pub struct State {
 
 /// `TryModifyPowerAmountReceived`: Strength landing on its owner doubled,
 /// once a fight.
-pub(super) fn modify_hook<V: crate::Build>(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &State,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
         ModifyHook::PowerAmountReceived {
             power: __c0,
             target,
             amount,
-            player,
         } if __c0 == V::Power::STRENGTH_POWER
-            && (target == player && amount > 0 && !state.used_this_combat) =>
+            && (target == owner && amount > 0 && !state.used_this_combat) =>
         {
             Modify::Replaced(amount * 2)
         }

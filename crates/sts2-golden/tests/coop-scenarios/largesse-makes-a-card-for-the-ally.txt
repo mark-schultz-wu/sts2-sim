@@ -1,0 +1,6 @@
+# Largesse makes a colorless card for the ally it is pointed at, into
+# that ally's hand.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"LARGESSE","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":1,"seat":0}

@@ -7,9 +7,12 @@ use crate::behaviour::relics::Number;
 
 /// `ModifyHpLostAfterOsty`: its reduction off a loss its owner takes,
 /// `Math.Max(0, amount - 1)`.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
-        ModifyHook::HpLostAfterOsty { target, player, .. } if target == player => {
+        ModifyHook::HpLostAfterOsty { target, .. } if target == owner => {
             Modify::Less(V::Relic::TUNGSTEN_ROD_HP_LOSS_REDUCTION)
         }
         ModifyHook::HpLostAfterOsty { .. } => Modify::Nothing,
