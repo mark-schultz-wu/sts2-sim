@@ -138,10 +138,6 @@ block, energy, hand, deck, health, plays and belt. What is left:
   ask as they are obtained, such as Astrolabe or Pandora's Box. Such a
   relic panics in `obtain_here`. The treasure phase keeps no question for
   each player. About 25 relics ask in `AfterObtained`.
-- Fight-in-event: `resuming` keeps one player's event to go back to.
-  `ResumeAfterCombat` runs on every player's copy. A won fight that
-  resumes its event panics in `run/fight.rs` when there are several
-  players. Ironclad and Silent seed 22 reaches one.
 - Out of a fight, damage kills the player. The game heals them to 1
   instead when there are several players (`CreatureCmd.cs:522`).
 
@@ -155,15 +151,9 @@ block, energy, hand, deck, health, plays and belt. What is left:
     when any player's health is low.
   - The game never allows Fake Merchant in co-op.
   - War Historian Repy ends its event in co-op.
-  - An option that `ThatWillKillPlayerIf` flags as fatal cannot be
-    chosen in co-op (`NEventOptionButton.OnRelease`). Neither the mod
-    nor the sim refuses it. Nineteen events flag one.
-- `GoldenPathActMap.cs:42` drops a point type in co-op. Golden
-  Compass ignores this.
 - Monster numbers:
   - Battleworn Dummy's options show each setting's health scaled by
-    `ScaleHpForMultiplayer`. The fight it opens panics in a run of
-    several players first.
+    `ScaleHpForMultiplayer`.
 - In Act 3, a fight of several players panics at `monster.rs:139`.
 - `BurningBlood` and `BlackBlood` heal a dead teammate. The game checks
   `!Owner.Creature.IsDead`.
@@ -233,9 +223,19 @@ run as its own machine sees it. The work goes in this order:
    stops on a question waits at the front of its player's queue, and the
    other players act around it. A won fight hands each player back their
    health and rolls their own rewards. A player who dies beside a living
-   one leaves the fight's cards, and a win revives them. A win cancels
+   one leaves the fight's cards, and a win revives them. A player whose
+   teammates the same command brought to nothing keeps them, and one who
+   dies as the fight ends keeps their energy. A death that readies the
+   last player not yet ready ends the turn once the play is over. A run of several players
+   never offers an event option that kills its player, Trial's Double
+   Down among them. A fight an event entered, once won, resumes
+   every player's copy of the event. A win cancels
    the actions still waiting, as the game's does. A merchant stocks an
-   inventory for each player, who buys from it alone. Each player goes
+   inventory for each player, who buys from it alone. An item's purchase
+   runs on the buyer's machine, and its results reach the other machines
+   once it is over. Each room a travel enters syncs every machine's copy
+   of each other player from that player's own machine, as
+   `CombatStateSynchronizer` does. Each player goes
    through their own copy of an event. A potion aimed at a player acts
    for that player, who answers what it asks, and its drinker applies its
    powers. A fresh power on
@@ -253,14 +253,44 @@ run as its own machine sees it. The work goes in this order:
    player who dies inside their own card keeps their cards until the
    card is over. The run is over only once every player is dead. A
    player who earns an extra turn takes it alone, while the others wait
-   ready.
+   ready. A filtered card choice lists its pile once its choice has
+   signalled. So a potion thrown at a player lists their hand once their
+   queue reaches it. A pick from any pile but the hand keeps the cards it
+   listed, whatever joins the pile while it waits. An auto-play whose
+   pick is another player's ends as the pick begins, and the pre-play
+   phase goes on. The other player's own pre-play phase runs all the
+   same. Whispering Earring's pushed selector answers its picks as they
+   come up, before the next player's pre-play phase. Each player's turn
+   end runs their orbs, even after a teammate's turn end wins the
+   fight. A potion discard reaches the other machines by its slot, and
+   does nothing where their copy of the slot is empty. A filtered pick
+   from the hand lists it again after each decision. So it offers a card
+   a teammate gives while it waits. Whispering Earring aims a card at an
+   ally drawn at random from the other living players. A card another
+   player's potion auto-plays runs in the drinker's choice context, so
+   its owner's pick branches onto the owner's queue. A lobby's clients
+   join in seat order, so a run of three players seats them the same way
+   every time. Fur Coat seeds its marks with its owner's slot, as
+   `new Rng(Owner, Id)` does. A card made for a dead player goes into no
+   pile, and every listener still hears it made. A card auto-played at
+   any ally draws its target from the other living players alone, never
+   from a pet.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
    On 2026-10-30 a hunt of 96 seeds covered four pairs of characters.
    Ironclad and Silent played seeds 0 to 47. Defect and Necrobinder,
    Regent and Ironclad, and Silent and Defect played seeds 0 to 15. 53 seeds
-   agreed to their end. What is still open is listed below, worked by
+   agreed to their end. On 2026-11-01 a fresh hunt
+   of seeds 0 to 15 for each of the four pairs agreed on 63 of the 64
+   seeds. The last, Silent and Defect seed 2, needed the room-entry sync,
+   and agrees too. A hunt of seeds 16 to 31 for the four pairs agreed on 55
+   of the 64 seeds, and all 64 agree now. A hunt of seeds 32 to 47 agreed
+   on 60 of the 64. Defect and Necrobinder seeds 33 and 39 agree now. The
+   harness lost Regent and Ironclad seed 43 to a game that exited as it
+   started, and the seed agrees when it plays again. Ironclad and Silent
+   seed 34 hangs at the same step each time, listed below.
+   What is still open is listed below, worked by
    class, with the seeds that show it.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. A lobby moves only once every game stands still and
@@ -269,10 +299,10 @@ run as its own machine sees it. The work goes in this order:
    while another player is yet to. Once all are done, it is on its way
    to the next turn or room. Two recordings of the co-op scenarios on
    2026-10-30 came out the same, byte for byte. The narrower ally
-   targets changed the moves the hunted runs chose from, so
+   targets changed the moves the hunted runs chose from. So
    `coop-v0.111.0.bin` holds the sixteen Ironclad and Silent seeds hunted
-   again. Eleven agree to their end, and the simulator follows 25,307 of
-   their 25,317 positions. Each machine logs the shared actions in the
+   again, and 17 runs the hunts since found a split in. The simulator
+   follows 58,855 of their 58,856 positions. Each machine logs the shared actions in the
    order it took them in, in `order.jsonl` under its profile. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. A rule no hunted run reaches gets
@@ -280,11 +310,9 @@ run as its own machine sees it. The work goes in this order:
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
-   - A card whose pick another player makes splits its play, as
-     `BranchingPlayerChoiceContext` does. The play ends there, and the
-     pick and the rest of the card go on as a hook action on the
-     chooser's queue. Tutor is `unimplemented!` until the scheduler has
-     this (Defect and Necrobinder seed 4).
+   - A card or potion whose pick another player makes splits as
+     `BranchingPlayerChoiceContext` does, but for a card with replays,
+     which is still `unimplemented!`.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the post-play phase asks in a fight of several players
      waits on its player's queue, and the turn's end waits for every
@@ -304,20 +332,21 @@ run as its own machine sees it. The work goes in this order:
        simulator, and the other 25 do not yet.
      - Content whose comment says "a fight here has one" player.
      - The rest of `Board::seat`'s callers, which a card or potion reaches
-       for its own player and a monster's move does not yet. The Test
-       Subject's move reaches one (Silent and Defect seed 4).
-   - A death that leaves every standing player ready panics.
+       for its own player and a monster's move does not yet. No hunted
+       seed reaches one now.
    - The hand screen checks a pick again whenever the fight changes
      (`NPlayerHand.RevalidateSelectionAfterStateChange`). A pick the
      filter no longer lets through drops, and a pick left with nothing
      picked and nothing to pick ends with no cards. Neither the mod nor
      the simulator does this yet. Both offer the hand as it stands.
+   - Two players who each hold Fur Coat. The game leaves out of each
+     coat's marks the points another coat marked, which the simulator's
+     map does not record, so it is `unimplemented!`.
+   - Ironclad and Silent seed 34 hangs at step 1292. After an event's
+     option, both players take rewards, and the host skips the last. Its
+     game then waits with an empty queue and never replies, until the
+     harness times out. The mod's reward screen is the place to look.
    - The splits the hunt of 2026-10-30 found, by where they show:
-     - A shop purchase draws a different number (Defect and Necrobinder
-       seeds 3 and 14, Silent and Defect seed 9).
-     - Travel into a fight parts in the turn, the creatures, the hand and
-       the moves. Ironclad and Silent seed 40 shows it, and so do Defect
-       and Necrobinder seed 11 and Regent and Ironclad seed 11.
      - A co-op scenario's `enter_room` setup hangs: the host leaves its
        room and enters none, and the reply never comes. The mod's
        `EnterRoom` calls `EnterRoomDebug`, where `fight` goes through the
@@ -325,38 +354,9 @@ run as its own machine sees it. The work goes in this order:
      - A setup that jumps out of a fight into a room keeps the health the
        game set inside the fight, and the simulator drops it. A scenario
        that sets health with `hp` and then enters a room shows it.
-     - The end of the turn in a fight: the creatures, or the question.
-       Ironclad and Silent seed 30 shows it at Spiny Toad, and seed 44
-       at Ceremonial Beast. Silent and Defect seed 4 shows it at Globe
-       Head, seed 10 at Ovicopter, and seed 13 at Knowledge Demon. The
-       lobby counted a game as still once every player ended the turn,
-       so hunt these again first.
-     - A potion thrown at a player who ended the turn. Its choice takes
-       that end back, and the game resumes the player's paused
-       `EndPlayerTurnAction` once the choice is over. After the player
-       ends the turn again, the game still offers them the end of the
-       turn, and the simulator offers nothing. Touch of Insanity shows it
-       (Defect and Necrobinder seed 15, Silent and Defect seed 13).
-     - Gambler's Brew's seed parts at a later confirm, in the run, the
-       belt and the moves (Ironclad and Silent seed 3). Swift Potion
-       parted once (Silent and Defect seed 15).
-     - Golden Compass in the map (Ironclad and Silent seeds 28 and 45).
-       `GoldenPathActMap` drops a point type in co-op, under class E.
-     - Outrage's question (Ironclad and Silent seed 24), Battleworn
-       Dummy's options (seed 37), and a card selection's piles (Regent
-       and Ironclad seed 9).
-     - The piles at the run's end (Ironclad and Silent seed 39, Defect
-       and Necrobinder seed 10).
-   - The game itself fails, as a player dies outside of combat in
-     multiplayer (Regent and Ironclad seed 14). Class D's
-     death out of a fight is the likely cause.
 4. Co-op content, as the runs reach it. Massive Scroll, Concoct, Tag
-   Team and the rest of v0.111.0's co-op cards are ported, but for The
-   Ball. After each play it goes into a random teammate's draw pile
-   (`CardPileCmd.GiveToAnotherPlayer`), so a card changes owner. The
-   simulator keeps each player's cards apart, and its result pile names
-   no player. Regent and Ironclad seed 7, and Silent and Defect seed 7,
-   panic at it.
+   Team and the rest of v0.111.0's co-op cards are ported. The Ball
+   goes to a teammate as `CardPileCmd.GiveToAnotherPlayer` gives it.
 
 ### 3. The engine's command frames as coroutines
 
