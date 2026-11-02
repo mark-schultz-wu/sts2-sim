@@ -298,6 +298,8 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
     // The build's type, `V0_107_1` for the module `v0_107_1`.
     let version = version_module().map_err(DumpError::from)?.to_uppercase();
     let mut split = Split::new(root, "card_plays", "card_plays.txt", &dump.build)?;
+    // Each pool, and whether it has a play that can stand still.
+    let mut pausing: Vec<(&str, &str, bool)> = Vec::new();
     for (pool_id, module, enum_name, _) in POOLS {
         // In the order the pool's enum declares them, which is the dump's.
         let mut members: Vec<(String, &Card)> = Vec::new();
@@ -315,34 +317,16 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
         let out = split.body(module);
         writeln!(out, "type V = super::super::super::{version};\n").unwrap();
 
-        // A pool with nothing generated reads nothing from the fight.
-        let (fight, from) = match members
-            .iter()
-            .any(|(_, card)| card.play.blocked.is_none() && !card.play.rows.is_empty())
-        {
-            true => ("fight", "from"),
-            false => ("_fight", "_from"),
-        };
-        writeln!(
-            out,
-            "/// `OnPlay` from the command at `from` on, for every card whose\n\
-             /// statements the dump matched. A command that leaves a question\n\
-             /// waiting stands the rest still, as the game's `await` does, and\n\
-             /// the play comes back as `Err` with the command to go on from.\n\
-             ///\n\
-             /// Any other card panics, and `behaviour/` ports it by hand.\n\
-             pub fn play_from<F: Fight<V>>(card: {enum_name}, {fight}: &mut F, {from}: u8) -> Result<Played<V, F::Kind>, u8> {{\n\
-             match card {{"
-        )
-        .unwrap();
+        // Each card the dump matched, as the commands it runs. A card with
+        // one command never stands still on a question, so `play` runs it.
+        // A card with more is the pool's coroutine's.
+        let mut plays: Vec<(&str, Vec<&Vec<String>>, bool)> = Vec::new();
+        let mut blocked: Vec<(&str, String)> = Vec::new();
         for (variant, card) in &members {
-            if let Some(blocked) = &card.play.blocked {
-                comment(out, blocked);
-                writeln!(
-                    out,
-                    "{variant} => unimplemented!(\"what {{card:?}} does when it is played\"),"
-                )
-                .unwrap();
+            if let Some(why) = &card.play.blocked {
+                let mut note = String::new();
+                comment(&mut note, why);
+                blocked.push((variant, note));
                 continue;
             }
             // A list nothing reads is a list the C# only animates over.
@@ -369,56 +353,125 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
             if let (Some(held), Some(reads)) = (held, reads)
                 && reads > held
             {
-                writeln!(
-                    out,
-                    "// A list held across a command that can wait on a question."
-                )
-                .unwrap();
-                writeln!(
-                    out,
-                    "{variant} => unimplemented!(\"what {{card:?}} does when it is played\"),"
-                )
-                .unwrap();
+                blocked.push((
+                    variant,
+                    "// A list held across a command that can wait on a question.\n".to_owned(),
+                ));
                 continue;
             }
-            writeln!(out, "{variant} => {{").unwrap();
-            if card
+            let targets = card
                 .play
                 .rows
                 .iter()
-                .any(|row| row.get(1).is_some_and(|t| t == "chosen"))
-            {
+                .any(|row| row.get(1).is_some_and(|t| t == "chosen"));
+            plays.push((variant, rows, targets));
+        }
+        let (single, multiple): (Vec<_>, Vec<_>) =
+            plays.iter().partition(|(_, rows, _)| rows.len() <= 1);
+        let unblocked = |variant: &str| blocked.iter().all(|(v, _)| *v != variant);
+        debug_assert!(plays.iter().all(|(v, ..)| unblocked(v)));
+
+        // `play`, for the cards with one command and those the dump left.
+        let reads = single.iter().any(|(_, rows, _)| !rows.is_empty());
+        let fight = if reads { "fight" } else { "_fight" };
+        match multiple.is_empty() {
+            true => writeln!(
+                out,
+                "/// `OnPlay`, for every card whose statements the dump matched. Each\n\
+                 /// is one command, which never stands still on a question.\n\
+                 ///\n\
+                 /// Any other card panics, and `behaviour/` ports it by hand.\n\
+                 pub fn play<F: Fight<V>>(card: {enum_name}, {fight}: &mut F) {{\n\
+                 match card {{"
+            ),
+            false => writeln!(
+                out,
+                "/// `OnPlay` of a card whose play is one command, which never stands\n\
+                 /// still on a question. `None` for a card with more, which [`paused`]\n\
+                 /// plays.\n\
+                 ///\n\
+                 /// Any other card panics, and `behaviour/` ports it by hand.\n\
+                 pub fn play<F: Fight<V>>(card: {enum_name}, {fight}: &mut F) -> Option<()> {{\n\
+                 match card {{"
+            ),
+        }
+        .unwrap();
+        let done = if multiple.is_empty() { "" } else { "Some(())" };
+        for (variant, note) in &blocked {
+            out.push_str(note);
+            writeln!(
+                out,
+                "{variant} => unimplemented!(\"what {{card:?}} does when it is played\"),"
+            )
+            .unwrap();
+        }
+        for (variant, rows, targets) in &single {
+            writeln!(out, "{variant} => {{").unwrap();
+            if *targets {
                 writeln!(out, "let target = fight.target();").unwrap();
             }
-            // Each command runs where the play has not yet gone past it. One
-            // that leaves a question waiting hands back the next to go on
-            // from, and the last has nothing after it to wait.
-            let last = rows.len().saturating_sub(1);
-            for (at, row) in rows.iter().enumerate() {
-                let step = u8::try_from(at).map_err(|_| Error::In {
-                    at: variant.to_string(),
-                    source: Box::new(Error::Unread {
-                        what: "a play this long",
-                        words: Vec::new(),
-                    }),
-                })?;
-                match step {
-                    0 => writeln!(out, "if from == 0 {{"),
-                    _ => writeln!(out, "if from <= {step} {{"),
-                }
-                .unwrap();
+            for row in rows {
                 command(out, row).map_err(|source| Error::In {
                     at: variant.to_string(),
                     source: Box::new(source),
                 })?;
-                if at < last {
-                    writeln!(out, "if fight.waiting() {{\nreturn Err({});\n}}", step + 1).unwrap();
+            }
+            writeln!(out, "{done}\n}}").unwrap();
+        }
+        if !multiple.is_empty() {
+            let names: Vec<&str> = multiple.iter().map(|(v, ..)| *v).collect();
+            writeln!(out, "{} => None,", names.join(" | ")).unwrap();
+        }
+        writeln!(out, "}}\n}}\n").unwrap();
+
+        // `paused`, for the cards with more than one command.
+        if !multiple.is_empty() {
+            writeln!(
+                out,
+                "/// `OnPlay` of a card whose play is more than one command, from its\n\
+                 /// start to its end. A command that leaves a question waiting stands\n\
+                 /// the rest still, as the game's `await` does. Each step is lent the\n\
+                 /// fight, and after a question the answer.\n\
+                 #[diapause::coroutine(yield = Ask<V>, resume = for<'f, 'a> Lent<'f, 'a, V, K>)]\n\
+                 #[derive(Debug, Clone, PartialEq, Eq, Hash)]\n\
+                 pub fn paused<K: FightKind<V>>(card: {enum_name}) {{\n\
+                 match card {{"
+            )
+            .unwrap();
+            for (variant, rows, targets) in &multiple {
+                writeln!(out, "{variant} => {{").unwrap();
+                if *targets {
+                    writeln!(
+                        out,
+                        "let target: sts2_core::CombatId = resumed!().fight.target();"
+                    )
+                    .unwrap();
+                }
+                let last = rows.len() - 1;
+                for (at, row) in rows.iter().enumerate() {
+                    writeln!(out, "{{\nlet fight = &mut *resumed!().fight;").unwrap();
+                    command(out, row).map_err(|source| Error::In {
+                        at: variant.to_string(),
+                        source: Box::new(source),
+                    })?;
+                    writeln!(out, "}}").unwrap();
+                    if at < last {
+                        writeln!(
+                            out,
+                            "if resumed!().fight.waiting() {{\nyield_!(Ask::Waiting);\n}}"
+                        )
+                        .unwrap();
+                    }
                 }
                 writeln!(out, "}}").unwrap();
             }
-            writeln!(out, "Ok(Played::Done)\n}}").unwrap();
+            writeln!(
+                out,
+                "card => unreachable!(\"{{card:?}} is not a play of more than one command\"),\n}}\n}}\n"
+            )
+            .unwrap();
         }
-        writeln!(out, "}}\n}}\n").unwrap();
+        pausing.push((module, enum_name, !multiple.is_empty()));
 
         writeln!(
             out,
@@ -494,6 +547,7 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
     for (_, module, _, _) in POOLS {
         writeln!(shape, "pub mod {module};").unwrap();
     }
+    shape.push_str(&dispatch(&version, &pausing));
     split.finish(
         &shape,
         |module| {
@@ -525,6 +579,7 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
                 ],
             ),
             ("crate::behaviour", &["Played"]),
+            ("crate::behaviour::paused", &["Ask", "Lent"]),
             ("super::super::orbs", &["Orb"]),
             ("super::super::powers", &["Power"]),
             (
@@ -535,6 +590,7 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
                     "CostPool",
                     "Effect",
                     "Fight",
+                    "FightKind",
                     "PowerAmount",
                     "Scaling",
                 ],
@@ -542,4 +598,98 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
         ],
     )?;
     Ok(())
+}
+
+/// The parent's `Paused`, `play` and `resume`, over every pool. `pausing`
+/// names each pool's module and enum, and whether it has a play that can
+/// stand still.
+fn dispatch(version: &str, pausing: &[(&str, &str, bool)]) -> String {
+    let pool = |module: &str| camel(module);
+    let mut out = format!(
+        "\ntype V = super::super::{version};\n\n\
+         /// A generated play standing still on a question, by its pool.\n\
+         #[derive(Debug, Clone, PartialEq, Eq, Hash)]\n\
+         pub enum Paused<K: sts2_core::FightKind<V>> {{\n"
+    );
+    for (module, _, pauses) in pausing {
+        if *pauses {
+            writeln!(out, "{}({module}::paused::State<K>),", pool(module)).unwrap();
+        }
+    }
+    out.push_str(
+        "}\n\n\
+         /// `OnPlay`, for every card whose statements the dump matched.\n\
+         ///\n\
+         /// Any other card panics, and `behaviour/` ports it by hand.\n\
+         pub fn play<'a, K: sts2_core::FightKind<V>>(\n\
+         card: super::cards::Cards,\n\
+         fight: &mut K::Fight<'a>,\n\
+         ) -> crate::behaviour::Played<V, K> {\n\
+         match card {\n",
+    );
+    for (module, enum_name, pauses) in pausing {
+        let variant = enum_name.trim_end_matches("Card");
+        match pauses {
+            true => writeln!(
+                out,
+                "super::cards::Cards::{variant}(card) => match {module}::play(card, fight) {{\n\
+                 Some(()) => crate::behaviour::Played::Done,\n\
+                 None => {{\n\
+                 let mut play = {module}::paused::<K>(card);\n\
+                 let state = play.start_with(crate::behaviour::paused::Lent {{ fight, taken: None }});\n\
+                 settle(Paused::{}(play), state)\n\
+                 }}\n\
+                 }},",
+                pool(module)
+            ),
+            false => writeln!(
+                out,
+                "super::cards::Cards::{variant}(card) => {{\n\
+                 {module}::play(card, fight);\n\
+                 crate::behaviour::Played::Done\n\
+                 }}"
+            ),
+        }
+        .unwrap();
+    }
+    out.push_str(
+        "}\n}\n\n\
+         /// A generated play that stood still, with the answer it waited for.\n\
+         pub fn resume<'a, K: sts2_core::FightKind<V>>(\n\
+         fight: &mut K::Fight<'a>,\n\
+         paused: Paused<K>,\n\
+         taken: sts2_core::Taken<V>,\n\
+         ) -> crate::behaviour::Played<V, K> {\n\
+         let lent = crate::behaviour::paused::Lent { fight, taken: Some(taken) };\n\
+         match paused {\n",
+    );
+    for (module, _, pauses) in pausing {
+        if *pauses {
+            let name = pool(module);
+            writeln!(
+                out,
+                "Paused::{name}(mut play) => {{\n\
+                 let state = diapause::Coroutine::resume(&mut play, lent);\n\
+                 settle(Paused::{name}(play), state)\n\
+                 }}"
+            )
+            .unwrap();
+        }
+    }
+    out.push_str(
+        "}\n}\n\n\
+         /// How far a step of `play` got.\n\
+         fn settle<K: sts2_core::FightKind<V>>(\n\
+         play: Paused<K>,\n\
+         state: diapause::CoroutineState<crate::behaviour::paused::Ask<V>, ()>,\n\
+         ) -> crate::behaviour::Played<V, K> {\n\
+         match state {\n\
+         diapause::CoroutineState::Complete(()) => crate::behaviour::Played::Done,\n\
+         diapause::CoroutineState::Yielded(ask) => {\n\
+         ask.at(crate::behaviour::Resume::Build(play.into()))\n\
+         }\n\
+         }\n\
+         }\n",
+    );
+    out
 }

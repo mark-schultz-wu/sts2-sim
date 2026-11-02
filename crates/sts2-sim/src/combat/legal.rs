@@ -55,7 +55,7 @@ impl<V: Rules> sts2_core::CardLogic for Logic<'_, V> {
     }
 
     fn osty(&self) -> bool {
-        super::board::osty::<V>(&self.0.creatures).is_some_and(|osty| osty.alive)
+        super::board::osty::<V>(&self.0.creatures, self.1).is_some_and(|osty| osty.alive)
     }
 
     fn hand_all_attacks(&self) -> bool {
@@ -88,14 +88,18 @@ pub(super) fn first_playable<V: Rules>(
         })
 }
 
-/// What a card names as its target.
+/// What a card of `seat`'s player names as its target.
 #[inline(always)]
-pub(super) fn target_type<V: Rules>(card: CardIdent<V>, live: &Live<V>) -> V::TargetType {
+pub(super) fn target_type<V: Rules>(
+    card: CardIdent<V>,
+    live: &Live<V>,
+    seat: sts2_core::SeatIndex,
+) -> V::TargetType {
     // One of the four cards that work their target out from the fight, which
-    // they do by reading the player's own powers.
-    card.card
-        .target()
-        .unwrap_or_else(|| V::computed_card_target(card.card, &super::board::powers::<V>(live)))
+    // they do by reading their owner's own powers.
+    card.card.target().unwrap_or_else(|| {
+        V::computed_card_target(card.card, &super::board::powers::<V>(live, seat))
+    })
 }
 
 /// Whether anything in the fight answers `ShouldPlay`, asked once for a hand
@@ -110,11 +114,13 @@ fn asks_should_play<V: Rules>(fight: Walk<'_, V>) -> bool {
 /// is where the copy stands, or nothing for the play pile.
 #[inline(always)]
 pub(super) fn costs<V: Rules>(
+    seat: sts2_core::SeatIndex,
     held: &CardInstance<V>,
     pile: Option<Pile>,
     fight: Walk<'_, V>,
 ) -> (sts2_core::Cost, sts2_core::Cost) {
     let card = (held.id, held.face.ident.card);
+    let player = seat.creature();
     let ethereal = held.face.ethereal();
     let affliction = held.face.ident.affliction;
     held.face.costs(
@@ -125,12 +131,14 @@ pub(super) fn costs<V: Rules>(
                 &[
                     sts2_core::ModifyHook::EnergyCost {
                         card,
+                        player,
                         ethereal,
                         affliction,
                         pile,
                     },
                     sts2_core::ModifyHook::EnergyCostLate {
                         card,
+                        player,
                         ethereal,
                         affliction,
                         pile,
@@ -146,7 +154,11 @@ pub(super) fn costs<V: Rules>(
                 true => super::board::modified_by::<V>(
                     fight,
                     cost,
-                    &[sts2_core::ModifyHook::StarCost { card, pile }],
+                    &[sts2_core::ModifyHook::StarCost {
+                        card,
+                        player: seat.creature(),
+                        pile,
+                    }],
                 ),
                 false => cost,
             }
@@ -196,12 +208,12 @@ pub(super) fn reasons<V: Rules>(
             <V::UnplayableReason as UnplayableReasonKinds>::STAR_COST_TOO_HIGH,
         );
     }
-    // One player creature is the player's own, so a card pointed at an ally
-    // needs a second one alive.
+    // `PlayerCreatures`: one is the player's own, so a card pointed at an
+    // ally needs a second player alive. A pet is no ally here.
     if target == <V::TargetType as TargetKinds>::ANY_ALLY
-        && creatures
+        && creatures[..fight.live.players.len()]
             .iter()
-            .filter(|c| c.side == <V::CombatSide as SideKinds>::PLAYER && c.alive)
+            .filter(|c| c.alive)
             .count()
             <= 1
     {
@@ -217,6 +229,7 @@ pub(super) fn reasons<V: Rules>(
                 fight,
                 sts2_core::DecisionHook::ShouldPlay {
                     card: card.card,
+                    player: seat.creature(),
                     affliction: card.affliction,
                     auto: false,
                 },
@@ -253,23 +266,26 @@ fn refused<V: Rules>(
     })
 }
 
-/// The creatures this card can legally be pointed at.
+/// The creatures `seat` can legally point this card at.
 ///
 /// Empty for a card that cannot be played at all, because the game stops
 /// asking once a rule has refused it.
 #[inline(always)]
 pub(super) fn targets<V: Rules>(
+    seat: sts2_core::SeatIndex,
     target: V::TargetType,
-    creatures: &[Fighter<V>],
+    live: &Live<V>,
     refused: bool,
 ) -> Targets {
     if refused {
         return Targets::new();
     }
-    creatures
+    let players = live.players.len();
+    live.creatures
         .iter()
-        .filter(|creature| valid_target::<V>(target, creature))
-        .map(|creature| creature.id)
+        .enumerate()
+        .filter(|&(at, creature)| valid_target::<V>(seat, target, at < players, creature))
+        .map(|(_, creature)| creature.id)
         .collect()
 }
 
@@ -297,9 +313,8 @@ impl<'a, V: Rules> InHand<'a, V> {
         fight: Walk<'a, V>,
         facts: &HandFacts<V>,
     ) -> Self {
-        let creatures = &fight.live.creatures;
-        let target = target_type::<V>(held.face.ident, fight.live);
-        let (cost, star_cost) = costs::<V>(&held, Some(Pile::Hand), fight);
+        let target = target_type::<V>(held.face.ident, fight.live, seat);
+        let (cost, star_cost) = costs::<V>(seat, &held, Some(Pile::Hand), fight);
         let (reason, preventer) = reasons::<V>(
             seat,
             held.face.ident,
@@ -317,7 +332,7 @@ impl<'a, V: Rules> InHand<'a, V> {
             target,
             reason,
             preventer,
-            targets: targets::<V>(target, creatures, reason.is_some()),
+            targets: targets::<V>(seat, target, fight.live, reason.is_some()),
         }
     }
 
@@ -390,7 +405,7 @@ pub(super) type Previews<V> = SmallVec<[Preview<V>; 4]>;
 
 /// Every decision a live fight accepts, in the order its report implies them.
 ///
-/// What [`sts2_core::legal::implied`] reads off the report, read from the
+/// What [`sts2_core::Observed::moves`] reads off the report, read from the
 /// fight instead. The rules are the ones the report runs: the belt's reasons,
 /// and each card's reasons and targets. Nothing computes a preview, and
 /// nothing is collected but the moves, which go on the end of `moves`.
@@ -406,8 +421,8 @@ pub(crate) fn moves<V: Rules>(
 
     let facts = HandFacts::of(seat, Walk { live, belts });
     for (at, card) in live.players[seat].cards.iter(Pile::Hand).enumerate() {
-        let costs = costs::<V>(&card, Some(Pile::Hand), Walk { live, belts });
-        let target = target_type::<V>(card.face.ident, live);
+        let costs = costs::<V>(seat, &card, Some(Pile::Hand), Walk { live, belts });
+        let target = target_type::<V>(card.face.ident, live, seat);
         let (refused, _) = reasons::<V>(
             seat,
             card.face.ident,
@@ -417,7 +432,7 @@ pub(crate) fn moves<V: Rules>(
             &facts,
         );
         if refused.is_none() {
-            let targets = targets::<V>(target, &live.creatures, false);
+            let targets = targets::<V>(seat, target, live, false);
             // A card that names a creature has nothing to be played at while
             // none is alive to name.
             if targets.is_empty() && names_creature::<V>(target) {
@@ -445,11 +460,12 @@ pub(crate) fn drinks<V: Rules>(
     moves: &mut Legal<V>,
 ) {
     for (at, &potion) in potions.iter().enumerate() {
-        if undrinkable::<V>(seat, potion, fight, merchant, alive, stuck).is_some() {
+        let queued = fight.is_some_and(|fight| fight.potion_queued(seat, at));
+        if undrinkable::<V>(seat, potion, fight, merchant, alive, queued, stuck).is_some() {
             continue;
         }
         let targets = match fight {
-            Some(fight) => aimable::<V>(potion, &fight.creatures),
+            Some(fight) => aimable::<V>(potion, fight),
             None => Targets::new(),
         };
         // `IsValidTarget` refuses no target for a potion thrown at one other
@@ -466,7 +482,8 @@ pub(crate) fn drinks<V: Rules>(
 /// The belt, and why each potion in it cannot be drunk.
 ///
 /// The order `NPotionPopup.RefreshButtons` asks in, minus the questions this
-/// slice cannot raise. Nothing is queued, because a decision resolves whole.
+/// slice cannot raise. A potion is queued only behind its owner's queue in a
+/// fight of several players.
 /// `stuck` is `CanRemovePotions` off, which an event sets while it runs.
 /// `merchant` is whether the room has a merchant a Foul Potion can be
 /// thrown at, which [`Rules::computed_potion_check`] reads.
@@ -478,8 +495,9 @@ pub(crate) fn belt<'a, V: Rules>(
     alive: bool,
     stuck: bool,
 ) -> impl ExactSizeIterator<Item = Held<V>> + 'a {
-    potions.iter().map(move |&potion| {
-        let reason = undrinkable::<V>(seat, potion, fight, merchant, alive, stuck);
+    potions.iter().enumerate().map(move |(at, &potion)| {
+        let queued = fight.is_some_and(|fight| fight.potion_queued(seat, at));
+        let reason = undrinkable::<V>(seat, potion, fight, merchant, alive, queued, stuck);
         Held {
             potion,
             // The game reads both out of its localisation tables, which
@@ -491,7 +509,7 @@ pub(crate) fn belt<'a, V: Rules>(
             // names them. Outside a fight, and once the player has died and
             // the fight is no longer in progress, there are none.
             targets: match fight {
-                Some(fight) if alive => aimable::<V>(potion, &fight.creatures),
+                Some(fight) if alive => aimable::<V>(potion, fight),
                 _ => Targets::new(),
             },
             reason,
@@ -511,10 +529,15 @@ fn undrinkable<V: Rules>(
     fight: Option<&Live<V>>,
     merchant: bool,
     alive: bool,
+    queued: bool,
     stuck: bool,
 ) -> Option<Undrinkable> {
     if !alive {
         return Some(Undrinkable::Dead);
+    }
+    // `IsQueued`: its use already waits in its owner's queue.
+    if queued {
+        return Some(Undrinkable::Queued);
     }
     if stuck {
         return Some(Undrinkable::Stuck);
@@ -558,7 +581,6 @@ fn drinking_turn<V: Rules>(seat: sts2_core::SeatIndex, fight: &Live<V>) -> bool 
             || V::selection_undoes_ended_turn() && fight.asking.is_some())
 }
 
-/// The creatures a potion can be pointed at.
 /// Whether `potion` is thrown at one creature other than its drinker, which
 /// `AnyEnemy` and `AnyAlly` are.
 pub(crate) fn thrown<V: Rules>(potion: V::Potion) -> bool {
@@ -569,11 +591,14 @@ pub(crate) fn thrown<V: Rules>(potion: V::Potion) -> bool {
         || target == <V::TargetType as TargetKinds>::ANY_ALLY
 }
 
-fn aimable<V: Rules>(potion: V::Potion, creatures: &[Fighter<V>]) -> Targets {
+/// The creatures a potion can be pointed at. `AnyPlayer` names one only in
+/// a fight of several players, which is `CanThrowAtAlly`.
+fn aimable<V: Rules>(potion: V::Potion, fight: &Live<V>) -> Targets {
     let target = potion
         .target()
         .unwrap_or_else(|| V::computed_potion_target(potion, true));
-    creatures
+    fight
+        .creatures
         .iter()
         .filter(|creature| {
             creature.is_alive()
@@ -583,6 +608,11 @@ fn aimable<V: Rules>(potion: V::Potion, creatures: &[Fighter<V>]) -> Targets {
                     }
                     t if t == <V::TargetType as TargetKinds>::ANY_ALLY => {
                         creature.side == <V::CombatSide as SideKinds>::PLAYER
+                    }
+                    t if t == <V::TargetType as TargetKinds>::ANY_PLAYER
+                        && fight.players.len() > 1 =>
+                    {
+                        super::turn::seats(fight).any(|seat| seat.creature() == creature.id)
                     }
                     _ => false,
                 }
@@ -613,18 +643,29 @@ pub(super) fn names_creature<V: Rules>(target: V::TargetType) -> bool {
         || target == <V::TargetType as TargetKinds>::ANY_ALLY
 }
 
-fn valid_target<V: Rules>(target: V::TargetType, creature: &Fighter<V>) -> bool {
+/// Whether `seat` can point a card of this target type at `creature`.
+///
+/// An ally is narrower than `IsValidTarget` says. `NTargetManager` lets the
+/// screen point an `AnyAlly` card only at another living player, never at
+/// the player's own creature or a pet. `IsValidTarget` takes both, and
+/// Tutor at a pet throws, since a pet has no player.
+fn valid_target<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    target: V::TargetType,
+    player: bool,
+    creature: &Fighter<V>,
+) -> bool {
     if !creature.is_alive() {
         return false;
     }
     // The player is the only creature a card is played from, so "the other
-    // side" and "this side" are the enemy's and the player's.
+    // side" is the enemy's.
     match target {
         t if t == <V::TargetType as TargetKinds>::ANY_ENEMY => {
             creature.side == <V::CombatSide as SideKinds>::ENEMY
         }
         t if t == <V::TargetType as TargetKinds>::ANY_ALLY => {
-            creature.side == <V::CombatSide as SideKinds>::PLAYER
+            player && creature.id != seat.creature()
         }
         _ => false,
     }
@@ -642,7 +683,7 @@ fn effect<V: Rules>(
     targets: &[CombatId],
 ) -> Previews<V> {
     let per_target = matches!(
-        Some(target_type::<V>(held.face.ident, fight.live)),
+        Some(target_type::<V>(held.face.ident, fight.live, seat)),
         Some(t) if t == <V::TargetType as TargetKinds>::ANY_ENEMY
             || t == <V::TargetType as TargetKinds>::ANY_ALLY
             || t == <V::TargetType as TargetKinds>::ANY_PLAYER
@@ -716,7 +757,7 @@ fn previewed<V: Rules>(
                     ),
                     None,
                 ) => {
-                    let dealer = super::board::dealer_of::<V>(modifier, creatures);
+                    let dealer = super::board::dealer_of::<V>(seat, modifier, creatures);
                     // A card's `DamageVar` is a powered attack's unless its
                     // props say otherwise.
                     let powered = modifier != sts2_core::CardNumberModifier::UnpoweredDamage;
@@ -729,9 +770,8 @@ fn previewed<V: Rules>(
                 (Some(sts2_core::CardNumberModifier::PowerGiven), _) => {
                     let power = sts2_core::CardVars::power(var.id)
                         .unwrap_or_else(|| unreachable!("{:?} is a PowerVar of no power", var.id));
-                    let giver = super::board::player::<V>(creatures);
+                    let giver = seat.creature();
                     let (given, _) = super::board::given_by::<V>(
-                        seat,
                         fight,
                         giver,
                         target,
@@ -747,21 +787,29 @@ fn previewed<V: Rules>(
                 (Some(sts2_core::CardNumberModifier::ExtraDamage), _) => {
                     super::board::enchant_scaled::<V>(held, printed())
                 }
-                (Some(modifier), _) => match super::board::dealer_of::<V>(modifier, creatures) {
-                    Some(dealer) => super::board::effect_of::<V>(modifier, var.id, dealer, target)
+                (Some(modifier), _) => {
+                    match super::board::dealer_of::<V>(seat, modifier, creatures) {
+                        Some(dealer) => super::board::effect_of::<V>(
+                            modifier, var.id, dealer, target,
+                        )
                         .map(|effect| {
-                            super::board::resolve::<V>(seat, fight, Some(held), effect).amount()
+                            super::board::resolve::<V>(seat, fight, Some(held), target, effect)
+                                .amount()
                         }),
-                    // `OstyDamageVar` with `Owner.Osty` null: `Hook.ModifyDamage`
-                    // with no dealer.
-                    None => Some(super::board::card_hit::<V>(
-                        seat, fight, None, target, held, var.id, true,
-                    )),
-                },
+                        // `OstyDamageVar` with `Owner.Osty` null: `Hook.ModifyDamage`
+                        // with no dealer.
+                        None => Some(super::board::card_hit::<V>(
+                            seat, fight, None, target, held, var.id, true,
+                        )),
+                    }
+                }
                 (None, _) => None,
             };
-            // A number no hook reaches reads what the card reads.
-            (var.id, resolved.unwrap_or_else(printed))
+            // A number no hook reaches reads what the card reads. One it
+            // does not work out is what it prints, whose whole part is the
+            // game's `(int)PreviewValue`.
+            let unresolved = || if var.calculated { printed() } else { var.base };
+            (var.id, resolved.unwrap_or_else(unresolved))
         })
         .collect()
 }
@@ -875,6 +923,7 @@ mod tests {
             super::super::live::HeldPower::new(
                 power,
                 crate::combat::live::Stacked::counted(amount),
+                None,
                 None,
             ),
         );

@@ -453,6 +453,13 @@ impl sts2_core::EventTable for Event {
         <Self as sts2_core::Table>::data(self).seed_name
     }
 
+    /// `IsShared`: every player goes through one copy, by vote.
+    fn shared(self) -> bool {
+        <Self as sts2_core::Table>::data(self)
+            .flags
+            .contains(EventFlag::SharedBetweenPlayers)
+    }
+
     /// The fight a `Combat`-layout event builds as it opens.
     fn combat_layout(self) -> Option<Encounter> {
         let data = <Self as sts2_core::Table>::data(self);

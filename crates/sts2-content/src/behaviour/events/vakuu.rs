@@ -35,6 +35,13 @@ impl<V: crate::Build> EventBehavior<V> for Vakuu {
         state.observe(V::Event::VAKUU)
     }
 
+    /// `SereTalon`'s option: `ThatDecreasesMaxHp(9)`.
+    fn kills(&self, state: &Offered<V>, option: u8, run: &impl EventView<V>) -> bool {
+        crate::behaviour::events::option_relic::<V>(&self.observe(state, run), option)
+            == Some(<V::Relic as crate::ids::RelicIds>::SERE_TALON)
+            && run.max_hp() <= 9
+    }
+
     fn choose<R: GameRng>(
         &self,
         state: &mut Offered<V>,

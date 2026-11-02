@@ -67,6 +67,7 @@ impl sts2_core::ContentVersion for V0_111_0 {
     type Index = u16;
     type CardSerial = u16;
     type Resume<K: sts2_core::FightKind<Self>> = crate::behaviour::Resume<Self, K>;
+    type CardFilter = crate::behaviour::CardFilter<Self>;
     type CardWrite = crate::behaviour::cards::CardWrite;
     type DeckWrite = crate::behaviour::DeckWrite;
 

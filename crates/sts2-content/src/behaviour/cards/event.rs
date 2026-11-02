@@ -1,15 +1,12 @@
 //! The event cards the generator leaves to a hand port.
 
 use crate::behaviour::Played;
-use crate::behaviour::cards::{Ask, Lent};
+use crate::behaviour::paused::{Ask, Lent};
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 use sts2_core::{
     Amount, Change, CostPool, CreatureView as _, Effect, Fight, FightKind, Lasting, Pile, PileAct,
     PowerAmount, Scaling, Selection,
 };
-
-/// Cards a play offers from the hand.
-type Cards<V> = smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>;
 
 /// One card, as a pick asks for it.
 const ONE: Selection = Selection::Exactly(nonmax::NonMaxUsize::ONE);
@@ -142,7 +139,7 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
         {
             start::<V, K>(card, fight)
         }
-        card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
+        card => crate::behaviour::cards::generated::<V, K>(card, fight),
     }
 }
 
@@ -238,13 +235,13 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
         // of it, its `Cards` times, each through `AddGeneratedCardToCombat`
         // into the hand.
         __c0 if __c0 == V::Card::DUAL_WIELD => {
-            let cards: Cards<V> = attacks_and_powers_in_hand::<V, _>(resumed!().fight);
             yield_!(Ask::AskingAmong {
-                cards,
+                pile: Pile::Hand,
+                filter: crate::behaviour::CardFilter::AttackOrPower,
                 selection: ONE,
             });
             let Lent { fight, taken } = resumed!();
-            if let Some(picked) = crate::behaviour::cards::selected::<V>(taken).one_or_none() {
+            if let Some(picked) = crate::behaviour::paused::selected::<V>(taken).one_or_none() {
                 // The game's loop reads its count before each pass.
                 let mut pass = 0;
                 while pass < fight.var(V::CardVar::CARDS) {
@@ -257,14 +254,14 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::cards::paused_play!(Event);
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Event);
 
 /// `CardPileCmd.Add` of the cards a pick took, into hand.
 fn into_hand_taken<V: crate::Build, K: FightKind<V>>(lent: &mut Lent<'_, '_, V, K>) {
     let Lent { fight, taken } = lent;
     fight.act_on(
         PileAct::IntoHand,
-        crate::behaviour::cards::selected::<V>(taken).as_slice(),
+        crate::behaviour::paused::selected::<V>(taken).as_slice(),
     );
 }
 
@@ -275,20 +272,6 @@ fn neows_fury_room<V: crate::Build, F: Fight<V>>(fight: &F) -> Option<nonmax::No
         num_traits::cast(fight.var(V::CardVar::CARDS)).expect("a count of cards is not negative");
     let room = sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
     nonmax::NonMaxUsize::new(cards.min(room)).filter(|count| count.get() > 0)
-}
-
-/// The Attacks and Powers of the hand.
-fn attacks_and_powers_in_hand<V: crate::Build, F: Fight<V>>(fight: &F) -> Cards<V> {
-    fight
-        .cards_in(Pile::Hand)
-        .into_iter()
-        .filter(|&at| {
-            matches!(
-                V::card_kind(fight.card_ident(at).card),
-                Some(sts2_core::CardKind::Attack | sts2_core::CardKind::Power)
-            )
-        })
-        .collect()
 }
 
 /// A Mad Science attack's rider, once its hits are over: Sapping's Weak and
