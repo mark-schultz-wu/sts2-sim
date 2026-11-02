@@ -83,10 +83,16 @@ impl crate::build::OwnRules for V {
         None
     }
 
+    fn own_card_fields(
+        _card: <V as sts2_core::ContentVersion>::Card,
+    ) -> Option<crate::behaviour::cards::Fields> {
+        None
+    }
+
     fn own_card_result_pile(
         _card: <V as sts2_core::ContentVersion>::Card,
         _base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>> {
+    ) -> Option<sts2_core::HookResponse<sts2_core::CardResult>> {
         None
     }
 

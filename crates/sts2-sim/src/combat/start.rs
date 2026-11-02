@@ -102,6 +102,7 @@ pub(crate) fn enter<V: Rules>(
         round: num_traits::one(),
         starting: sts2_core::Participants::default(),
         turns_apart: false,
+        taking: 0,
         ending: sts2_core::Participants::default(),
         side: <V::CombatSide as SideKinds>::PLAYER,
         history: super::live::CombatHistory::new(),

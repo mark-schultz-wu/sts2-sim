@@ -108,6 +108,9 @@ pub(super) struct CardPlay<V: Rules> {
     /// the first play. Nothing for a card that leaves the fight.
     pub(super) pile: Option<sts2_core::Pile>,
     pub(super) position: sts2_core::PilePosition,
+    /// `GetResultLocationForCardPlay`'s `player`, where it names a
+    /// teammate the card goes to: `CardPileCmd.GiveToAnotherPlayer`.
+    pub(super) holder: Option<sts2_core::SeatIndex>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,9 +120,26 @@ pub(super) struct Resuming<V: Rules> {
     pub(super) ended: Option<super::Ended>,
     /// Where this effect is in `GeneratePlayCount`'s loop.
     pub(super) plays: Plays<V>,
+    /// Whether its choice branched it, as `BranchingPlayerChoiceContext`
+    /// does where another player picks. The effect's end ran as the choice
+    /// began, and the rest goes on as that player's hook action.
+    pub(super) branched: bool,
+    /// The other player a card's `CardSelectCmd` asks, for whom the rest of
+    /// its effect acts. Nothing while the card's owner picks.
+    pub(super) chooser: Option<sts2_core::SeatIndex>,
+    /// The other player whose choice context the effect runs in, as a card
+    /// another player's potion auto-plays does. A choice that is not theirs
+    /// branches, as `BranchingPlayerChoiceContext` does.
+    pub(super) context: Option<sts2_core::SeatIndex>,
 }
 
 impl<V: Rules> Resuming<V> {
+    /// Whether the effect's choice is another player's than the one whose
+    /// context it runs in, which `BranchingPlayerChoiceContext` branches on.
+    pub(super) fn chooser_elsewhere(&self, live: &Live<V>, seat: sts2_core::SeatIndex) -> bool {
+        self.reaching(live, seat).unwrap_or(seat) != self.context.unwrap_or(seat)
+    }
+
     /// The other player a potion is aimed at, for whom its effect acts and
     /// whom its `CardSelectCmd` asks. Nothing for a card, or a potion aimed
     /// at its drinker in `seat`.
@@ -130,7 +150,7 @@ impl<V: Rules> Resuming<V> {
     ) -> Option<sts2_core::SeatIndex> {
         match self.asker {
             Asker::Potion(_) => potion_reaching(live, seat, self.target),
-            Asker::Card(_) => None,
+            Asker::Card(_) => self.chooser,
         }
     }
 }
@@ -167,6 +187,16 @@ pub(super) enum Asked<V: Rules> {
     Among {
         cards: smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>,
         selection: sts2_core::Selection,
+        /// The filter of a pick from the hand, which lists the hand as it
+        /// stands each time it is shown, as `NPlayerHand.SelectCards` does.
+        hand: Option<V::CardFilter>,
+    },
+    /// A selection through a filter whose choice signalled and has not
+    /// listed yet. It lists as [`Asked::Among`] once its task goes on.
+    Filtered {
+        pile: sts2_core::Pile,
+        filter: V::CardFilter,
+        selection: sts2_core::Selection,
     },
     Offered {
         offered: sts2_core::Offered<V>,
@@ -182,8 +212,6 @@ pub(super) struct Paused<V: Rules> {
     pub(super) asking: Asking<V>,
     /// What waits behind it.
     pub(super) waiting: Vec<Deferred<V>>,
-    /// How many cards the hand held as it was set aside.
-    pub(super) hand: usize,
 }
 
 /// The listeners of one hook that the game runs each under a pause boundary
@@ -247,23 +275,18 @@ impl<V: Rules> Listening<V> {
     /// Close the boundary [`Listening::enter`] opened, and set the listener
     /// aside where it paused.
     #[inline]
-    pub(super) fn leave(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        live: &mut Live<V>,
-        entered: Boundary<V>,
-    ) {
+    pub(super) fn leave(&mut self, live: &mut Live<V>, entered: Boundary<V>) {
         live.pause_boundary = entered.boundary;
         match live.asking.is_some() {
-            true => self.set_aside(seat, live, entered),
+            true => self.set_aside(live, entered),
             false => live.deferred.keep_fresh(entered.fresh),
         }
     }
 
     /// The listener [`Listening::leave`] found paused, set aside.
     #[cold]
-    fn set_aside(&mut self, seat: sts2_core::SeatIndex, live: &mut Live<V>, entered: Boundary<V>) {
-        self.aside.push(live.set_aside(seat, entered.fresh));
+    fn set_aside(&mut self, live: &mut Live<V>, entered: Boundary<V>) {
+        self.aside.push(live.set_aside(entered.fresh));
         self.listeners.extend(entered.listener);
     }
 
@@ -370,7 +393,11 @@ pub(super) enum Deferred<V: Rules> {
     AutoPlayAtRandom { id: CardId<V> },
     /// `CardCmd.AutoPlay` of a card `AutoPlayFromDrawPile` already took into
     /// the play pile, with `ExhaustOnNextPlay` set to `force_exhaust` first.
-    AutoPlayTaken { id: CardId<V>, force_exhaust: bool },
+    AutoPlayTaken {
+        id: CardId<V>,
+        force_exhaust: bool,
+        context: Option<sts2_core::SeatIndex>,
+    },
     /// The rest of a play's `AfterCardPlayed` walk, which a question a
     /// listener asked stood still, then `AfterCardPlayedLate`.
     Played {
@@ -424,6 +451,14 @@ pub(super) enum Deferred<V: Rules> {
         seat: sts2_core::SeatIndex,
         rest: Box<super::turn::PassRest<V>>,
         next: usize,
+    },
+    /// The rest of `seat`'s `AfterAutoPostPlayPhaseEntered`, from where an
+    /// auto-play's question stood it still in a fight of several players.
+    /// The turn loop waits in [`Live::after_picks`] until no player's is
+    /// left.
+    PostPlayFrom {
+        seat: sts2_core::SeatIndex,
+        rest: Box<super::turn::PassRest<V>>,
     },
     /// A listener's task a pause boundary set aside, which goes on here
     /// where its caller waits for it.
@@ -2788,6 +2823,9 @@ pub(crate) struct Live<V: Rules> {
     /// Whether the players' `TurnNumber`s differ, which only an extra turn
     /// some of them take makes so. Set where it does, and never cleared.
     pub(super) turns_apart: bool,
+    /// `PlayersTakingExtraTurn`: the seats taking an extra turn, a bit for
+    /// each. Empty for a turn every player takes.
+    pub(super) taking: u8,
     /// The creatures ending the side's turn, which its end hooks name as
     /// taking part. Taken as the end begins.
     pub(super) ending: sts2_core::Participants,
@@ -3207,6 +3245,7 @@ impl<V: Rules> Clone for Live<V> {
             round,
             starting,
             turns_apart,
+            taking,
             ending,
             side,
             history,
@@ -3252,6 +3291,7 @@ impl<V: Rules> Clone for Live<V> {
         *round = source.round;
         *starting = source.starting;
         *turns_apart = source.turns_apart;
+        *taking = source.taking;
         *ending = source.ending;
         *side = source.side;
         history.clone_from(&source.history);
@@ -3394,9 +3434,12 @@ impl<V: Rules> Live<V> {
         self.players[seat].ready
     }
 
-    /// Whether a play asked for the turn to end.
-    pub(crate) fn ending_turn(&self, seat: sts2_core::SeatIndex) -> bool {
-        self.players[seat].ending_turn
+    /// The player whose turn ends once the decision is over. That is `seat`
+    /// where its play asked, or else the first player who asked.
+    pub(crate) fn turn_to_end(&self, seat: sts2_core::SeatIndex) -> Option<sts2_core::SeatIndex> {
+        std::iter::once(seat)
+            .chain(self.players.seats())
+            .find(|&each| self.players[each].ending_turn)
     }
 
     /// Clear a play's ask for the turn to end, as the turn ends.
@@ -3465,11 +3508,7 @@ impl<V: Rules> Live<V> {
     /// The task a pause boundary waited on, which paused on the question
     /// asked: the question, and what it deferred since `fresh` was opened.
     /// The boundary's caller runs on without it.
-    pub(super) fn set_aside(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        fresh: (usize, Option<usize>),
-    ) -> Paused<V> {
+    pub(super) fn set_aside(&mut self, fresh: (usize, Option<usize>)) -> Paused<V> {
         let asking = self
             .asking
             .take()
@@ -3477,7 +3516,6 @@ impl<V: Rules> Live<V> {
         Paused {
             asking,
             waiting: self.deferred.take_fresh(fresh),
-            hand: self.players[seat].cards.len(sts2_core::Pile::Hand),
         }
     }
 
@@ -3486,26 +3524,10 @@ impl<V: Rules> Live<V> {
     ///
     /// # Panics
     ///
-    /// Where the caller asked a question of its own as it ran on. Where a
-    /// filtered choice signalled and the hand changed since: the choice
-    /// listed the hand as it stopped, and the game lists it now.
-    pub(super) fn rejoin(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        Paused {
-            asking,
-            waiting,
-            hand,
-        }: Paused<V>,
-    ) {
+    /// Where the caller asked a question of its own as it ran on.
+    pub(super) fn rejoin(&mut self, Paused { asking, waiting }: Paused<V>) {
         if let Some(other) = &self.asking {
             unimplemented!("{other:?} asked while a paused task waited to rejoin");
-        }
-        if let Asked::Among { cards, .. } = &asking.question
-            && asking.signalled
-            && self.players[seat].cards.len(sts2_core::Pile::Hand) != hand
-        {
-            unimplemented!("a filtered choice over {cards:?} whose hand changed as it paused");
         }
         self.asking = Some(asking);
         self.deferred.put_back(waiting);
@@ -3533,8 +3555,8 @@ impl<V: Rules> Live<V> {
         if self.asking.is_some() || !self.deferred.is_empty() {
             return;
         }
-        if let Some((owner, task)) = self.queues.take_next() {
-            self.rejoin(owner, task);
+        if let Some((_, task)) = self.queues.take_next() {
+            self.rejoin(task);
         }
     }
 
@@ -3614,12 +3636,21 @@ impl<V: Rules> Live<V> {
     /// on goes to the front of `seat`'s queue, with what waits behind it. The
     /// other seats act around it until `seat` answers.
     pub(crate) fn stop_for_answer(&mut self, seat: sts2_core::SeatIndex) {
-        if self.players.len() == 1 {
-            return;
+        if let Some((answerer, task)) = self.paused_for_answer(seat) {
+            self.queues.stop(seat, answerer, task);
         }
-        let Some(asking) = self.asking.take() else {
-            return;
-        };
+    }
+
+    /// The question `seat`'s decision ended on, with what waits behind it,
+    /// beside who answers it. Nothing in a fight of one.
+    fn paused_for_answer(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+    ) -> Option<(sts2_core::SeatIndex, Paused<V>)> {
+        if self.players.len() == 1 {
+            return None;
+        }
+        let asking = self.asking.take()?;
         // A potion aimed at another player asks them, and its choice stands
         // in their queue.
         let answerer = match &asking.then {
@@ -3629,9 +3660,16 @@ impl<V: Rules> Live<V> {
         let task = Paused {
             asking,
             waiting: self.deferred.take_fresh((0, None)),
-            hand: self.players[seat].cards.len(sts2_core::Pile::Hand),
         };
-        self.queues.stop(seat, answerer.unwrap_or(seat), task);
+        Some((answerer.unwrap_or(seat), task))
+    }
+
+    /// [`Live::stop_for_answer`], with the question at the front of its
+    /// answerer's queue, where its task stood before it listed.
+    pub(super) fn stop_at_front(&mut self, seat: sts2_core::SeatIndex) {
+        if let Some((answerer, task)) = self.paused_for_answer(seat) {
+            self.queues.stop_first(seat, answerer, task);
+        }
     }
 
     /// The question `seat` answers, back in play with what waits behind it,
@@ -3641,7 +3679,7 @@ impl<V: Rules> Live<V> {
         let Some((owner, task)) = self.queues.go_on(seat) else {
             return seat;
         };
-        self.rejoin(owner, task);
+        self.rejoin(task);
         owner
     }
 
@@ -3680,6 +3718,7 @@ impl<V: Rules> Live<V> {
                 piles.all(|pile| pile == first).then_some(first).flatten()
             }
             Asked::Offered { .. } => None,
+            Asked::Filtered { .. } => unreachable!("a filtered choice lists before it is shown"),
         };
         let options: Vec<_> = match &asked.question {
             Asked::Pile { pile, .. } => self
@@ -3706,6 +3745,7 @@ impl<V: Rules> Live<V> {
                 })
                 .collect(),
             Asked::Offered { offered, .. } => offered.to_vec(),
+            Asked::Filtered { .. } => unreachable!("a filtered choice lists before it is shown"),
         };
         Some(sts2_core::Question::SelectCards {
             min,
@@ -3750,11 +3790,14 @@ impl<V: Rules> Live<V> {
                 let (min, max) = bounds(*selection);
                 (min, max, self.players[seat].cards.len(*pile))
             }
-            Asked::Among { cards, selection } => {
+            Asked::Among {
+                cards, selection, ..
+            } => {
                 let (min, max) = bounds(*selection);
                 (min, max, cards.len())
             }
             Asked::Offered { offered, skippable } => (u32::from(!skippable), 1, offered.len()),
+            Asked::Filtered { .. } => unreachable!("a filtered choice lists before it is shown"),
         })
     }
 
@@ -3781,7 +3824,6 @@ impl<V: Rules> Live<V> {
         for intent in &mut next.intents {
             if let Some(attack) = &mut intent.attack {
                 attack.damage = super::board::modified::<V>(
-                    seat,
                     super::listen::Walk { live: self, belts },
                     Some(fighter.id),
                     Some(player),
@@ -4061,6 +4103,37 @@ impl<V: Rules> Live<V> {
                 max_hp: player.max_hp,
             },
         }
+    }
+
+    /// `EndPlayerTurnPhaseOne` waits for each player's post-play phase in
+    /// seat order, and turns each player's phase to `End` as theirs is
+    /// over. So each player before the first whose phase still waits on a
+    /// question turns to `End`.
+    pub(crate) fn post_plays_end(&mut self) {
+        let auto = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::AUTO_POST_PLAY;
+        for seat in self.players.seats() {
+            let waits = self.queues.stopped(seat).is_some_and(|task| {
+                (task.waiting.iter()).any(|w| matches!(w, Deferred::PostPlayFrom { .. }))
+            });
+            if waits {
+                break;
+            }
+            if self.part_of_turn(seat) && self.players[seat].phase == auto {
+                self.players[seat].phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::END;
+            }
+        }
+    }
+
+    /// `IsPartOfPlayerTurn`: whether `seat` takes part in the player turn,
+    /// which every seat does but where some take an extra turn alone.
+    pub(crate) fn part_of_turn(&self, seat: sts2_core::SeatIndex) -> bool {
+        self.taking == 0 || self.taking & (1 << seat.0) != 0
+    }
+
+    /// The seats taking part in the player turn, in seat order:
+    /// `playersStartingTurn` and `playersEndingTurn`.
+    pub(crate) fn turn_seats(&self) -> impl Iterator<Item = sts2_core::SeatIndex> + '_ {
+        self.players.seats().filter(|&seat| self.part_of_turn(seat))
     }
 
     /// The `TurnNumber` of the player `creature` is, or of the first player
@@ -4559,6 +4632,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             round: 1,
             starting: sts2_core::Participants::default(),
             turns_apart: false,
+            taking: 0,
             ending: sts2_core::Participants::default(),
             side: CombatSide::Player,
             history: CombatHistory::new(),

@@ -10,6 +10,16 @@ use crate::session::error::Error;
 use crate::wire::peers::{net_id, peers};
 use crate::{Config, Oracle, Reply, Response, parse_reply};
 
+/// The files a client's game waits for and writes, so the clients join the
+/// lobby in seat order.
+#[derive(Debug, Clone, Default)]
+pub struct JoinOrder {
+    /// What the client before this one writes once it has joined.
+    pub after: Option<std::path::PathBuf>,
+    /// What this client writes once it has joined.
+    pub joined: Option<std::path::PathBuf>,
+}
+
 /// Where a seat's game is, and the port the lobby's host listens on.
 #[derive(Debug, Clone)]
 pub struct SeatHost {
@@ -83,7 +93,12 @@ impl<V: sts2_content_wire::WireContentVersion> GameSeat<V> {
     ///
     /// On an ascension or a modifier, which the mod's co-op lobby does not
     /// set yet.
-    pub fn begin(host: SeatHost, start: &Start<V>, me: SeatIndex) -> Result<Self, Error> {
+    pub fn begin(
+        host: SeatHost,
+        start: &Start<V>,
+        me: SeatIndex,
+        order: JoinOrder,
+    ) -> Result<Self, Error> {
         if start.ascension != V::AscensionLevel::NONE || !start.modifiers.is_empty() {
             unimplemented!("a co-op run with an ascension or modifiers");
         }
@@ -104,19 +119,22 @@ impl<V: sts2_content_wire::WireContentVersion> GameSeat<V> {
             0 => "host",
             _ => "client",
         };
-        let game = Oracle::launch_as(
-            host.config,
-            "coop",
-            &[
-                ("STS2_COOP_ROLE", role.to_owned()),
-                ("STS2_COOP_PORT", host.port.to_string()),
-                ("STS2_COOP_NETID", net_id(me).to_string()),
-                ("STS2_COOP_PLAYERS", start.players.len().to_string()),
-                ("STS2_COOP_CHARACTER", character),
-                ("STS2_COOP_WINS", wins.join(",")),
-                ("STS2_COOP_SEED", start.seed.as_str().to_owned()),
-            ],
-        )?;
+        let mut env = vec![
+            ("STS2_COOP_ROLE", role.to_owned()),
+            ("STS2_COOP_PORT", host.port.to_string()),
+            ("STS2_COOP_NETID", net_id(me).to_string()),
+            ("STS2_COOP_PLAYERS", start.players.len().to_string()),
+            ("STS2_COOP_CHARACTER", character),
+            ("STS2_COOP_WINS", wins.join(",")),
+            ("STS2_COOP_SEED", start.seed.as_str().to_owned()),
+        ];
+        if let Some(after) = order.after {
+            env.push(("STS2_COOP_JOIN_AFTER", after.display().to_string()));
+        }
+        if let Some(joined) = order.joined {
+            env.push(("STS2_COOP_JOINED", joined.display().to_string()));
+        }
+        let game = Oracle::launch_as(host.config, "coop", &env)?;
         Ok(Self {
             game,
             seats: start.players.len(),
