@@ -6,16 +6,16 @@ use sts2_core::{EventHook, HookEffect, PowerAmount};
 use super::super::V0_107_1 as V;
 use super::super::generated;
 use crate::behaviour::relics::State;
-use crate::generated::runstate::CombatSide;
 
 /// `EventHook` for a relic of this build's own.
 pub(crate) fn own_relic_event_hook(
     state: &mut State<V>,
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match state {
-        State::DiamondDiadem(state) => diamond_diadem(state, hook, asked),
+        State::DiamondDiadem(state) => diamond_diadem(state, owner, hook, asked),
         state => unreachable!("{state:?} is a shared relic"),
     }
 }
@@ -26,15 +26,13 @@ pub(crate) fn own_relic_event_hook(
 /// A fight here has one player.
 pub(crate) fn diamond_diadem(
     state: &mut crate::behaviour::relics::diamond_diadem::State,
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
         EventHook::CardPlayed { .. } => state.cards_played += 1,
-        EventHook::BeforeSideTurnEnd {
-            side: CombatSide::Player,
-            ..
-        } => {
+        EventHook::BeforeSideTurnEnd { participants, .. } if participants.contains(owner) => {
             if state.cards_played <= crate::behaviour::relics::diamond_diadem::THRESHOLD {
                 asked.push(HookEffect::ApplyToOwner(
                     generated::powers::Power::DiamondDiademPower,

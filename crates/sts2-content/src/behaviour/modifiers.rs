@@ -301,6 +301,7 @@ pub(crate) fn event_hook<V: crate::Build>(
             __c0,
             EventHook::CardRewardCreationOptions {
                 elite_encounter: true,
+                ..
             },
         ) if __c0 == V::Modifier::BIG_GAME_HUNTER => asked.push(HookEffect::RaresAtEvenOdds),
         (__c0, EventHook::CardRewardCreationOptions { .. })
