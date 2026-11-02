@@ -467,9 +467,9 @@ pub fn paused<V: crate::Build, K: sts2_core::FightKind<V>>(potion: V::Potion) {
         // `SetToFreeThisCombat`: both costs at nothing for the rest of the
         // fight.
         __c0 if __c0 == V::Potion::TOUCH_OF_INSANITY => {
-            let costly: Hand<V> = costly_in_hand::<V, _>(resumed!().fight);
             yield_!(crate::behaviour::paused::Ask::AskingAmong {
-                cards: costly,
+                pile: Pile::Hand,
+                filter: crate::behaviour::CardFilter::CostsEnergyOrStars,
                 selection: ONE,
             });
             let crate::behaviour::paused::Lent { fight, taken } = resumed!();
@@ -513,26 +513,8 @@ pub fn paused<V: crate::Build, K: sts2_core::FightKind<V>>(potion: V::Potion) {
 
 crate::behaviour::paused::paused_play!(V::Potion, crate::behaviour::potions::Resume::Shared);
 
-/// Cards of the hand a potion offers.
-type Hand<V> = smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>;
-
 /// One card, as a pick asks for it.
 const ONE: sts2_core::Selection = sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE);
-
-/// The cards of the hand that cost energy or stars, with their own
-/// modifiers or with every one.
-fn costly_in_hand<V: crate::Build, F: Fight<V>>(fight: &F) -> Hand<V> {
-    let costs = |cost| matches!(cost, sts2_core::Cost::Fixed(cost) if cost.get() > 0);
-    fight
-        .cards_in(Pile::Hand)
-        .into_iter()
-        .filter(|&card| {
-            let (energy, stars) = fight.card_costs(card, false);
-            let (all_energy, all_stars) = fight.card_costs(card, true);
-            costs(energy) || costs(stars) || costs(all_energy) || costs(all_stars)
-        })
-        .collect()
-}
 
 /// The offer of `PowerPotion`, `AttackPotion`, `SkillPotion` or
 /// `ColorlessPotion`: three distinct cards off `CombatCardGeneration`, of the

@@ -60,6 +60,20 @@ pub(crate) fn upgrade<V: crate::Build>(card: V::Card) -> &'static [sts2_core::Ch
     V::generated_upgrade(card)
 }
 
+/// `GetTeammatesOf(Owner.Creature)` with `IsAlive && IsPlayer`: every living
+/// player, the card's owner among them, in seat order.
+pub(crate) fn teammates<V: crate::Build, F: Fight<V>>(
+    fight: &F,
+) -> smallvec::SmallVec<[sts2_core::CombatId; 4]> {
+    use sts2_core::CreatureView as _;
+
+    let mut players = fight.players();
+    players.retain(|player| {
+        (fight.creatures()).any(|creature| creature.id() == *player && creature.alive())
+    });
+    players
+}
+
 /// Where `card` stands now, found again by its id, or nothing where no pile
 /// holds it. A card auto-played more than once moves between its plays, and
 /// `CardCmd.AutoPlay` plays it wherever it is.
@@ -84,9 +98,18 @@ pub(crate) fn computed_target<V: crate::Build>(
     card: V::Card,
     powers: &[sts2_core::Stack<V>],
 ) -> crate::generated::cards::TargetType {
+    computed_target_by::<V>(card, |power| powers.iter().any(|held| held.power == power))
+}
+
+/// [`computed_target`], where `carries` says whether the card's owner
+/// carries a power.
+pub(crate) fn computed_target_by<V: crate::Build>(
+    card: V::Card,
+    carries: impl Fn(V::Power) -> bool,
+) -> crate::generated::cards::TargetType {
     match card {
         card if V::card_filed(card) == CardFiled::Token => {
-            token::computed_target::<V>(card, powers)
+            token::computed_target::<V>(card, carries)
         }
         // `Malaise.TargetType`, which names what its constructor does.
         __c0 if __c0 == V::Card::MALAISE => crate::generated::cards::TargetType::AnyEnemy,
@@ -165,8 +188,8 @@ pub(crate) fn is_playable<V: crate::Build>(
 pub(crate) fn result_pile<V: crate::Build>(
     card: V::Card,
     base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)> {
-    use sts2_core::{HookResponse, Pile};
+) -> sts2_core::HookResponse<sts2_core::CardResult> {
+    use sts2_core::{HookResponse, Pile, ResultHolder};
 
     if let Some(own) = V::own_card_result_pile(card, base) {
         return own;
@@ -174,8 +197,8 @@ pub(crate) fn result_pile<V: crate::Build>(
     match card {
         // `ParticleWall`: back into the hand where the base class discards.
         __c0 if __c0 == V::Card::PARTICLE_WALL => HookResponse::Decision(match base {
-            (Some(Pile::Discard), position) => (Some(Pile::Hand), position),
-            base => base,
+            (Some(Pile::Discard), position) => (Some(Pile::Hand), position, ResultHolder::Owner),
+            (pile, position) => (pile, position, ResultHolder::Owner),
         }),
         _ => HookResponse::DoesNotImplement,
     }
@@ -288,6 +311,14 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
                 + printed.face(V::CardVar::CALCULATION_EXTRA) * twice
         }
+        // `DemonicShield`: a base, and more for each block its owner holds,
+        // whoever it is pointed at.
+        (__c0, __c1)
+            if (__c0 == V::Card::DEMONIC_SHIELD && __c1 == V::CardVar::CALCULATED_BLOCK) =>
+        {
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * owner.block
+        }
         // `Stack`: a base, and more for each card in its owner's discard pile.
         (__c0, __c1) if (__c0 == V::Card::STACK && __c1 == V::CardVar::CALCULATED_BLOCK) => {
             let discard =
@@ -347,6 +378,30 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             let started = Number::try_from(started).expect("three fits the game's numbers");
             printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
                 + printed.face(V::CardVar::CALCULATION_EXTRA) * started
+        }
+        // `GangUp`: a base, and more for each powered hit its target took
+        // this turn from a creature on its owner's side other than its owner.
+        (__c0, __c1) if (__c0 == V::Card::GANG_UP && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
+            let hits = owner
+                .history
+                .damage_received_this_turn()
+                .filter(|received| {
+                    Some(received.receiver) == owner.targeted
+                        && received.powered
+                        && received.dealer.is_some_and(|dealer| {
+                            dealer != owner.player && owner.allies.contains(&dealer)
+                        })
+                })
+                .count();
+            let hits = Number::try_from(hits).expect("a turn's hits fit the game's numbers");
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * hits
+        }
+        // `Mimic`: a base, and more for each point of block on the ally it is
+        // pointed at.
+        (__c0, __c1) if (__c0 == V::Card::MIMIC && __c1 == V::CardVar::CALCULATED_BLOCK) => {
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * owner.target_block.unwrap_or(0)
         }
         // `BeatIntoShape`: a base, and more for each powered hit its owner
         // landed on its target this turn.
@@ -771,7 +826,7 @@ pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             status::event_hook::<V, _>(card, id, printed, hook, asked)
         }
         card if V::card_filed(card) == CardFiled::Curse => {
-            curse::event_hook::<V>(card, pile, hook, asked)
+            curse::event_hook::<V>(card, owner, pile, hook, asked)
         }
         // `HowlFromBeyond.AfterAutoPostPlayPhaseEntered`: from the exhaust
         // pile, it plays itself.
@@ -821,10 +876,15 @@ pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
         // `RocketPunch.AfterCardGeneratedForCombat`: free until played once
         // its owner makes a Status.
         __c0 if __c0 == V::Card::ROCKET_PUNCH => match hook {
-            sts2_core::EventHook::CardGeneratedForCombat { card, creator, .. }
-                if creator == Some(owner)
-                    && <V as sts2_core::Rules>::card_kind(card)
-                        == Some(sts2_core::CardKind::Status) =>
+            sts2_core::EventHook::CardGeneratedForCombat {
+                card,
+                player,
+                creator,
+                ..
+            } if creator == Some(owner)
+                && player == owner
+                && <V as sts2_core::Rules>::card_kind(card)
+                    == Some(sts2_core::CardKind::Status) =>
             {
                 asked.push(sts2_core::HookEffect::ModifySelf {
                     change: sts2_core::Change::SetCost(sts2_core::CostPool::Energy, 0),
@@ -948,7 +1008,7 @@ const GENETIC_ALGORITHM_BLOCK: Number = 1;
 const SOVEREIGN_BLADE_DAMAGE: Number = 10;
 
 /// `number` as a [`Field`].
-fn field(number: impl TryInto<i16>) -> Field {
+pub(crate) fn field(number: impl TryInto<i16>) -> Field {
     nonmax::NonMaxI16::new(number.try_into().ok()?)
 }
 
@@ -978,6 +1038,9 @@ fn set<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 
 impl<V: crate::Build> sts2_core::CardFields<V> for Fields {
     fn new(card: V::Card) -> Self {
+        if let Some(own) = V::own_card_fields(card) {
+            return own;
+        }
         let zero = field(0);
         match card {
             __c0 if __c0 == V::Card::CLAW => Self::Claw { extra_damage: zero },
@@ -1168,7 +1231,9 @@ pub(crate) fn deck_event_hook<V: crate::Build>(
         }
         // `SpoilsMap.ModifyGeneratedMap`: a `SpoilsActMap` in place of its
         // act's own.
-        (__c0, _, sts2_core::EventHook::GeneratedMap { act }) if __c0 == V::Card::SPOILS_MAP => {
+        (__c0, _, sts2_core::EventHook::GeneratedMap { act, .. })
+            if __c0 == V::Card::SPOILS_MAP =>
+        {
             if act == SPOILS_ACT {
                 asked.push(sts2_core::HookEffect::SpoilsMap);
             }

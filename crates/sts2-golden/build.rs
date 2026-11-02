@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 include!("src/suite.rs");
 
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::{ContentVersion, Play};
+use sts2_core::ContentVersion;
 use sts2_headless::{
     Cached, Config, FromTranscript, MOD_IDENTITY, Oracle, game_dir_from_env, recording,
 };
@@ -208,7 +208,7 @@ fn ensure(
             Oracle::<V>::launch(config).map_err(|e| format!("launching: {e}"))?
         }
     };
-    // The start goes first and is not a step. `Play::begin` takes it, so
+    // The start goes first and is not a step. `begin` takes it, so
     // `steps()` does not carry it, and a game driven from `steps()` alone
     // plays whatever character it launched in.
     let mut cached = Cached::begin(

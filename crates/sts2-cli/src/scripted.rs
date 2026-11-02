@@ -11,8 +11,7 @@
 use std::collections::VecDeque;
 
 use sts2_core::{
-    Answered, Applied, Construct, Decision, Observation, Play, RunTable, SeatIndex, Settled, Setup,
-    Snapshot, Start,
+    Answered, Applied, Decision, Observation, RunTable, SeatIndex, Settled, Setup, Snapshot, Start,
 };
 
 use crate::tui::check::Sent;
@@ -105,35 +104,6 @@ impl<V: crate::tui::Build> Scripted<V> {
     }
 }
 
-impl<V: crate::tui::Build> Play<V> for Scripted<V> {
-    /// Itself. A script is what it is before a run starts, and starting one
-    /// changes nothing about what it will say.
-    type Host = Scripted<V>;
-
-    fn begin(mut host: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
-        host.sent.note_start(start);
-        // The script's answer to starting is consumed, not read: a run that
-        // did not start is a fault, and a scripted game has no socket to lose.
-        let _ = host.next("start a run");
-        Ok(host)
-    }
-
-    type Error = std::convert::Infallible;
-
-    fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
-        self.sent.note(*decision);
-        Ok(self.next("play a decision"))
-    }
-
-    fn observe(&mut self) -> Result<Snapshot<V>, Self::Error> {
-        self.looked += 1;
-        match self.next("say where the run is standing") {
-            Ok(applied) => Ok(applied.snapshot()),
-            Err(refusal) => panic!("a script refused an observation: {refusal}"),
-        }
-    }
-}
-
 impl<V: crate::tui::Build> Scripted<V> {
     /// Where the run stands, asked of the script only the first time, and
     /// after that what the last answer left.
@@ -162,8 +132,14 @@ impl<V: crate::tui::Build> RunTable<V> for Scripted<V> {
     type Host = Scripted<V>;
     type Seen<'a> = &'a Observation<V>;
 
-    fn begin(host: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
-        <Self as Play<V>>::begin(host, start)
+    /// Itself. A script is what it is before a run starts, and starting one
+    /// changes nothing about what it will say. The script's answer to
+    /// starting is consumed, not read. A run that did not start is a fault,
+    /// and a scripted game has no socket to lose.
+    fn begin(mut host: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
+        host.sent.note_start(start);
+        let _ = host.next("start a run");
+        Ok(host)
     }
 
     fn seats(&self) -> usize {
@@ -195,19 +171,12 @@ impl<V: crate::tui::Build> RunTable<V> for Scripted<V> {
     }
 }
 
-impl<V: crate::tui::Build> Construct<V> for Scripted<V> {
-    fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Self::Error> {
-        self.constructed.push(step.clone());
-        Ok(self.next("reach a position"))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::Scripted;
     use crate::fixture;
     use serde_json::json;
-    use sts2_core::{Decision, Play, Reason, Refusal};
+    use sts2_core::{Decision, Reason, Refusal, RunTable as _, SeatIndex};
 
     type V = sts2_content::v0_107_1::V0_107_1;
 
@@ -222,7 +191,7 @@ mod tests {
     fn a_game_to_be_left_alone_fails_the_test_when_it_is_asked() {
         let mut game: Scripted<V> = Scripted::untouchable();
 
-        let _ = game.observe();
+        let _ = game.snapshot(SeatIndex(0));
     }
 
     /// One answer, however many times it is asked.
@@ -230,8 +199,8 @@ mod tests {
     fn a_canned_game_says_the_same_thing_again() {
         let mut game = Scripted::saying(plain());
 
-        assert!(game.play(&Decision::EndTurn).unwrap().is_ok());
-        assert!(game.play(&Decision::EndTurn).unwrap().is_ok());
+        assert!(game.play(SeatIndex(0), &Decision::EndTurn).unwrap().is_ok());
+        assert!(game.play(SeatIndex(0), &Decision::EndTurn).unwrap().is_ok());
         assert_eq!(game.sent().count(), 2);
     }
 
@@ -246,10 +215,16 @@ mod tests {
             }),
         ]);
 
-        assert!(game.play(&Decision::EndTurn).unwrap().is_ok());
-        assert!(game.play(&Decision::EndTurn).unwrap().is_err());
+        assert!(game.play(SeatIndex(0), &Decision::EndTurn).unwrap().is_ok());
         assert!(
-            game.play(&Decision::EndTurn).unwrap().is_err(),
+            game.play(SeatIndex(0), &Decision::EndTurn)
+                .unwrap()
+                .is_err()
+        );
+        assert!(
+            game.play(SeatIndex(0), &Decision::EndTurn)
+                .unwrap()
+                .is_err(),
             "the script ran out and the game changed its mind"
         );
     }

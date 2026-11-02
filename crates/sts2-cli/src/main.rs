@@ -6,7 +6,7 @@
 //!
 //! # What this front end knows about the game
 //!
-//! That it implements [`sts2_core::Construct`]. Nothing else.
+//! That it is a [`sts2_core::RunTable`]. Nothing else.
 //!
 //! It does not know that the oracle boots in seconds, that something holds it
 //! between two invocations, or that a unix socket is involved. Those are facts
@@ -28,15 +28,14 @@ use sts2_cli::cli::{Play, StartArgs};
 use sts2_cli::control::{self, Outcome};
 use sts2_cli::oracle::{self, Held};
 use sts2_cli::tui;
-use sts2_core::Play as _;
 use sts2_core::RunTable;
 use sts2_headless::daemon::DEFAULT_IDLE_TIMEOUT;
 use sts2_headless::{HeldTable, Session};
 
 /// The implementation this drives, named once.
 ///
-/// Everything below reaches it through [`sts2_core::Construct`], so the day
-/// there is a simulator this line is what changes. `Session` is the oracle held
+/// Everything below reaches it through a [`HeldTable`], a
+/// [`sts2_core::RunTable`], as `sts2 sim` reaches the simulator's. `Session` is the oracle held
 /// open by a daemon. `sts2_headless::Oracle` is one this process owns and kills
 /// on the way out.
 type Game<V> = Session<V>;
@@ -383,9 +382,9 @@ fn drive<V: tui::Build>(cli: Cli) -> Result<(), V> {
         Command::Start(args) => start(&held, &args, show),
 
         Command::Run(command) => {
-            let mut game = held.attached();
+            let mut game = HeldTable::attached(held.attached());
             let outcome = control::perform(&mut game, &command)?;
-            report(&game, outcome, show)
+            report(game.session(), outcome, show)
         }
     }
 }
@@ -411,12 +410,12 @@ fn start<V: sts2_content_wire::WireContentVersion>(
     // Starting is not a step, so it does not go through `perform`. It is what
     // makes the thing `perform` sends to, and the daemon refuses a second one
     // while it is holding a run.
-    let mut game = Game::<V>::begin((), &opening).map_err(Error::Start)?;
+    let mut game = HeldTable::attached(Game::<V>::begin(&opening).map_err(Error::Start)?);
     let outcome = Outcome::Seen {
         snapshot: Box::new(control::look(&mut game)?),
         decided: None,
     };
-    report(&game, outcome, show)
+    report(game.session(), outcome, show)
 }
 
 /// Opens the game on the screen.
@@ -447,7 +446,7 @@ fn play<V: tui::Build>(held: &Host<V>) -> Result<(), V> {
         let mut screen = tui::setup::Screen::<V>::default();
         loop {
             let mut table = match attached.take() {
-                Some(game) => HeldTable::attached(game).map_err(Error::Start)?,
+                Some(game) => HeldTable::attached(game),
                 None => match screen.collect(terminal)? {
                     Some(start) => {
                         <HeldTable<V> as RunTable<V>>::begin((), &start).map_err(Error::Start)?
@@ -586,7 +585,7 @@ fn replay<V: sts2_content_wire::WireContentVersion>(
         return Err(Error::NoSteps);
     }
 
-    let mut game = held.empty()?;
+    let mut game = HeldTable::attached(held.empty()?);
 
     // Carrying the replayed file on means appending to it: the steps about to
     // be sent are already there, so it starts *after* the replay. Anything else
@@ -602,7 +601,7 @@ fn replay<V: sts2_content_wire::WireContentVersion>(
     if let Some(path) = &record
         && !carry_on
     {
-        oracle::begin_recording(&game, path.clone(), false)?;
+        oracle::begin_recording(game.session(), path.clone(), false)?;
     }
 
     let last = control::replay(&mut game, steps)?;
@@ -615,14 +614,14 @@ fn replay<V: sts2_content_wire::WireContentVersion>(
     // to, and says it is not recording otherwise. Silently stopping is how a
     // session gets played out under the belief it was being kept.
     if carry_on {
-        oracle::begin_recording(&game, file.to_path_buf(), true)?;
+        oracle::begin_recording(game.session(), file.to_path_buf(), true)?;
     } else if record.is_none() {
         eprintln!("(not recording — pass --record FILE to play on into one)");
     }
 
     match last {
         Some((decided, snapshot)) => report(
-            &game,
+            game.session(),
             Outcome::Seen {
                 snapshot: Box::new(snapshot),
                 decided: Some(decided),
