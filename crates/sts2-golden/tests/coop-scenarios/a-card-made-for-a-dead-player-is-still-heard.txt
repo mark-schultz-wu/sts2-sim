@@ -1,0 +1,11 @@
+# The Defect holds Rocket Punch and ends the turn. The Ironclad, on 1 hit
+# point, plays Bloodletting and dies of it. The Soul Fysh opens on Beckon,
+# which makes two for each player. The dead Ironclad's copies go into no
+# pile, and every listener still hears them made.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"DEFECT"},{"character":"IRONCLAD"}]}
+{"cmd":"fight","encounter":"SOUL_FYSH_BOSS","seat":0}
+{"cmd":"grant","card":"ROCKET_PUNCH","target":1,"seat":0}
+{"cmd":"grant","card":"BLOODLETTING","target":1001,"seat":0}
+{"cmd":"hp","hp":1,"target":1,"seat":0}
+{"cmd":"end_turn","seat":0}
+{"cmd":"play_card","index":5,"seat":1}
