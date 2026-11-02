@@ -49,21 +49,38 @@ pub(super) fn event_hook<V: crate::Build>(
 
 /// `ModifyDamageMultiplicative`: double for a powered hit from the attack it
 /// doubles. With none being doubled, double for one previewed out of play
-/// while the next attack is the tenth. A card's hit comes from its owner or
-/// Osty, as a fight here has one player. An Osty attack with no Osty comes
-/// from nobody, which is what `Owner.Osty` is then, so it counts too.
+/// while the next attack is the tenth. The hit comes from its owner or its
+/// owner's Osty. An Osty attack with no Osty comes from nobody, which is
+/// what `Owner.Osty` is then, so it counts too.
 pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    fight: Option<&dyn sts2_core::FightView<V>>,
     state: &State<V>,
     hook: ModifyHook<V>,
 ) -> Modify<Number> {
+    use crate::ids::MonsterIds as _;
+
     let ModifyHook::DamageMultiplicative {
         card: Some(source),
+        dealer,
         powered: true,
         ..
     } = hook
     else {
         return Modify::Nothing;
     };
+    let fight = fight.expect("a hit is dealt in a fight");
+    let from_owner = match dealer {
+        None => true,
+        Some(dealer) => {
+            dealer == owner
+                || (fight.monster(dealer) == Some(V::Monster::OSTY)
+                    && fight.pet_owner(dealer) == Some(owner))
+        }
+    };
+    if !from_owner {
+        return Modify::Nothing;
+    }
     let doubled = match state.to_double {
         None => !source.playing && state.attacks_played == THRESHOLD - 1,
         Some(id) => source.id == id,

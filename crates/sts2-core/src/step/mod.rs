@@ -4,8 +4,8 @@
 //!
 //! A [`Start`] is what a run needs before there is anything to decide. It is
 //! not a `Decision`, because it is not a move a player makes: it is the thing
-//! that makes a run exist. [`Play::begin`](crate::Play::begin) takes it, and
-//! nothing else does.
+//! that makes a run exist. [`RunTable::begin`](crate::RunTable::begin) takes
+//! it, and nothing else does.
 //!
 //! A [`Decision`] is something a player does sitting at the game: play a card,
 //! take a rest site option, travel.
@@ -15,9 +15,8 @@
 //! more variants of `Decision`.
 //!
 //! A [`Setup`] is not a move at all. It constructs a situation no run reaches by
-//! playing. It is on [`Construct`](crate::Construct) rather than on
-//! [`Play`](crate::Play), so that an implementation which cannot build one says
-//! so in its type instead of at runtime.
+//! playing, through [`RunTable::construct`](crate::RunTable::construct), with
+//! one of the game's own debug commands.
 //!
 //! [`Step`] is either of the two that can be recorded, and is what this module
 //! is named for. A recording is a sequence of them. Replaying one into an
