@@ -1,9 +1,11 @@
 //! Everything a run draws before play begins.
 
 mod fight;
+mod relay;
 mod setup;
 mod shop;
 mod state;
+mod sync;
 mod travel;
 mod treasure;
 
