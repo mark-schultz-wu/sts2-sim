@@ -9,9 +9,17 @@ use crate::ids::CardIds as _;
 /// `BeforeHandDraw` for its owner on turn one: `CardsVar` Souls, each
 /// `AddGeneratedCardToCombat` into the draw pile at `CardPilePosition.Random`.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // `player != Owner`: another player's turn is not its owner's.
+    if let EventHook::BeforeHandDraw { player, .. } = hook
+        && player != owner
+    {
+        return;
+    }
     if let EventHook::BeforeHandDraw { turn, .. } = hook
         && turn == 1
     {

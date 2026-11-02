@@ -98,14 +98,18 @@ pub(crate) fn enter<V: Rules>(
     let mut live = Box::new(Live {
         players: crate::seats::BySeat::new(host_combat, others_combat),
         ascension,
-        turn: num_traits::one(),
         modifiers,
         round: num_traits::one(),
+        starting: sts2_core::Participants::default(),
+        turns_apart: false,
+        taking: 0,
+        ending: sts2_core::Participants::default(),
         side: <V::CombatSide as SideKinds>::PLAYER,
         history: super::live::CombatHistory::new(),
         kept: Vec::new(),
         encounter,
         encounter_state: sts2_core::EncounterModel::new(encounter),
+        scaling: monster::Scaling::of::<V>(players.len(), encounter, entering.act),
         in_progress: false,
         point: entering.coord,
         extra_rewards: Vec::new(),
@@ -136,6 +140,7 @@ pub(crate) fn enter<V: Rules>(
         asking: None,
         deferred: super::live::Deferrals::new(),
         queues: super::queues::Queues::new(),
+        after_picks: None,
         waited_attack: None,
     });
 
@@ -162,11 +167,12 @@ pub(crate) fn enter<V: Rules>(
     let Live {
         creatures,
         machines,
+        scaling,
         ..
     } = &mut *live;
     monster::initialize::<V>(
         ascension,
-        monster::Scaling::of::<V>(players.len(), encounter, entering.act),
+        *scaling,
         encounter,
         &mut streams,
         monster::Roster {
@@ -400,9 +406,10 @@ pub(crate) fn enter<V: Rules>(
         creatures,
         powers,
         machines,
+        scaling,
         ..
     } = &mut *live;
-    monster::added_to_room::<V>(ascension, creatures, powers, machines);
+    monster::added_to_room::<V>(ascension, *scaling, creatures, powers, machines);
     // `BeforeCombatStart`, after the room and before the fight opens. The
     // player carries no power yet, so block gained here is what was asked for
     // and passes no modifier.
@@ -468,7 +475,18 @@ pub(crate) fn enter<V: Rules>(
                     amount,
                 );
             }
-            (_, afflict @ HookEffect::Afflict { .. }) => afflicting[seat.at()].push(afflict),
+            // A monster's power afflicts every player's cards, as Vital Spark
+            // walks `Allies` that are players.
+            (listener, afflict @ HookEffect::Afflict { .. }) => {
+                let monsters = matches!(
+                    listener,
+                    super::listen::Listener::Power { owner, .. } if live.seat_of(owner).is_none()
+                );
+                match monsters {
+                    true => afflicting.iter_mut().for_each(|each| each.push(afflict)),
+                    false => afflicting[seat.at()].push(afflict),
+                }
+            }
             // `CardPileCmd.AddToCombatAndPreview` into the draw pile at random,
             // which the deck is in by now. It lands once the piles are dealt.
             (
@@ -614,6 +632,7 @@ fn player_combat<V: Rules>(
     let character = player.character;
     super::live::PlayerCombat {
         character,
+        turn: num_traits::one(),
         phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
         energy: num_traits::cast(V::max_energy(character))
             .expect("the starting energy fits the build's count type"),
@@ -622,7 +641,10 @@ fn player_combat<V: Rules>(
         potions: super::live::PotionBelt::holding(player.potions, modifiers.hooks),
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
+        lost: 0,
         ending_turn: false,
+        ready: false,
+        deaf: false,
         effect_depth: 0,
         deck_versions: super::live::DeckVersions::none(),
         taken_from_deck: Vec::new(),
@@ -686,11 +708,12 @@ pub(super) fn hand_size<V: Rules>(
 }
 
 /// The health a `Combat`-layout event's monsters roll as it opens, off the
-/// run's `Niche` stream.
+/// run's `Niche` stream, for a fight of `players` in the act `act`.
 pub(crate) fn roll_layout<V: Rules>(
     raw_seed: u64,
     floor: V::Count,
     ascension: V::AscensionLevel,
+    (players, act): (usize, usize),
     encounter: V::Encounter,
     streams: &mut Streams<V>,
 ) -> Result<smallvec::SmallVec<[V::Health; 2]>, Error> {
@@ -698,6 +721,7 @@ pub(crate) fn roll_layout<V: Rules>(
     Ok(monster::roll_layout::<V>(
         &monsters,
         ascension,
+        monster::Scaling::of::<V>(players, encounter, act),
         streams.combat().niche,
     ))
 }

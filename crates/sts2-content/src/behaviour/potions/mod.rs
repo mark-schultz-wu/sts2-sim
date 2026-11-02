@@ -41,16 +41,17 @@ pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
 }
 
 /// `ShouldDie`, which only `FairyInABottle` answers in this build: no for
-/// its owner, which keeps the player in the fight.
+/// its `owner`, which keeps that player in the fight.
 pub(crate) fn decide_hook<V: crate::Build>(
     potion: V::Potion,
+    owner: sts2_core::CombatId,
     hook: sts2_core::DecisionHook<V>,
 ) -> sts2_core::HookResponse<bool> {
     match (potion, hook) {
-        (__c0, sts2_core::DecisionHook::ShouldDie { creature, player })
+        (__c0, sts2_core::DecisionHook::ShouldDie { creature })
             if __c0 == V::Potion::FAIRY_IN_A_BOTTLE =>
         {
-            sts2_core::HookResponse::Decision(creature != player)
+            sts2_core::HookResponse::Decision(creature != owner)
         }
         (potion, hook) => match hook.model_hook() {
             Some(_) => unimplemented!("what {potion:?} decides for {hook:?}"),

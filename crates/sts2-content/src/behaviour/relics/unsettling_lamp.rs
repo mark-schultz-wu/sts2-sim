@@ -34,7 +34,11 @@ impl<V: crate::Build> Default for State<V> {
 /// `AfterCardPlayed` of that card finishes it.
 ///
 /// A power on an enemy is always visible.
-pub(super) fn event_hook<V: crate::Build>(state: &mut State<V>, hook: EventHook<V>) {
+pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &mut State<V>,
+    hook: EventHook<V>,
+) {
     match hook {
         EventHook::CombatStarting { .. } | EventHook::CombatEnd { .. } => {
             *state = State::default();
@@ -44,12 +48,11 @@ pub(super) fn event_hook<V: crate::Build>(state: &mut State<V>, hook: EventHook<
             amount,
             target_side,
             applier,
-            player,
             source: Some(card),
             ..
         } if state.triggering.is_none()
             && !state.finished
-            && applier == Some(player)
+            && applier == Some(owner)
             && target_side != CombatSide::Player
             && debuff_at::<V>(power, amount) =>
         {

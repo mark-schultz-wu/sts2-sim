@@ -15,13 +15,21 @@ pub struct State {
 /// v0.107.1's `AfterPlayerTurnStart` for its owner counts the turn, and
 /// every third draws its card. v0.111.0's `BeforeHandDraw` counts it, and
 /// its `ModifyHandDraw` adds the card to that turn's hand. Each build's class
-/// overrides one pair, so it hears only that pair. A fight here has one
-/// player.
+/// overrides one pair, so it hears only that pair.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // `player != Owner`: another player's turn is not its owner's.
+    if let EventHook::BeforeHandDraw { player, .. } | EventHook::PlayerTurnStart { player, .. } =
+        hook
+        && player != owner
+    {
+        return;
+    }
     match hook {
         EventHook::PlayerTurnStart { .. } => {
             state.turns_seen = (state.turns_seen + 1) % V::Relic::PENDULUM_TURNS;
