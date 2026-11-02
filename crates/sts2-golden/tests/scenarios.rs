@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use sts2_core::Digested;
 
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::{Construct, ContentVersion, Play, Section, Snapshot};
+use sts2_core::{ContentVersion, Snapshot};
 use sts2_golden::scenario::{Expected, Seen, Stamp, Step};
 use sts2_golden::suite::read_suite;
 
@@ -39,26 +39,34 @@ fn expected_path() -> PathBuf {
 }
 
 /// What every step a run of this recording passes through leaves showing.
-fn walk<C, E>(name: &str, driven: &mut C, steps: &[sts2_core::Step<V>]) -> Vec<Seen>
-where
-    C: Construct<V, Error = E>,
-    E: std::fmt::Display,
-{
+/// `stepped` plays one step on the implementation and says where it left the
+/// run, or why it did not take it.
+fn walk(
+    name: &str,
+    steps: &[sts2_core::Step<V>],
+    mut stepped: impl FnMut(&sts2_core::Step<V>) -> Result<Snapshot<V>, String>,
+) -> Vec<Seen> {
     steps
         .iter()
         .map(|step| {
-            driven
-                .step(step)
-                .unwrap_or_else(|e| panic!("{name}: {e}"))
-                .unwrap_or_else(|refusal| panic!("{name}: refused: {refusal}"));
-            let seen: Snapshot<V> =
-                Play::<V>::observe(driven).unwrap_or_else(|e| panic!("{name}: observing: {e}"));
+            let seen = stepped(step).unwrap_or_else(|e| panic!("{name}: {e}"));
             Seen {
                 sections: seen.observation.sections().to_vec(),
                 question: sts2_core::Digest::of_question_and_pile(seen.asking.as_ref()),
             }
         })
         .collect()
+}
+
+/// A step's answer, then where it left the run: what [`walk`] takes.
+fn stepped<E: std::fmt::Display>(
+    answered: Result<sts2_core::Answered<V>, E>,
+    observe: impl FnOnce() -> Result<Snapshot<V>, E>,
+) -> Result<Snapshot<V>, String> {
+    answered
+        .map_err(|e| e.to_string())?
+        .map_err(|refusal| format!("refused: {refusal}"))?;
+    observe().map_err(|e| format!("observing: {e}"))
 }
 
 #[test]
@@ -99,7 +107,9 @@ fn the_simulator_reaches_the_positions_the_game_reaches() {
         // scenario yet leaves its recording to be written all the same.
         if updating() {
             let mut oracle = sts2_golden::oracle_or_explain::<V>(name, recorded.start());
-            let answered = walk(name, &mut oracle, recorded.steps());
+            let answered = walk(name, recorded.steps(), |step| {
+                stepped(oracle.step(step), || oracle.observe::<V>())
+            });
             let mut steps = Vec::new();
             let mut before: Option<Seen> = None;
             for seen in answered {
@@ -114,10 +124,12 @@ fn the_simulator_reaches_the_positions_the_game_reaches() {
             .scenarios
             .get(name)
             .unwrap_or_else(|| panic!("{name} has no recorded answers; run `just scenarios`"));
-        let mut sim = sts2_sim::Sim::<V>::begin((), recorded.start())
+        let mut sim = sts2_sim::Sim::<V>::begin(recorded.start())
             .unwrap_or_else(|e| panic!("{name}: starting: {e}"));
-        let walked = walk(name, &mut sim, recorded.steps());
-        if let Some(why) = compare(steps, &walked) {
+        let walked = walk(name, recorded.steps(), |step| {
+            stepped(sim.step(step), || sim.observe())
+        });
+        if let Some(why) = sts2_golden::scenario::parted(steps, &walked, 1) {
             wrong.push(format!("{name}: {why}"));
         }
     }
@@ -137,38 +149,4 @@ fn the_simulator_reaches_the_positions_the_game_reaches() {
         "the answers came from another build; run `just scenarios`"
     );
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
-}
-
-/// Where a scenario parted, named by section, or as `question`.
-///
-/// Only the parts are named. What the game said is a hash and nothing more, so
-/// a failure says which part moved and leaves the simulator to print its own.
-fn compare(want: &[Step], got: &[Seen]) -> Option<String> {
-    if want.len() != got.len() {
-        return Some(format!(
-            "{} steps recorded, {} played",
-            want.len(),
-            got.len()
-        ));
-    }
-
-    let mut standing: BTreeMap<Section, sts2_core::Digest> = BTreeMap::new();
-    let mut asked = None;
-    for (at, (step, seen)) in want.iter().zip(got).enumerate() {
-        standing.extend(step.moved.iter().copied());
-        asked = step.question.or(asked);
-        let mut named: Vec<&str> = seen
-            .sections
-            .iter()
-            .filter(|(section, now)| standing.get(section) != Some(now))
-            .map(|(section, _)| section.name())
-            .collect();
-        if asked != Some(seen.question) {
-            named.push("question");
-        }
-        if !named.is_empty() {
-            return Some(format!("step {at} differs in {}", named.join(", ")));
-        }
-    }
-    None
 }

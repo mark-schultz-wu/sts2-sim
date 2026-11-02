@@ -3,7 +3,7 @@
 //!
 //! The action log says what each action did, and not the order of the
 //! game's steps inside one. This plays the run on the game beside the
-//! simulator, through `follow_run --diff`, with the mod's trace on. The
+//! simulator, through `sts2-run follow --diff`, with the mod's trace on. The
 //! mod writes each call of a method a pattern names, with its arguments,
 //! and each command it was sent. This prints the calls of the last
 //! `--moves` moves before the split.
@@ -16,11 +16,11 @@
 //!     'Hook.*' 'PowerCmd.*' DampenPower
 //! ```
 //!
-//! The build is `STS2_GAME_VERSION`'s, as for `follow_run`. The whole
+//! The build is `STS2_GAME_VERSION`'s, as for `sts2-run follow`. The whole
 //! trace stays in `target/game-trace/<INDEX>.log`.
 //!
 //! With `--coop`, `INDEX` is a co-op seed's number, as `cargo xtask coop`
-//! counts them. This plays that seed through `coop_run --hunt`, one game
+//! counts them. This plays that seed through `sts2-run --hunt`, one game
 //! for each seat, and each game traces to a file of its own. It prints the
 //! calls of each seat's game over the last `--moves` moves of the run, and
 //! the whole of each trace stays in `target/game-trace/<SEED>/`:
@@ -84,7 +84,7 @@ pub fn run(
         return coop_trace(index, &patterns, moves, &characters);
     }
     let root = crate::workspace();
-    let follow = error::build_example(&root, "follow_run")?;
+    let follow = error::build_runner(&root)?;
     let file = match file {
         Some(file) => file,
         None => crate::followed::recorded_file(&root)?,
@@ -97,6 +97,7 @@ pub fn run(
     // A run that parts exits with a failure, which is the point here.
     let followed = error::spawned(
         Command::new(&follow)
+            .arg("follow")
             .arg(&file)
             .arg(index.to_string())
             .arg("--diff")
@@ -128,20 +129,21 @@ fn coop_trace(
     characters: &[String],
 ) -> Result<String, Error> {
     let root = crate::workspace();
-    let runner = error::build_example(&root, "coop_run")?;
-    let seed = format!("C{seed:09}");
+    let runner = error::build_runner(&root)?;
+    let seed = crate::runner::seed(seed);
     let homes = root.join("target/game-trace").join(&seed);
     // A trace left from an earlier run would read as this one's.
     let _ = std::fs::remove_dir_all(&homes);
     error::create_dir(&homes)?;
     let played = error::spawned(
         Command::new(&runner)
-            .args([seed.as_str(), &characters.join(",")])
-            .arg("--homes")
+            .args(["play", seed.as_str(), &characters.join(",")])
+            .args(["--build", &crate::runner::game_build()])
+            .args(["--table", "game", "--carried", "--moves", "--hunt"])
+            .arg("--home")
             .arg(&homes)
-            .arg("--out")
+            .arg("--record")
             .arg(homes.join("run.bin"))
-            .arg("--hunt")
             .env("STS2_HEADLESS_TRACE", patterns.join(",")),
     )?;
     let log = String::from_utf8_lossy(&played.stdout);
