@@ -9,9 +9,9 @@
 //! it falls, and asks to be raised if it rises, the way `BASELINE` does.
 //! `cargo xtask coverage` says where the runs part.
 //!
-//! `hunted.bin` and `hunted-v0.111.0.bin` hold the runs `cargo xtask hunt`
-//! found the simulator parting on, recorded whole once fixed. Each is
-//! followed against its own `.matched`, and holds no census.
+//! `hunted.bin`, `hunted-v0.111.0.bin` and the co-op `coop-v0.111.0.bin`
+//! hold hunted runs, recorded whole once fixed. Each is followed against
+//! its own `.matched`, and holds no census.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -20,13 +20,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_111_0::V0_111_0;
-use sts2_core::{Construct as _, Gift, Play as _, Setup};
-use sts2_golden::recorded::{Followed, Recorded, Run, follow};
-use sts2_sim::Sim;
-
-#[path = "../examples/carried/mod.rs"]
-mod carried;
-use carried::carried;
+use sts2_core::RunTable as _;
+use sts2_golden::recorded::{Ending, Followed, Recorded, Run, follow};
+use sts2_run::Carried;
+use sts2_sim::SimTable;
 
 type V = V0_107_1;
 
@@ -104,45 +101,75 @@ fn holds_every_census_run(recorded: &Recorded, build: &sts2_core::Version) {
     }
 }
 
-/// The positions of `run` the simulator agrees with, from the start.
+/// The positions of `run` the simulator agrees with, from the start, as
+/// [`follow`] compares them.
+///
+/// A hunt stops a run on the move a simulator panicked on, and the run ends
+/// there, parted. That move is a known gap. A panic on any move before it is
+/// not.
 fn matched<V: sts2_content::Build>(run: &Run) -> usize {
-    let mut sim = Sim::<V>::begin((), &run.start()).expect("the run starts");
-    for (relic, count) in carried::<V>() {
-        for _ in 0..count {
-            sim.setup(&Setup::Grant(Gift::Relic(relic)))
-                .expect("a grant applies")
-                .expect("and is not refused");
+    let agreed = AtomicUsize::new(0);
+    let followed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut table =
+            Carried::<SimTable<V>>::begin((), &run.start()).expect("the run starts and carries");
+        follow(run, &mut table, true, |count| {
+            agreed.store(count, Ordering::Relaxed)
+        })
+        .unwrap_or_else(|fault| panic!("following the run: {fault}"))
+    }));
+    match followed {
+        Ok(Followed::Whole) => run.digests.len(),
+        Ok(Followed::PartedAt { step, .. }) => step,
+        Err(_)
+            if run.ending == Ending::Parted
+                && agreed.load(Ordering::Relaxed) == run.moves.len() =>
+        {
+            run.moves.len()
         }
-    }
-    match follow(run, &mut sim) {
-        Followed::Whole => run.digests.len(),
-        Followed::PartedAt { step, .. } => step,
+        Err(payload) => std::panic::resume_unwind(payload),
     }
 }
 
 #[test]
 fn the_simulator_follows_the_recorded_runs_no_less_far() {
-    follows_no_less_far::<V>("recorded.bin", "recorded.matched");
+    follows_no_less_far("recorded.bin", "recorded.matched", matched::<V>);
 }
 
 #[test]
 fn the_simulator_follows_the_hunted_runs_no_less_far() {
-    follows_no_less_far::<V>("hunted.bin", "hunted.matched");
+    follows_no_less_far("hunted.bin", "hunted.matched", matched::<V>);
 }
 
 #[test]
 fn the_simulator_follows_the_v0_111_0_hunted_runs_no_less_far() {
-    follows_no_less_far::<V0_111_0>("hunted-v0.111.0.bin", "hunted-v0.111.0.matched");
+    follows_no_less_far(
+        "hunted-v0.111.0.bin",
+        "hunted-v0.111.0.matched",
+        matched::<V0_111_0>,
+    );
 }
 
 #[test]
 fn the_simulator_follows_the_v0_111_0_runs_no_less_far() {
-    follows_no_less_far::<V0_111_0>("recorded-v0.111.0.bin", "recorded-v0.111.0.matched");
+    follows_no_less_far(
+        "recorded-v0.111.0.bin",
+        "recorded-v0.111.0.matched",
+        matched::<V0_111_0>,
+    );
 }
 
-/// Follows every run of `file` on `B`, and holds the positions that agree to
-/// the count in `count`.
-fn follows_no_less_far<B: sts2_content::Build>(file: &str, count: &str) {
+#[test]
+fn the_simulator_follows_the_coop_runs_no_less_far() {
+    follows_no_less_far(
+        "coop-v0.111.0.bin",
+        "coop-v0.111.0.matched",
+        matched::<V0_111_0>,
+    );
+}
+
+/// Follows every run of `file` with `matched`, and holds the positions that
+/// agree to the count in `count`.
+fn follows_no_less_far(file: &str, count: &str, matched: fn(&Run) -> usize) {
     let recorded = recorded(file);
     let path = here(count);
     let floor: usize = std::fs::read_to_string(&path)
@@ -162,8 +189,7 @@ fn follows_no_less_far<B: sts2_content::Build>(file: &str, count: &str) {
                 while let Some(run) = recorded.runs.get(next.fetch_add(1, Ordering::Relaxed)) {
                     // A panic names the run, then fails the test once every
                     // other run is done.
-                    let followed =
-                        std::thread::scope(|inner| inner.spawn(|| matched::<B>(run)).join());
+                    let followed = std::thread::scope(|inner| inner.spawn(|| matched(run)).join());
                     match followed {
                         Ok(steps) => {
                             total.fetch_add(steps, Ordering::Relaxed);
@@ -186,7 +212,8 @@ fn follows_no_less_far<B: sts2_content::Build>(file: &str, count: &str) {
     assert!(
         total >= floor,
         "the simulator follows {total} of {all} recorded positions, down from {floor}. \
-         `cargo xtask coverage` says where the runs part."
+         `cargo xtask coverage` says where the runs part, and \
+         `cargo xtask coop --hunt` where a co-op run does."
     );
     assert!(
         total <= floor,

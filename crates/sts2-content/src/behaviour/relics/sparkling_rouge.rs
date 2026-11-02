@@ -7,15 +7,13 @@ use sts2_core::{EventHook, HookEffect, PowerAmount};
 /// `AfterBlockCleared`: Strength then Dexterity on its owner once its block
 /// clears on the third turn.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    if let EventHook::BlockCleared {
-        creature,
-        player,
-        turn,
-    } = hook
-        && creature == player
+    if let EventHook::BlockCleared { creature, turn } = hook
+        && creature == owner
         && turn == 3
     {
         asked.extend([

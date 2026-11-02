@@ -18,8 +18,8 @@ namespace Sts2Headless;
 /// <summary>Every move the run accepts right now, as the commands that make them.</summary>
 /// <remarks>
 /// What the game's screens offer, read off the game. A card is offered where
-/// <c>CanPlay</c> says it can be played, at each creature
-/// <c>CanPlayTargeting</c> accepts, or at nobody where that is accepted. A
+/// <c>CanPlay</c> says it can be played, at each creature <see cref="Aimable"/>
+/// accepts, or at nobody where that is accepted. A
 /// potion is offered where the belt's buttons would be enabled. A room offers
 /// the options and stock its screen leaves enabled. The map offers the points
 /// <see cref="MapLegality"/> allows, or proceeding where that is the way on.
@@ -109,10 +109,10 @@ public static class Moves
                 continue;
             }
 
-            List<uint?> targets = alive.Where(card.CanPlayTargeting).Select(c => c.CombatId).ToList();
+            List<uint?> targets = alive.Where(c => Aimable(card, c)).Select(c => c.CombatId).ToList();
             if (targets.Count == 0)
             {
-                if (card.CanPlayTargeting(null))
+                if (Aimable(card, null))
                 {
                     moves.Add(Aimed("play_card", i, null));
                 }
@@ -126,6 +126,25 @@ public static class Moves
         moves.Add(Command("end_turn"));
         moves.AddRange(Discards(me));
         return moves;
+    }
+
+    /// <summary>Whether the screen lets <paramref name="card"/> be played at <paramref name="target"/>.</summary>
+    /// <remarks>
+    /// <c>CanPlayTargeting</c>, narrowed for an ally the way
+    /// <c>NTargetManager.AllowedToTargetCreature</c> narrows it: an
+    /// <c>AnyAlly</c> card points only at another living player. The game's
+    /// own check also takes the player's own creature and a pet, and Tutor
+    /// played at a pet throws, because a pet has no player.
+    /// </remarks>
+    internal static bool Aimable(CardModel card, Creature? target)
+    {
+        if (card.TargetType == TargetType.AnyAlly
+            && target != null
+            && (!target.IsPlayer || target == card.Owner.Creature))
+        {
+            return false;
+        }
+        return card.CanPlayTargeting(target);
     }
 
     /// <summary>Each potion the belt would let be thrown away, last in every list.</summary>
@@ -214,7 +233,8 @@ public static class Moves
                     .ToList();
             }
 
-            // The relics, then the skip one past them, while the chest is open.
+            // The relics, then the skip one past them where the chest offers
+            // it, while the chest is open.
             case TreasureRoom:
             {
                 IReadOnlyList<RelicModel>? relics =
@@ -224,7 +244,8 @@ public static class Moves
                     return new List<Dictionary<string, object?>>();
                 }
 
-                return Enumerable.Range(0, relics.Count + 1).Select(Choosing).ToList();
+                int offered = relics.Count + (Chest.Skippable(state) ? 1 : 0);
+                return Enumerable.Range(0, offered).Select(Choosing).ToList();
             }
 
             case EventRoom:
@@ -237,7 +258,7 @@ public static class Moves
 
                 IReadOnlyList<EventOption> options = ev.CurrentOptions;
                 return Enumerable.Range(0, options.Count)
-                    .Where(i => !options[i].IsLocked && !options[i].WasChosen)
+                    .Where(i => !options[i].IsLocked && !options[i].WasChosen && !Kills(ev, options[i]))
                     .Select(Choosing)
                     .ToList();
             }
@@ -249,6 +270,15 @@ public static class Moves
                 return new List<Dictionary<string, object?>>();
         }
     }
+
+    /// <summary>
+    /// <c>NEventOptionButton.OnRelease</c>: in a run of several players, an option
+    /// whose <c>WillKillPlayer</c> holds for the event's player does nothing.
+    /// </summary>
+    internal static bool Kills(EventModel ev, EventOption option) =>
+        ev.Owner is { } owner
+        && owner.RunState.Players.Count > 1
+        && (option.WillKillPlayer?.Invoke(owner) ?? false);
 
     /// <summary>Each entry stocked, affordable, and not blocked, which is what <c>buy</c> refuses on.</summary>
     private static List<Dictionary<string, object?>> Buying(MerchantInventory inventory, Player me)

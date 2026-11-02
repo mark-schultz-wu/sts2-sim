@@ -270,13 +270,14 @@ The order:
      copies what it did before.
    - Compile time: a release build of `sts2-cli` after a change to core
      takes 150 s, against 148 s on main. A dev build is unchanged, at 4 s.
-2. The coroutines and the scheduler with one player. The scenarios, the
-   golden replays and the hunts prove them.
-3. The pause sites move over, one pool at a time. Each takes away the
-   `Deferred` and `Resume` variants it replaces.
+2. The pause sites in content move over, one pool at a time. Each takes
+   away the `Resume` variants it replaces. They come before the scheduler
+   because each pool stands alone, and the recorded runs prove it.
+3. The scheduler with one player. It takes away the engine's `Deferred`
+   work. The scenarios, the golden replays and the hunts prove it.
+   `docs/SCHEDULER.md` is its design.
 4. Co-op fights, on top.
 
-## Open question
-
-1. Do the run layer's pauses (`Pickup`, `Unfinished`) move with the
-   fight's, or stay hand-written?
+The run layer's pauses, `Pickup` and `Unfinished`, move to coroutines too,
+before co-op fights. Mark chose that on 2026-10-26, so every pause is held
+the same way.
