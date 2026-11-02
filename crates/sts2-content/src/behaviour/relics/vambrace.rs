@@ -42,6 +42,7 @@ pub(super) fn event_hook<V: crate::Build>(state: &mut State<V>, hook: EventHook<
 /// must be `IsCardOrMonsterMove`. A fight here has one player, whose every
 /// card is its owner's.
 pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &State<V>,
     hook: ModifyHook<V>,
 ) -> Modify<Number> {
@@ -49,8 +50,12 @@ pub(super) fn modify_hook<V: crate::Build>(
         ModifyHook::BlockMultiplicative {
             moved: true,
             source: Some(card),
+            player: Some(player),
             ..
-        } if state.triggering.is_none_or(|taken| taken == card) && !state.gained => {
+        } if player == owner
+            && state.triggering.is_none_or(|taken| taken == card)
+            && !state.gained =>
+        {
             Modify::Scaled(sts2_core::Fixed::new(2, 0))
         }
         _ => Modify::Nothing,

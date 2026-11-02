@@ -11,7 +11,8 @@
 
 use std::panic::{self, AssertUnwindSafe};
 
-use sts2_core::{Construct, ContentVersion, Start, Step};
+use sts2_core::{ContentVersion, Rules, Start, Step};
+use sts2_sim::Sim;
 
 /// What a step is, for a report that has to name one.
 pub fn named<V: ContentVersion>(step: &Step<V>) -> String {
@@ -41,13 +42,10 @@ pub fn kind<V: ContentVersion>(step: &Step<V>) -> String {
 ///
 /// Unported behaviour panics deliberately, so the boundary is discovered here
 /// rather than inside a timed region.
-pub fn reached<V: ContentVersion, P: Construct<V, Host = ()>>(
-    start: &Start<V>,
-    steps: &[Step<V>],
-) -> usize {
+pub fn reached<V: Rules>(start: &Start<V>, steps: &[Step<V>]) -> usize {
     let hook = panic::take_hook();
     panic::set_hook(Box::new(|_| {}));
-    let begun = panic::catch_unwind(AssertUnwindSafe(|| P::begin((), start)));
+    let begun = panic::catch_unwind(AssertUnwindSafe(|| Sim::begin(start)));
     let Ok(Ok(mut playing)) = begun else {
         panic::set_hook(hook);
         return 0;
@@ -66,15 +64,8 @@ pub fn reached<V: ContentVersion, P: Construct<V, Host = ()>>(
 }
 
 /// A run standing where the first `count` steps leave it.
-pub fn upto<V: ContentVersion, P: Construct<V, Host = ()>>(
-    start: &Start<V>,
-    steps: &[Step<V>],
-    count: usize,
-) -> P
-where
-    P::Error: std::fmt::Debug,
-{
-    let mut playing = P::begin((), start).expect("a recording starts a run");
+pub fn upto<V: Rules>(start: &Start<V>, steps: &[Step<V>], count: usize) -> Sim<V> {
+    let mut playing = Sim::begin(start).expect("a recording starts a run");
     for step in steps.iter().take(count) {
         let _ = playing.step(step);
     }
