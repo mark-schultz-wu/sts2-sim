@@ -20,19 +20,12 @@ listener's own creature, and with no `reaching`:
 - a monster: the monster
 - a modifier: the actor the walk was raised with, as now.
 
-`Board::relic_asked` does this for relics now. It becomes
-`Board::listener_asked`, and every walk that carries out effects goes
-through it: `carry_out_walk`, `after_hit`, the turn's phases, and
-`walk_played`. `hook::apply` then reads `fight.actor()` as the
-listener's owner, which is what its comments already claim. The
-special cases that put the actor back for one effect go away:
-
-- `relic_asked`
-- `after_hit`'s Heal arm
-- the turn's end `applied`
-- `side_turn_started`'s `listen::owner`.
-
-The draw that runs a relic's own command over stays as it is.
+`Board::as_listener` sets this up around what the listener asked, and
+`Board::listener_asked` carries an effect out through it. The board's
+walks go through them, and `hook::apply` reads `fight.actor()` as the
+listener's owner. A walk that builds a board for each effect, as the
+turn's phases do, builds it for the listener's owner's seat. A card
+writes on itself in its owner's piles, wherever the walk runs.
 
 In a fight of one player, every player-owned listener's owner is the
 actor already. A monster's power gets its own monster in place of the

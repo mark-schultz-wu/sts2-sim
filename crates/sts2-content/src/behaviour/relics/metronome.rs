@@ -17,12 +17,13 @@ pub struct State {
 /// damages every enemy that can be hit. Entering a combat room and the end
 /// of a fight start the count again.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::OrbChanneled => {
+        EventHook::OrbChanneled { player } if player == owner => {
             state.orbs_channeled = state.orbs_channeled.saturating_add(1);
             if state.orbs_channeled == (V::Relic::METRONOME_ORB_COUNT as u8) {
                 asked.push(HookEffect::DamageOpponents(V::Relic::METRONOME_DAMAGE));

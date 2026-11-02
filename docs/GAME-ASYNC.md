@@ -630,8 +630,8 @@ goes in?** Yes, in exits 1 and 3, and on the *other* machines in every case:
   `observe` can return **mid-transition**. For example, while waiting for another
   machine's `ReadyToBeginEnemyTurnAction`, with phase `End` and the enemy
   turn not yet run (inference from the conditions).
-* **Other machines**: `Coop::step` (`crates/sts2-core/src/play/coop.rs:213-246`)
-  observes every seat and then plays on one. Seat A's `play` returning says
+* **Other machines**: `LobbyTable` (`crates/sts2-headless/src/session/table.rs`)
+  observes every seat, and the runner then plays on one. Seat A's `play` returning says
   nothing about seat B's game having **received** A's action. B's own
   `WaitForDecisionPoint` can see an empty, idle queue before A's
   `ActionEnqueuedMessage` arrives, and report a stale state. Host ordering is
