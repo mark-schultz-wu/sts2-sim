@@ -117,6 +117,12 @@ public static class Driver
             // wait above is what guarantees the loader has finished.
             Determinism.Arm();
 
+            // The game caps its frame rate at the player's setting, which
+            // NGame.InitializeGraphicsPreferences reads once at startup. Every
+            // await in the game resumes on a frame. Headless, no frame is
+            // drawn, so the cap only adds a wait to each request. Zero lifts it.
+            Godot.Engine.MaxFps = 0;
+
             // Everything below can throw, and all of it belongs inside this try.
             // UseSelector throws outright if a selector is already installed, and
             // PatchAll throws when Harmony cannot patch -- and Run is started
@@ -665,28 +671,7 @@ public static class Driver
 
         for (int i = 0; i < 20000; i++)
         {
-            if (Pending.Current != null)
-            {
-                return true;
-            }
-
-            if (queue.IsEmpty && !executor.IsRunning && !Peers.InFlight && ReadyForInput(turnMustAdvancePast))
-            {
-                return true;
-            }
-
-            // In a co-op run the game can stand still waiting on another seat,
-            // with this seat's part done or the queue held for another player's
-            // choice. That is as far as a command here can take it. Work this
-            // seat started outside the queue, such as an event option, can be
-            // what waits on that choice, and it finishes only once that seat
-            // has chosen. A choice the game already waited on before this
-            // command is another seat's own, so this seat's work goes on
-            // around it, as an event option's delay does.
-            if (!Peers.InFlight
-                && RunManager.Instance.DebugOnlyGetState() is RunState held && Peers.HeldByOthers(held)
-                && (!BackgroundWork.InFlight
-                    || Peers.AwaitedChoices().Any(seat => !awaitedBefore.Contains(seat))))
+            if (Still(awaitedBefore, turnMustAdvancePast))
             {
                 return true;
             }
@@ -707,6 +692,42 @@ public static class Driver
 
         throw new TimeoutException(
             $"action queue never drained{(issued == null ? "" : $" after {issued}")}");
+    }
+
+    /// <summary>
+    /// Whether the game here stands still: it asks this seat, or does nothing
+    /// until this seat or another acts.
+    /// </summary>
+    /// <param name="awaitedBefore">
+    /// The seats whose choice the game waited on before the command that waits.
+    /// </param>
+    /// <param name="turnMustAdvancePast">A turn the fight has to be past.</param>
+    internal static bool Still(HashSet<ulong> awaitedBefore, int? turnMustAdvancePast)
+    {
+        if (Pending.Current != null)
+        {
+            return true;
+        }
+
+        ActionQueueSet queue = RunManager.Instance.ActionQueueSet;
+        ActionExecutor executor = RunManager.Instance.ActionExecutor;
+        if (queue.IsEmpty && !executor.IsRunning && !Peers.InFlight && ReadyForInput(turnMustAdvancePast))
+        {
+            return true;
+        }
+
+        // In a co-op run the game can stand still waiting on another seat,
+        // with this seat's part done or the queue held for another player's
+        // choice. That is as far as a command here can take it. Work this
+        // seat started outside the queue, such as an event option, can be
+        // what waits on that choice, and it finishes only once that seat
+        // has chosen. A choice the game already waited on before this
+        // command is another seat's own, so this seat's work goes on
+        // around it, as an event option's delay does.
+        return !Peers.InFlight
+            && RunManager.Instance.DebugOnlyGetState() is RunState held && Peers.HeldByOthers(held)
+            && (!BackgroundWork.InFlight
+                || Peers.AwaitedChoices().Any(seat => !awaitedBefore.Contains(seat)));
     }
 
     /// <summary>
