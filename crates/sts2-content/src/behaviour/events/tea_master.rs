@@ -92,6 +92,9 @@ mod tests {
         fn wins(&self) -> u32 {
             unreachable!("Tea Master does not inspect the profile")
         }
+        fn local(&self) -> bool {
+            unreachable!("Tea Master does not ask whose machine it is on")
+        }
         fn room(&self) -> Option<<V as sts2_core::ContentVersion>::RoomType> {
             unreachable!("Tea Master does not inspect the room")
         }

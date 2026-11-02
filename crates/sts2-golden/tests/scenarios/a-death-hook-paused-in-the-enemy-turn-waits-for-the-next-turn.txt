@@ -1,0 +1,14 @@
+# A slime at 3 HP attacks into Thorns in turn two's enemy turn and dies.
+# Gremlin Horn draws for the death. The draw pile is dry, so the draw
+# shuffles, and Stratagem asks for its pick. The paused hook action waits
+# until the player's next turn has started: turn three's hand comes off
+# the shuffled pile first, and the pick and the Horn's draw come after.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"grant","relic":"GREMLIN_HORN"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"power","power":"THORNS_POWER","amount":3,"target":0}
+{"cmd":"hp","hp":3,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}
