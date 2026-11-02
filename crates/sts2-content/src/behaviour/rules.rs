@@ -182,7 +182,7 @@ pub(crate) fn enchanted_changes<V: crate::Build>(
 pub(crate) fn card_result_pile<V: crate::Build>(
     card: V::Card,
     base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)> {
+) -> sts2_core::HookResponse<sts2_core::CardResult> {
     crate::behaviour::cards::result_pile::<V>(card, base)
 }
 
@@ -901,6 +901,14 @@ pub(crate) fn observe_event<V: crate::Build>(
     run: &impl sts2_core::EventView<V>,
 ) -> sts2_core::Room<V> {
     crate::behaviour::events::observe::<V>(state, run)
+}
+
+pub(crate) fn event_kills<V: crate::Build>(
+    state: &V::EventState,
+    option: u8,
+    run: &impl sts2_core::EventView<V>,
+) -> bool {
+    crate::behaviour::events::kills::<V>(state, option, run)
 }
 
 pub(crate) fn choose_event<V: crate::Build, R: sts2_core::rng::GameRng>(
