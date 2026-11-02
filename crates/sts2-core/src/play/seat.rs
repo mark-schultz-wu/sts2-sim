@@ -5,22 +5,19 @@
 //! the buyer's machine alone, so two peers can differ and both be right. So
 //! the unit here is a *seat*: one player, and that player's machine.
 //!
-//! [`Seat`] is what every implementation of a seat answers to, whether it is
-//! the real game or a simulator. [`Coop`](super::coop::Coop) seats several of
-//! them in one lobby and decides who acts next.
-//!
-//! A seat's [`Seat::play`] returns once its move is submitted, not once it is
-//! resolved. A co-op move can wait on the other seats. Ending the turn waits
-//! for every seat to end it, and travel waits for every vote.
+//! A [`RunTable`](crate::RunTable) holds every seat of a run. [`Seated`] is
+//! where one seat stands as its game reports it, its peers included. A co-op
+//! move can wait on the other seats. Ending the turn waits for every seat to
+//! end it, and travel waits for every vote.
 
-use crate::{ContentVersion, Coord, Decision, Refusal, Snapshot, Start};
+use crate::{ContentVersion, Coord, Decision, Refusal, Snapshot};
 
-/// A place in a run's lobby: an index into [`Start::players`]. Seat 0 hosts.
+/// A place in a run's lobby: an index into [`Start::players`](crate::Start::players). Seat 0 hosts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SeatIndex(pub u8);
 
 impl SeatIndex {
-    /// The index into [`Start::players`].
+    /// The index into [`Start::players`](crate::Start::players).
     pub fn at(self) -> usize {
         usize::from(self.0)
     }
@@ -55,14 +52,22 @@ pub struct Peers {
     pub awaiting: Vec<SeatIndex>,
     /// A move of this seat's is not back from the host yet.
     pub in_flight: bool,
-    /// How many shared actions this machine has taken in from the host, in
-    /// order: actions, hook actions and resumes after a choice. Every seat
-    /// comes to the same count once it has caught up with the others.
-    pub synced: u64,
-    /// How many checksums this machine's game generated. Every seat
-    /// generates them at the same points, a turn's changes among them. A
-    /// seat still running a turn's change has fewer than one past it.
-    pub checksums: u64,
+    /// The game stands still: it asks this seat, or does nothing until a
+    /// seat acts or a packet comes in.
+    pub still: bool,
+    /// The reliable packets between this machine and each seat's, in seat
+    /// order. This seat's own entry is empty.
+    pub links: Vec<Link>,
+}
+
+/// The reliable packets between one machine and another, as one end counts
+/// them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Link {
+    /// The packets this end sent to the other.
+    pub sent: u64,
+    /// The packets this end took in from the other.
+    pub received: u64,
 }
 
 /// Where one seat stands: its own view of the run, and of the others.
@@ -98,33 +103,3 @@ impl<V: ContentVersion> Seated<V> {
 /// What a seat's move came to: where the seat stands after it, or the
 /// game's refusal.
 pub type SeatAnswered<V> = Result<Seated<V>, Refusal<V>>;
-
-/// One player's machine in a co-op run.
-///
-/// The co-op counterpart of [`Play`](super::Play): the same three methods,
-/// each scoped to one seat.
-pub trait Seat<V: ContentVersion>: Sized {
-    /// A fault, which is not a refusal. See [`Play::Error`](super::Play::Error).
-    type Error;
-
-    /// What it takes to reach this seat's game. See
-    /// [`Play::Host`](super::Play::Host).
-    type Host;
-
-    /// Takes seat `me` in the run `start` names, and returns once the run has
-    /// started.
-    ///
-    /// A run starts only once every seat has joined, so the seats of one run
-    /// begin at the same time. [`Coop::begin`](super::coop::Coop::begin) does
-    /// that.
-    fn begin(host: Self::Host, start: &Start<V>, me: SeatIndex) -> Result<Self, Self::Error>;
-
-    /// Submits one of this seat's moves.
-    ///
-    /// Returns once the move is submitted. What the move does can wait on the
-    /// other seats.
-    fn play(&mut self, decision: &Decision<V>) -> Result<SeatAnswered<V>, Self::Error>;
-
-    /// Where this seat stands, without moving it.
-    fn observe(&mut self) -> Result<Seated<V>, Self::Error>;
-}

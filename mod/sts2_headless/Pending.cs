@@ -184,7 +184,19 @@ internal sealed class CardSelection : Pending
         // is posted to Godot's loop and the handler returns first.
         new TaskCompletionSource<IEnumerable<CardModel>>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    private readonly IReadOnlyList<CardModel> _options;
+    private readonly IReadOnlyList<CardModel> _offered;
+
+    /// <summary>The hand a pick from the hand reads its options from, as it stands.</summary>
+    private readonly Func<IReadOnlyList<CardModel>>? _live;
+
+    /// <summary>The cards on offer now.</summary>
+    /// <remarks>
+    /// A pick from the hand offers the hand as it stands, as
+    /// <c>NPlayerHand.SelectCards</c> does: a card another player puts into
+    /// the hand while the pick is open shows, and can be picked. Every other
+    /// pick offers what it was asked with.
+    /// </remarks>
+    private IReadOnlyList<CardModel> Options => _live?.Invoke() ?? _offered;
     private readonly int _min;
     private readonly int _max;
     private readonly string? _asker;
@@ -204,9 +216,12 @@ internal sealed class CardSelection : Pending
     /// </remarks>
     private readonly List<int> _picked = new List<int>();
 
-    private CardSelection(IReadOnlyList<CardModel> options, int min, int max, string? asker)
+    private CardSelection(
+        IReadOnlyList<CardModel> options, int min, int max, string? asker,
+        Func<IReadOnlyList<CardModel>>? live)
     {
-        _options = options;
+        _offered = options;
+        _live = live;
         _min = min;
         _max = max;
         _asker = asker;
@@ -221,9 +236,10 @@ internal sealed class CardSelection : Pending
     public override string Kind => "select_cards";
 
     public static Task<IEnumerable<CardModel>> Ask(
-        IReadOnlyList<CardModel> options, int min, int max, string? asker)
+        IReadOnlyList<CardModel> options, int min, int max, string? asker,
+        Func<IReadOnlyList<CardModel>>? live = null)
     {
-        var pending = new CardSelection(options, min, max, asker);
+        var pending = new CardSelection(options, min, max, asker, live);
         Park(pending);
         return pending._answer.Task;
     }
@@ -240,7 +256,7 @@ internal sealed class CardSelection : Pending
         // action is the best attribution available and is labelled as such
         // rather than dressed up as the game's own prompt text.
         ["asker"] = _asker,
-        ["options"] = _options.Select((c, i) => new Dictionary<string, object?>
+        ["options"] = Options.Select((c, i) => new Dictionary<string, object?>
         {
             ["index"] = i,
             ["card"] = Observation.Ident(c),
@@ -264,7 +280,7 @@ internal sealed class CardSelection : Pending
     private string? SharedPile()
     {
         PileType? shared = null;
-        foreach (CardModel card in _options)
+        foreach (CardModel card in Options)
         {
             PileType? pile = card.Pile?.Type;
             if (pile is null or PileType.None or PileType.Deck)
@@ -289,7 +305,7 @@ internal sealed class CardSelection : Pending
         var answers = new List<Dictionary<string, object?>>();
         if (_picked.Count < _max)
         {
-            for (int i = 0; i < _options.Count; i++)
+            for (int i = 0; i < Options.Count; i++)
             {
                 if (!_picked.Contains(i))
                 {
@@ -401,9 +417,9 @@ internal sealed class CardSelection : Pending
         var picked = new List<int>(_picked);
         foreach (int i in more)
         {
-            if (i < 0 || i >= _options.Count)
+            if (i < 0 || i >= Options.Count)
             {
-                return Refusals.OutOfRange(i, _options.Count);
+                return Refusals.OutOfRange(i, Options.Count);
             }
 
             // The same card twice would be one selection to the game and two to
@@ -435,7 +451,8 @@ internal sealed class CardSelection : Pending
         }
 
         Release();
-        _answer.SetResult(picked.Select(i => _options[i]).ToList());
+        IReadOnlyList<CardModel> options = Options;
+        _answer.SetResult(picked.Select(i => options[i]).ToList());
         return null;
     }
 
@@ -1078,7 +1095,8 @@ internal sealed class HeadlessCardSelector : ICardSelector
         }
         List<CardModel> offered = options.ToList();
         return GameApi.Sent(offered, CardSelection.Ask(offered, minSelect, maxSelect,
-            RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString()));
+            RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString(),
+            HandPicksLive.Take(offered)));
     }
 
     /// <summary>

@@ -23,7 +23,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Wrap};
-use sts2_core::{Play, Question, View};
+use sts2_core::{Question, View};
 
 use super::app::App;
 use super::names;
@@ -45,11 +45,9 @@ pub(crate) fn log_rows(height: u16) -> u16 {
     }
 }
 
-pub fn draw<V, G>(frame: &mut Frame, app: &App<V, G>)
+pub fn draw<V>(frame: &mut Frame, app: &App<V>)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     let whole = frame.area();
 
@@ -84,11 +82,9 @@ where
 }
 
 /// The last thing that went wrong, in a box at the bottom right of the body.
-fn toast<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>)
+fn toast<V>(frame: &mut Frame, body: Rect, app: &App<V>)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     let Some(note) = &app.ui.toast else {
         return;
@@ -177,11 +173,9 @@ fn run_strip<V: crate::tui::Build>(frame: &mut Frame, area: Rect, observed: &Vie
     frame.render_widget(Line::from(spans), area);
 }
 
-fn body_of<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, observed: &View<V>)
+fn body_of<V>(frame: &mut Frame, area: Rect, app: &App<V>, observed: &View<V>)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     if let Some(question) = app.view().and_then(|a| a.asking.as_ref()) {
         return room::asking(frame, area, app, question);
@@ -224,11 +218,9 @@ fn over<V: crate::tui::Build>(frame: &mut Frame, area: Rect, observed: &View<V>)
 }
 
 /// What has just happened, oldest at the top.
-fn scrollback<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>)
+fn scrollback<V>(frame: &mut Frame, area: Rect, app: &App<V>)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     let block = Block::new()
         .borders(Borders::TOP)
@@ -270,11 +262,9 @@ where
 
 /// The keys that mean something on the screen in front of the player.
 /// The name of the potion being aimed, for the bar to say what it drinks.
-fn drinking<V, G>(app: &App<V, G>) -> Option<String>
+fn drinking<V>(app: &App<V>) -> Option<String>
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     let at = app.drinking()?;
     let potion = app.view()?.potions.get(at)?;
@@ -286,11 +276,9 @@ where
     )
 }
 
-fn key_bar<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>)
+fn key_bar<V>(frame: &mut Frame, area: Rect, app: &App<V>)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     let mut spans = vec![Span::raw(" ")];
 

@@ -4,7 +4,7 @@
 //! ```text
 //! sts2-run follow <file> [index] [--at <step> | --scenario | --diff <dir>]
 //! sts2-run play <seed> <characters> [--build v0.107.1] [--table sim|game]
-//!          [--player random] [--carried] [--steps N]
+//!          [--player random|uniform] [--carried] [--steps N]
 //!          [--record FILE] [--hunt] [--home DIR] [--moves]
 //!          [--ascension ID] [--modifiers ID,...]
 //! ```
@@ -21,7 +21,9 @@ use std::process::ExitCode;
 use clap::{Parser, ValueEnum};
 use sts2_core::{Player as Lobbyist, RunTable, Seed, Start, Verdict};
 use sts2_headless::{Config, LobbyTable, OracleTable, SeatHost, game_dir_from_env};
-use sts2_run::{Carried, Fault, Hunted, LogGuard, MovesLog, Random, Recorded, ids::read_id};
+use sts2_run::{
+    Carried, Fault, Hunted, LogGuard, MovesLog, Random, Recorded, Uniform, ids::read_id,
+};
 use sts2_sim::SimTable;
 
 /// Moves a run takes before this gives up on it.
@@ -100,6 +102,28 @@ enum Table {
 enum Pick {
     /// At random, as the census and the recorder pick.
     Random,
+    /// Every legal move alike, Cancel among them, as a fuzzer picks.
+    Uniform,
+}
+
+/// The player the run was given.
+enum Picking {
+    Random(Random),
+    Uniform(Uniform),
+}
+
+impl<V: sts2_core::ContentVersion> sts2_run::Player<V> for Picking {
+    fn choose<T: RunTable<V>>(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        table: &mut T,
+        moves: &[sts2_core::Decision<V>],
+    ) -> Result<Option<sts2_core::Decision<V>>, T::Error> {
+        match self {
+            Picking::Random(player) => player.choose(seat, table, moves),
+            Picking::Uniform(player) => player.choose(seat, table, moves),
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -165,6 +189,9 @@ fn id<T: serde::de::DeserializeOwned>(id: &str) -> Result<T, Error> {
 fn run<V>(cli: Play) -> Result<Verdict, Error>
 where
     V: sts2_content::Build + sts2_content_wire::WireContentVersion,
+    sts2_core::Seated<V>: Send,
+    sts2_core::Answered<V>: Send,
+    sts2_core::Setup<V>: Sync,
 {
     let Play {
         seed,
@@ -208,8 +235,10 @@ where
             .collect::<Result<_, _>>()?,
         seed,
     };
-    let Pick::Random = player;
-    let mut player = Random::for_seed(start.seed.as_str());
+    let mut player = match player {
+        Pick::Random => Picking::Random(Random::for_seed(start.seed.as_str())),
+        Pick::Uniform => Picking::Uniform(Uniform::for_seed(start.seed.as_str())),
+    };
 
     if table == Table::Sim {
         if hunt {
@@ -286,11 +315,11 @@ fn lobby(
 }
 
 /// The run `start` names at a table of `T`, to its verdict.
-fn at<V, T>(host: T::Host, start: &Start<V>, player: &mut Random, steps: usize) -> Verdict
+fn at<V, T>(host: T::Host, start: &Start<V>, player: &mut Picking, steps: usize) -> Verdict
 where
     V: sts2_core::ContentVersion,
     T: RunTable<V>,
     Fault: From<T::Error>,
 {
-    sts2_run::run::<V, T, Random>(host, start, player, steps)
+    sts2_run::run::<V, T, Picking>(host, start, player, steps)
 }

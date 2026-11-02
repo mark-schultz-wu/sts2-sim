@@ -23,6 +23,45 @@ const MAGIC: &[u8; 8] = b"STS2SCN\x00";
 /// The layout below. A change here is a re-record, not a migration.
 const VERSION: u16 = 2;
 
+/// Where a walk parted from its recorded answers, named by section, or as
+/// `question`, or nothing where it did not.
+///
+/// The answers hold `seats` entries a step, one for each seat in order. A
+/// run of several names the seat as well as the step. What the game said
+/// is a hash, so a failure names only the part that moved.
+pub fn parted(want: &[Step], got: &[Seen], seats: usize) -> Option<String> {
+    if want.len() != got.len() {
+        return Some(format!(
+            "{} steps recorded, {} played",
+            want.len(),
+            got.len()
+        ));
+    }
+    let mut standing: BTreeMap<Section, Digest> = BTreeMap::new();
+    let mut asked = None;
+    for (at, (step, seen)) in want.iter().zip(got).enumerate() {
+        standing.extend(step.moved.iter().copied());
+        asked = step.question.or(asked);
+        let mut named: Vec<&str> = seen
+            .sections
+            .iter()
+            .filter(|(section, now)| standing.get(section) != Some(now))
+            .map(|(section, _)| section.name())
+            .collect();
+        if asked != Some(seen.question) {
+            named.push("question");
+        }
+        if !named.is_empty() {
+            let place = match seats {
+                1 => format!("step {at}"),
+                _ => format!("step {}, seat {}", at / seats + 1, at % seats),
+            };
+            return Some(format!("{place} differs in {}", named.join(", ")));
+        }
+    }
+    None
+}
+
 /// The mask bit a step sets when what the run asks moved. The sections take
 /// the low bits, one each.
 const QUESTION: u16 = 1 << 15;

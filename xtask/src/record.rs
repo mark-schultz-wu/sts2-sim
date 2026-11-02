@@ -102,7 +102,6 @@ pub fn run(args: Args) -> Result<String, Error> {
     };
     let runner = crate::error::build_runner(&root)?;
     let build = crate::runner::game_build();
-    let merger = crate::error::build_example(&root, "merge_runs")?;
 
     // Each run to play: its seed, its character and the runner's setup flags.
     let jobs: Vec<(String, String, Vec<String>)> = match &again {
@@ -162,7 +161,12 @@ pub fn run(args: Args) -> Result<String, Error> {
             what: "keeping the runs already recorded",
             source,
         })?;
-    crate::error::status(Command::new(&merger).arg(&target).args(&held).args(&kept))?;
+    crate::error::status(
+        Command::new(crate::error::merger(&root)?)
+            .arg(&target)
+            .args(&held)
+            .args(&kept),
+    )?;
 
     let mut report = format!(
         "{} of {} runs recorded into {}, {} played again after a crash\n",

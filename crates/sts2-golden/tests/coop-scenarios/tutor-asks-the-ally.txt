@@ -1,0 +1,10 @@
+# Tutor asks the ally it is pointed at to pick a card of their own draw
+# pile, which goes into their hand. The pick is the ally's, so the play
+# ends as it begins: Tutor is in its owner's discard pile while the ally
+# picks.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"TUTOR","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":1,"seat":0}
+{"cmd":"answer","pick":0,"seat":1}
+{"cmd":"answer","done":true,"seat":1}

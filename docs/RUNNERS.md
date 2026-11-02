@@ -13,9 +13,9 @@ parts:
 Solo is a lobby of one. Co-op is a lobby of several. Nothing else changes
 between them.
 
-## Where it stands
+## Where it stood
 
-Eleven entry points play or replay a run today. They share one random
+Before this work, eleven entry points played or replayed a run. They share one random
 pick, `Pick`. The rest is written again in each:
 
 | Piece | Copies |
@@ -28,16 +28,16 @@ pick, `Pick`. The rest is written again in each:
 | The verdict line, and a parser for each | 4 |
 | A pool of runs in xtask | 5 |
 
-Some shared parts exist, but no entry point uses them. `Recorder` wraps
-any `Play` and records it, and only tests use it. `SimSeat` is not a
-`Seat`, so `Coop` cannot drive the simulator. The co-op hunt and the
-golden test drive a `Vec<SimSeat>` by hand. `follow_noting` refuses a run
-of several players.
+Some shared parts existed, but no entry point used them. `Recorder`
+wrapped any `Play` and recorded it, and only tests used it. `SimSeat` was
+not a `Seat`, so `Coop` did not drive the simulator. The co-op hunt and
+the golden test drove a `Vec<SimSeat>` by hand. `follow_noting` refused a
+run of several players.
 
-The two traits are part of why. `Play` is one run on one machine. `Seat`
-is one player's machine in a co-op run. The game is one process for each
+The two traits were part of why. `Play` was one run on one machine. `Seat`
+was one player's machine in a co-op run. The game is one process for each
 seat. The simulator keeps one machine's view for each seat, in one value,
-and each takes every player's moves. Neither trait fits both.
+and each takes every player's moves. Neither trait fit both.
 
 ## The table
 
@@ -79,20 +79,30 @@ So the census, which never reads one, pays nothing for it. A player reads
 
 ```rust
 trait Player<V> {
-    /// Which of `moves` seat `seat` makes.
+    /// Seat `seat`'s move, or nothing for a player who stops the run. The
+    /// table lists `moves`. A move it does not list is the player's to try.
     fn choose<T: RunTable<V>>(&mut self, seat: SeatIndex, table: &mut T, moves: &[Decision<V>])
-        -> Result<usize, T::Error>;
+        -> Result<Option<Decision<V>>, T::Error>;
+    /// What the table answered the move: what it decided, or why not.
+    fn answered(&mut self, seat: SeatIndex, decision: &Decision<V>, settled: &Settled<V>) {}
+    /// How the run ended, at the table where it ended.
+    fn ended<T: RunTable<V>>(&mut self, table: &mut T, verdict: &Verdict) {}
 }
 ```
+
+A move the table lists and then refuses ends the run as `refused`. One it
+never listed goes back to the player, with the table's reason, and the
+player is asked again.
 
 - `Random`: `Pick`, with its end-turn odds and the room rule. A layer
   never sees the rule, because it is the player's own.
 - `Uniform`: every legal move alike, Cancel included. The fuzzer's.
-- `Human`: the terminal UI.
+- `Human`: the terminal screen. It is asked for a move like any player,
+  and reads keys until one asks for one.
 - Later, an AI.
 
-Which seat acts next is the driver's: `Coop::step`'s rule today. A seat
-with no moves waits. A replay is no player, because the run names the seat
+Which seat acts next is the driver's: the seats in turn, from the one
+after the seat that last moved. A seat with no moves waits. A replay is no player, because the run names the seat
 of each move: `recorded::follow` plays it on any table instead.
 
 ## Layers
@@ -192,11 +202,13 @@ own moves.
 - `random_run`, `record_run`, `coop_run`, `follow_run`: into `sts2-run`.
 - `sts2-fuzz`: `--table game --player uniform`, with `RefusalGuard` and
   `LogGuard`. Its coverage file and clock seed go with it.
-- `sim` (bin): `--table sim --player human`.
-- `Play`, `Seat`, `Recorder`, `Tape`, `SimSeat`: into `RunTable` and the
-  layers.
+- `sts2-sim` (bin): `sts2 sim`, the screen as a player at the simulator's
+  table (done).
+- `Play`, `Construct`, `Seat`, `Coop`, `Recorder`, `Tape`, `SimSeat`:
+  into `RunTable` and the layers (done).
 - The cli's `scenario` example and `map_bench`, which nothing runs.
-  `where_it_goes`, `clone_sites`, `digest_sites` and `legal_shapes` go too.
+  `where_it_goes`, `clone_sites`, `digest_sites` and `legal_shapes` go too
+  (done).
 
 These stay as they are:
 
@@ -228,7 +240,21 @@ Each step is one PR, with the golden tests, the census and the hunt.
 3. `recorded::follow` replays a run at any `RunTable`. `sts2-run follow`
    and the golden replay tests use it, and `follow_run` goes. A co-op run
    replays like a solo one, so `follow_noting`'s refusal goes (done).
-4. `Uniform`, `RefusalGuard` and `Human`: the fuzzer and `sim` go.
-   `Play`, `Seat`, `Recorder` and `SimSeat` go. The `sts2` daemon reads a
-   `RunTable`. The unused examples go.
-5. ARCHITECTURE.md and STS2-CORE.md say what is above.
+4. `Uniform`: the fuzzer goes. The driver already ends a run on a move the
+   table refuses after listing it, so no `RefusalGuard` is needed. The
+   unused examples go (done).
+5. `Human`: the terminal screen is a player, as Mark chose. The screen's
+   state holds no game. It shows where the run stands, and turns a key into
+   a move, a look, or nothing. A player returns a decision rather than an
+   index, so a person can try a move the table does not list and read why
+   not. `sts2 sim` plays it at the simulator's table, and a bare `sts2` at
+   the daemon's, `HeldTable`. The `sts2-sim` binary goes (done).
+6. `Seat`, `Coop`, `Recorder`, `Tape` and `SimSeat` go. The lobby table
+   launches its seats and waits for them to catch up itself, and the
+   driver's tests hold its order (done).
+7. `Play` and `Construct` go. Each implementation keeps `begin`, `play`,
+   `observe` and `setup` as its own methods. The command line's one
+   command per process plays a `HeldTable`. The scenario replays step each
+   side by hand, and the benches use `Sim`. The transcripts' commands are
+   the commands they were, so no scenario is recorded again (done).
+8. ARCHITECTURE.md and STS2-CORE.md say what is above (done).

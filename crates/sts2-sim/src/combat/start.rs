@@ -98,9 +98,12 @@ pub(crate) fn enter<V: Rules>(
     let mut live = Box::new(Live {
         players: crate::seats::BySeat::new(host_combat, others_combat),
         ascension,
-        turn: num_traits::one(),
         modifiers,
         round: num_traits::one(),
+        starting: sts2_core::Participants::default(),
+        turns_apart: false,
+        taking: 0,
+        ending: sts2_core::Participants::default(),
         side: <V::CombatSide as SideKinds>::PLAYER,
         history: super::live::CombatHistory::new(),
         kept: Vec::new(),
@@ -137,6 +140,7 @@ pub(crate) fn enter<V: Rules>(
         asking: None,
         deferred: super::live::Deferrals::new(),
         queues: super::queues::Queues::new(),
+        after_picks: None,
         waited_attack: None,
     });
 
@@ -628,6 +632,7 @@ fn player_combat<V: Rules>(
     let character = player.character;
     super::live::PlayerCombat {
         character,
+        turn: num_traits::one(),
         phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
         energy: num_traits::cast(V::max_energy(character))
             .expect("the starting energy fits the build's count type"),
@@ -703,11 +708,12 @@ pub(super) fn hand_size<V: Rules>(
 }
 
 /// The health a `Combat`-layout event's monsters roll as it opens, off the
-/// run's `Niche` stream.
+/// run's `Niche` stream, for a fight of `players` in the act `act`.
 pub(crate) fn roll_layout<V: Rules>(
     raw_seed: u64,
     floor: V::Count,
     ascension: V::AscensionLevel,
+    (players, act): (usize, usize),
     encounter: V::Encounter,
     streams: &mut Streams<V>,
 ) -> Result<smallvec::SmallVec<[V::Health; 2]>, Error> {
@@ -715,6 +721,7 @@ pub(crate) fn roll_layout<V: Rules>(
     Ok(monster::roll_layout::<V>(
         &monsters,
         ascension,
+        monster::Scaling::of::<V>(players, encounter, act),
         streams.combat().niche,
     ))
 }

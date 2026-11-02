@@ -64,8 +64,10 @@ impl<V: crate::Build> EventBehavior<V> for WarHistorianRepy {
     }
 
     /// The first choice spends the first Lantern Key, and a run of one player
-    /// with a key left goes on to the other unlock. The second spends every
-    /// key left. `PlayerCmd.CompleteQuest` writes to the map history alone.
+    /// with a key left goes on to the other unlock. In a run of several
+    /// players it spends every key, and there is no second choice. The
+    /// second spends every key left. `PlayerCmd.CompleteQuest` writes to the
+    /// map history alone.
     ///
     /// `UnlockCage`: History Course. `UnlockChest`: `OfferCustom` of its
     /// rewards. The second choice finishes the event before it unlocks.
@@ -89,10 +91,16 @@ impl<V: crate::Build> EventBehavior<V> for WarHistorianRepy {
         let mut effects = HookEffects::new();
         if state.page == Page::Initial {
             let keys = keys::<V>(run);
-            effects.extend(keys.first().copied().map(HookEffect::RemoveDeckCardAt));
+            if run.multiplayer() {
+                // From the back, so each place still names its key.
+                effects.extend(keys.iter().rev().copied().map(HookEffect::RemoveDeckCardAt));
+            } else {
+                effects.extend(keys.first().copied().map(HookEffect::RemoveDeckCardAt));
+            }
             effects.push(unlock);
             state.chosen = NonMaxU8::new(option);
-            if keys.len() > 1 {
+            // `ShouldGetSecondReward`: a key left, in a run of one player.
+            if !run.multiplayer() && keys.len() > 1 {
                 state.next = Some(if cage {
                     Page::SecondChest
                 } else {
