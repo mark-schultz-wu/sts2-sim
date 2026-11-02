@@ -649,11 +649,18 @@ internal static class Protocol
                 // deadlocks: an event option may park a question for the client,
                 // and a handler blocked here could never send it.
                 //
-                // Only the tasks this choice started. In a co-op run another
-                // player's option in the same room can wait on that player,
-                // such as a reward screen it put up, and this seat's choice
-                // does not wait for it.
-                BackgroundWork.Track(Task.WhenAll(pending.Skip(before).ToList()));
+                // Only this seat's task. In a co-op run another player's
+                // option in the same room can wait on that player, such as a
+                // reward screen it put up, and this seat's choice does not
+                // wait for it. The last vote on a shared event's page starts
+                // one task for each player, in slot order, as
+                // `ChooseOptionForSharedEvent` does.
+                List<Task> started = pending.Skip(before).ToList();
+                if (sync.IsShared && started.Count == _state.Players.Count)
+                {
+                    started = new List<Task> { started[_state.GetPlayerSlotIndex(Seat.Me(_state))] };
+                }
+                BackgroundWork.Track(Task.WhenAll(started));
                 break;
             }
 
