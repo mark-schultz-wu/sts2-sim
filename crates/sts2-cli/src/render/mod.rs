@@ -744,7 +744,7 @@ mod tests {
         let out = rendered(observation(json!({
             "room": {
                 "type": "Event", "id": "BYRDONIS_NEST", "finished": false,
-                "text": "A nest of squalling byrdlings.",
+                "text": "A test nest, made up for this fixture.",
                 "options": [
                     {"index": 0, "key": "BYRDONIS_NEST.pages.INITIAL.options.EAT",
                      "title": "Eat one", "text": "Gain 10 Max HP. Take 5 damage."},
@@ -754,7 +754,10 @@ mod tests {
             }
         })));
 
-        assert!(out.contains("A nest of squalling byrdlings."), "{out}");
+        assert!(
+            out.contains("A test nest, made up for this fixture."),
+            "{out}"
+        );
         assert!(out.contains("0 Eat one"), "{out}");
         // An event option carries no `enabled` at all, and absent must not read
         // as disabled — which is what "not true" would have made it.

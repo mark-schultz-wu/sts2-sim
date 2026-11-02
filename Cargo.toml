@@ -7,6 +7,7 @@ members = [
     "crates/sts2-core",
     "crates/sts2-golden",
     "crates/sts2-headless",
+    "crates/sts2-pack",
     "crates/sts2-run",
     "crates/sts2-sim",
     "crates/sts2-trace",
@@ -32,6 +33,8 @@ indexmap = "2"
 libm = "0.2"
 nonmax = { version = "0.5.5", features = ["serde"] }
 num-traits = "0.2"
+# Telling which build of the game an install holds, by the hash its lock pins.
+sha2 = "0.10"
 # The TUI. It reaches its `crossterm` backend through `ratatui::crossterm`
 # rather than as a second dependency. So the key and resize events that the
 # front end matches on cannot drift from the backend's.
@@ -49,6 +52,7 @@ sts2-content = { path = "crates/sts2-content", default-features = false }
 sts2-content-wire = { path = "crates/sts2-content-wire" }
 sts2-core = { path = "crates/sts2-core" }
 sts2-headless = { path = "crates/sts2-headless" }
+sts2-pack = { path = "crates/sts2-pack" }
 sts2-run = { path = "crates/sts2-run" }
 sts2-sim = { path = "crates/sts2-sim" }
 thiserror = "2.0.20"

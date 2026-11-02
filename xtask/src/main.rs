@@ -26,7 +26,6 @@ mod hunt;
 mod instructions;
 mod neow;
 mod pause_sites;
-mod pck;
 mod plays;
 mod reached;
 mod record;

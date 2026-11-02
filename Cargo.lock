@@ -1942,10 +1942,12 @@ dependencies = [
  "ratatui",
  "serde",
  "serde_json",
+ "sha2",
  "sts2-content",
  "sts2-content-wire",
  "sts2-core",
  "sts2-headless",
+ "sts2-pack",
  "sts2-run",
  "sts2-sim",
  "thiserror 2.0.20",
@@ -2021,6 +2023,13 @@ dependencies = [
  "sts2-content",
  "sts2-content-wire",
  "sts2-core",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "sts2-pack"
+version = "0.1.0"
+dependencies = [
  "thiserror 2.0.20",
 ]
 

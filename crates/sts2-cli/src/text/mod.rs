@@ -3,13 +3,20 @@
 //! The game reports a card's, relic's or potion's title and words as it plays.
 //! The simulator has no text, so a view off it carries none, and a card was a
 //! box with a name. [`fill`] writes in what the view left out, from the text
-//! tables `cargo xtask dump textdump` copies out of each build's pack. A view
-//! the game already filled keeps the game's words.
+//! tables `build.rs` copies out of the player's install of each build. A build
+//! with no install where the build looked has no tables, and its views keep
+//! no text. A view the game already filled keeps the game's words.
 //!
 //! A card in a fight takes its numbers from the preview the fight computed.
 //! Anything else takes them from the build's dumped numbers. An upgrade's numbers are not dumped. So a card that
 //! has been upgraded, read outside a fight, says so rather than showing the
 //! numbers it had before.
+
+// A build with no text found has no tables to read.
+#![cfg_attr(
+    not(any(text_v0_107_1, text_v0_111_0)),
+    expect(dead_code, unused_imports, unused_macros)
+)]
 
 pub mod format;
 
@@ -48,35 +55,21 @@ struct Build {
 macro_rules! build {
     ($dir:literal) => {{
         let text = [
+            include_str!(concat!(env!("OUT_DIR"), "/text/", $dir, "/cards.json")),
+            include_str!(concat!(env!("OUT_DIR"), "/text/", $dir, "/relics.json")),
+            include_str!(concat!(env!("OUT_DIR"), "/text/", $dir, "/powers.json")),
+            include_str!(concat!(env!("OUT_DIR"), "/text/", $dir, "/potions.json")),
             include_str!(concat!(
-                "../../../sts2-content/src/",
+                env!("OUT_DIR"),
+                "/text/",
                 $dir,
-                "/dumps/text/cards.json"
+                "/enchantments.json"
             )),
             include_str!(concat!(
-                "../../../sts2-content/src/",
+                env!("OUT_DIR"),
+                "/text/",
                 $dir,
-                "/dumps/text/relics.json"
-            )),
-            include_str!(concat!(
-                "../../../sts2-content/src/",
-                $dir,
-                "/dumps/text/powers.json"
-            )),
-            include_str!(concat!(
-                "../../../sts2-content/src/",
-                $dir,
-                "/dumps/text/potions.json"
-            )),
-            include_str!(concat!(
-                "../../../sts2-content/src/",
-                $dir,
-                "/dumps/text/enchantments.json"
-            )),
-            include_str!(concat!(
-                "../../../sts2-content/src/",
-                $dir,
-                "/dumps/text/afflictions.json"
+                "/afflictions.json"
             )),
         ];
         let numbers = [
@@ -149,10 +142,14 @@ impl Build {
     }
 
     fn of<V: ContentVersion>() -> Option<&'static Build> {
+        #[cfg(text_v0_107_1)]
         static V0_107_1: OnceLock<Build> = OnceLock::new();
+        #[cfg(text_v0_111_0)]
         static V0_111_0: OnceLock<Build> = OnceLock::new();
         match V::VERSION.name {
+            #[cfg(text_v0_107_1)]
             "v0.107.1" => Some(V0_107_1.get_or_init(|| build!("v0_107_1"))),
+            #[cfg(text_v0_111_0)]
             "v0.111.0" => Some(V0_111_0.get_or_init(|| build!("v0_111_0"))),
             _ => None,
         }
@@ -397,7 +394,8 @@ where
     }
 }
 
-#[cfg(test)]
+/// What v0.107.1's text says, so these run where `build.rs` found it.
+#[cfg(all(test, text_v0_107_1))]
 mod tests {
     use super::*;
     use sts2_content::v0_107_1::V0_107_1 as V;
