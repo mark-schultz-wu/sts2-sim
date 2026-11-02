@@ -9,12 +9,20 @@ use crate::ids::PowerIds as _;
 
 /// `BeforeHandDraw`: `ShuffleIfNecessary`, then `CardCmd.Exhaust` on the top
 /// card of the draw pile. The first turn passes over the innate ones. Then
-/// its Strength goes on its owner. A relic's owner is the player, and a
-/// fight here has one.
+/// its Strength goes on its owner.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // `player != Owner`: another player's turn is not its owner's.
+    if let EventHook::BeforeHandDraw { player, .. } | EventHook::PlayerTurnStart { player, .. } =
+        hook
+        && player != owner
+    {
+        return;
+    }
     match hook {
         EventHook::BeforeHandDraw { turn, .. } => asked.extend([
             HookEffect::ShuffleIfNecessary,

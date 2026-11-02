@@ -33,7 +33,7 @@ pub(crate) enum Fight<'a, V: Rules> {
 impl<V: Rules> ObservedFight<V> for Fight<'_, V> {
     fn turn(&self) -> V::Count {
         match self {
-            Fight::Live { live, .. } => live.turn,
+            Fight::Live { live, seat, .. } => live.players[*seat].turn,
             Fight::Over(combat) => combat.turn,
         }
     }

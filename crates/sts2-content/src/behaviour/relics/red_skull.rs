@@ -1,7 +1,7 @@
 //! `RedSkull`: Strength while its owner stands at half health or below.
 
 use crate::vars::RelicVars as _;
-use sts2_core::{EventHook, HookEffect, PlayerHealth, PowerAmount};
+use sts2_core::{EventHook, HookEffect, PlayerHealth, PowerAmount, RelicOwner};
 
 use crate::ids::PowerIds as _;
 
@@ -15,21 +15,18 @@ pub struct State {
 /// a fight run `ModifyStrengthIfNecessary`. `AfterCombatEnd` forgets what it
 /// lent, which the fight took with it.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: RelicOwner<V>,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::RoomEntered { room, player, .. }
-            if crate::behaviour::relics::combat_room(room) =>
-        {
-            modify_strength::<V>(state, player, asked);
+        EventHook::RoomEntered { room, .. } if crate::behaviour::relics::combat_room(room) => {
+            modify_strength::<V>(state, owner.health, asked);
         }
-        EventHook::CurrentHpChanged {
-            in_fight: true,
-            player,
-            ..
-        } => modify_strength::<V>(state, player, asked),
+        EventHook::CurrentHpChanged { in_fight: true, .. } => {
+            modify_strength::<V>(state, owner.health, asked)
+        }
         EventHook::CombatEnd { .. } => state.strength_applied = false,
         _ => {}
     }
