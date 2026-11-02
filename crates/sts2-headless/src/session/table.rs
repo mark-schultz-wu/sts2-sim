@@ -10,7 +10,7 @@ use sts2_core::{
 };
 
 use crate::session::error::Error;
-use crate::{Config, GameSeat, Oracle, SeatHost};
+use crate::{Config, GameSeat, JoinOrder, Oracle, SeatHost};
 
 /// A solo run on one game.
 #[derive(Debug)]
@@ -94,6 +94,9 @@ impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for OracleTable<V> {
             .collect()
     }
 }
+
+/// The file a client's game writes in its data home once it has joined.
+const JOINED: &str = "coop-joined";
 
 /// How many times a lobby looks again at seats that have no move and are not
 /// all over. Each game runs on its own, so a move one seat sent can still be
@@ -240,9 +243,29 @@ where
     /// When the hosts and the run's players differ in number.
     fn begin(host: Vec<SeatHost>, start: &Start<V>) -> Result<Self, Error> {
         assert_eq!(host.len(), start.players.len(), "one host for each player");
+        // The lobby seats each client in the order it joins, and the run's
+        // players follow it. So each client joins once the one before it
+        // has, which it marks in its own data home.
+        let joined: Vec<Option<std::path::PathBuf>> = (host.iter())
+            .map(|host| host.config.data_home.as_ref().map(|home| home.join(JOINED)))
+            .collect();
+        for marker in joined.iter().flatten() {
+            match std::fs::remove_file(marker) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                    return Err(Error::Io("removing a join marker", e));
+                }
+                _ => {}
+            }
+        }
         let begun: Vec<Result<GameSeat<V>, Error>> = std::thread::scope(|scope| {
             let threads: Vec<_> = (host.into_iter().zip(SeatIndex::all(start.players.len())))
-                .map(|(host, me)| scope.spawn(move || GameSeat::begin(host, start, me)))
+                .map(|(host, me)| {
+                    let order = JoinOrder {
+                        after: (me.at() > 1).then(|| joined[me.at() - 1].clone()).flatten(),
+                        joined: (me.at() > 0).then(|| joined[me.at()].clone()).flatten(),
+                    };
+                    scope.spawn(move || GameSeat::begin(host, start, me, order))
+                })
                 .collect();
             threads
                 .into_iter()

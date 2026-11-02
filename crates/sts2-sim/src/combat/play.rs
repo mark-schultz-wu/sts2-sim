@@ -365,6 +365,7 @@ pub(crate) fn play<V: Rules>(
             ended,
             branched: false,
             chooser: None,
+            context: None,
         },
         played,
         true,
@@ -438,6 +439,7 @@ pub(super) fn auto_play_capturing<V: Rules>(
         named,
         pausable,
         captured,
+        None,
     )
 }
 
@@ -465,7 +467,12 @@ fn auto_play_at_random<V: Rules>(
 
 /// `AutoPlayFromDrawPile`'s play of one card it took into the play pile:
 /// `ExhaustOnNextPlay = forceExhaust`, then `CardCmd.AutoPlay`. A card whose
-/// owner has died stays where it is, unplayed.
+/// owner has died stays where it is, unplayed. `context` is the other
+/// player whose effect took it, in whose choice context it plays.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the pile command's own, and the context it runs in"
+)]
 pub(super) fn auto_play_taken<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
@@ -474,6 +481,7 @@ pub(super) fn auto_play_taken<V: Rules>(
     id: sts2_core::CardId<V>,
     force_exhaust: bool,
     pausable: bool,
+    context: Option<sts2_core::SeatIndex>,
 ) -> Option<super::Ended> {
     if !live.player(seat).alive {
         return None;
@@ -485,7 +493,9 @@ pub(super) fn auto_play_taken<V: Rules>(
     let Some(card) = live.players[seat].cards.named(id) else {
         unimplemented!("auto-playing {id:?}, which left the fight first");
     };
-    auto_play_in_play::<V>(seat, live, rngs, belts, card, None, None, pausable, None)
+    auto_play_in_play::<V>(
+        seat, live, rngs, belts, card, None, None, pausable, None, context,
+    )
 }
 
 /// `CardCmd.AutoPlay` for a card already in the play pile. `named` is the
@@ -508,6 +518,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     named: Option<CombatId>,
     pausable: bool,
     captured: Option<(V::Count, V::Count)>,
+    context: Option<sts2_core::SeatIndex>,
 ) -> Option<super::Ended> {
     use sts2_core::{CardTable as _, TargetKinds as _};
 
@@ -544,14 +555,14 @@ pub(super) fn auto_play_in_play<V: Rules>(
         }
         kind if kind == V::TargetType::ANY_ALLY && named.is_some() => named,
         // `CombatState.Allies`: a living player other than the card's owner,
-        // drawn off `CombatTargets`.
+        // drawn off `CombatTargets`. `IsPlayer` leaves out pets.
         kind if kind == V::TargetType::ANY_ALLY => {
             use sts2_core::rng::GameRng as _;
 
             let owner = seat.creature();
             let allies: smallvec::SmallVec<[CombatId; 4]> = (live.creatures.iter())
                 .filter(|creature| creature.alive && creature.id != owner)
-                .filter(|creature| live.seat_of(creature.id).is_some())
+                .filter(|creature| matches!(creature.model, Some(sts2_core::ModelId::Character(_))))
                 .map(|creature| creature.id)
                 .collect();
             let Some(target) = rngs.targets.choose(&allies).ok().copied() else {
@@ -634,6 +645,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
             ended,
             branched: false,
             chooser: None,
+            context,
         },
         played,
         false,
@@ -1080,6 +1092,19 @@ fn signal_pauses<V: Rules>(live: &Live<V>) -> bool {
     live.pause_boundary && V::signals_choice_before_listing()
 }
 
+/// Whether the question in play is a pick an effect branched onto another
+/// player's queue, which waits there.
+pub(crate) fn branched<V: Rules>(live: &Live<V>) -> bool {
+    matches!(
+        &live.asking,
+        Some(super::live::Asking {
+            signalled: true,
+            then: Then::Play { effect, .. },
+            ..
+        }) if effect.branched
+    )
+}
+
 /// Whether the fight stands on a choice that signalled under a pause
 /// boundary and has not listed yet, which [`come_up`] lists.
 pub(crate) fn signalled<V: Rules>(live: &Live<V>) -> bool {
@@ -1105,7 +1130,9 @@ pub(crate) fn selector_picks<V: Rules>(
     };
     let take = match &asking.question {
         Asked::Pile { pile, selection } => most(selection).min(live.offered(seat, *pile).len()),
-        Asked::Among { cards, selection } => most(selection).min(cards.len()),
+        Asked::Among {
+            cards, selection, ..
+        } => most(selection).min(cards.len()),
         Asked::Offered { offered, .. } => offered.len().min(1),
         Asked::Filtered { .. } => unreachable!("a filtered choice lists before it is answered"),
     };
@@ -1165,7 +1192,9 @@ pub(crate) fn answer<V: Rules>(
             }
             // Each card named where it stood as the selection asked, which
             // nothing moves while it waits.
-            Asked::Among { cards, selection } => {
+            Asked::Among {
+                cards, selection, ..
+            } => {
                 let picked: Option<sts2_core::Picked<V>> = chosen
                     .iter()
                     .map(|index| cards.get(index).copied())
@@ -1259,7 +1288,11 @@ pub(crate) fn come_up<V: Rules>(
             live.asking
                 .as_mut()
                 .expect("a signalled choice stands")
-                .question = Asked::Among { cards, selection };
+                .question = Asked::Among {
+                cards,
+                selection,
+                hand: (pile == sts2_core::Pile::Hand).then_some(filter),
+            };
         }
         let Some(asking) = &live.asking else {
             unreachable!("a signalled choice stands");
@@ -1285,9 +1318,9 @@ pub(crate) fn come_up<V: Rules>(
                 }
                 picked
             }
-            Asked::Among { cards, selection } => {
-                selection.validate_automatic(cards.iter().copied().collect())
-            }
+            Asked::Among {
+                cards, selection, ..
+            } => selection.validate_automatic(cards.iter().copied().collect()),
             Asked::Offered { .. } => unimplemented!("a choose-a-card screen that signalled"),
             Asked::Filtered { .. } => unreachable!("a filtered choice listed above"),
         };
@@ -1307,6 +1340,89 @@ pub(crate) fn come_up<V: Rules>(
         )?;
         if ended.is_some() {
             return Ok(ended);
+        }
+    }
+}
+
+/// Each waiting pick from the hand through a filter, listed again from the
+/// hand as it stands. `NPlayerHand.SelectCards` shows the hand as it is, so
+/// a card that joins it while the pick waits is offered too. `seat` made the
+/// decision just settled, and plays what the fight's own question asks for
+/// a potion.
+pub(crate) fn relist_hand_picks<V: Rules>(seat: sts2_core::SeatIndex, fighting: Fighting<'_, V>) {
+    let Fighting {
+        live,
+        streams,
+        belts,
+    } = fighting;
+    if live.asking.is_none() && !live.queues.any_stopped() {
+        return;
+    }
+    // Whose effect each pick is, with its filter, by where it waits: the
+    // fight's own question first, then each queue's stopped front.
+    let mut picks: smallvec::SmallVec<[(Option<usize>, sts2_core::SeatIndex); 2]> =
+        smallvec::SmallVec::new();
+    if let Some(super::live::Asking {
+        question: Asked::Among { hand: Some(_), .. },
+        then: Then::Play { effect, .. },
+        ..
+    }) = &live.asking
+    {
+        let owner = match effect.asker {
+            Asker::Card(card) => (live.players.seated())
+                .find(|(_, player)| player.cards.find(sts2_core::Pile::Play, card.id).is_some())
+                .map_or(seat, |(owner, _)| owner),
+            Asker::Potion(_) => seat,
+        };
+        picks.push((None, owner));
+    }
+    for (at, (owner, task)) in live.queues.every_stopped().enumerate() {
+        if let super::live::Asking {
+            question: Asked::Among { hand: Some(_), .. },
+            then: Then::Play { .. },
+            ..
+        } = &task.asking
+        {
+            picks.push((Some(at), owner));
+        }
+    }
+    for (place, owner) in picks {
+        let asking = match place {
+            None => live.asking.as_ref(),
+            Some(at) => (live.queues.every_stopped().nth(at)).map(|(_, task)| &task.asking),
+        };
+        let Some(super::live::Asking {
+            question: Asked::Among {
+                hand: Some(filter), ..
+            },
+            then: Then::Play { effect, .. },
+            ..
+        }) = asking
+        else {
+            unreachable!("a pick found above stands");
+        };
+        let (filter, effect) = (filter.clone(), effect.clone());
+        let fresh = listed::<V, _>(
+            owner,
+            Fighting {
+                live: &mut *live,
+                streams: &mut *streams,
+                belts: &mut *belts,
+            },
+            &effect,
+            sts2_core::Pile::Hand,
+            &filter,
+        );
+        let asking = match place {
+            None => live.asking.as_mut(),
+            Some(at) => (live.queues.every_stopped_mut().nth(at)).map(|(_, task)| &mut task.asking),
+        };
+        if let Some(super::live::Asking {
+            question: Asked::Among { cards, .. },
+            ..
+        }) = asking
+        {
+            *cards = fresh;
         }
     }
 }
@@ -1337,7 +1453,11 @@ fn listed_pile<V: Rules>(
             sts2_core::CardAt::new(held.id, pile, at)
         })
         .collect();
-    Asked::Among { cards, selection }
+    Asked::Among {
+        cards,
+        selection,
+        hand: None,
+    }
 }
 
 /// The cards of the chooser's `pile` that `filter` lets through, as
@@ -1412,13 +1532,7 @@ pub(crate) fn fronts_come_up<V: Rules>(
     if live.players.len() == 1 {
         return Ok(None);
     }
-    if let Some(super::live::Asking {
-        signalled: true,
-        then: Then::Play { effect, .. },
-        ..
-    }) = &live.asking
-        && effect.branched
-    {
+    if branched(live) {
         live.stop_for_answer(seat);
     }
     if live.asking.is_some() {
@@ -1726,7 +1840,11 @@ fn run_deferred<V: Rules>(
                 ),
                 ended => ended,
             },
-            super::live::Deferred::AutoPlayTaken { id, force_exhaust } => match ended {
+            super::live::Deferred::AutoPlayTaken {
+                id,
+                force_exhaust,
+                context,
+            } => match ended {
                 None => auto_play_taken::<V>(
                     seat,
                     fighting.live,
@@ -1735,6 +1853,7 @@ fn run_deferred<V: Rules>(
                     id,
                     force_exhaust,
                     true,
+                    context,
                 ),
                 ended => ended,
             },
@@ -2097,9 +2216,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 let branches = !ending
                     && !effect.branched
                     && next.players.len() > 1
-                    && effect
-                        .reaching(next, seat)
-                        .is_some_and(|chooser| chooser != seat);
+                    && effect.chooser_elsewhere(next, seat);
                 signalled = !ending && (signal_pauses::<V>(next) || branches);
                 let chooser = effect.reaching(next, seat).unwrap_or(seat);
                 let taken = match (ending, signalled) {
@@ -2128,9 +2245,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 let branches = !ending
                     && !effect.branched
                     && next.players.len() > 1
-                    && effect
-                        .reaching(next, seat)
-                        .is_some_and(|chooser| chooser != seat);
+                    && effect.chooser_elsewhere(next, seat);
                 signalled = !ending && (signal_pauses::<V>(next) || branches);
                 match signalled {
                     true => (
@@ -2160,7 +2275,16 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                         let taken = selection
                             .validate_automatic(cards.iter().copied().collect())
                             .map(sts2_core::Taken::Selected);
-                        (at, Asked::Among { cards, selection }, taken)
+                        let hand = (pile == sts2_core::Pile::Hand).then_some(filter);
+                        (
+                            at,
+                            Asked::Among {
+                                cards,
+                                selection,
+                                hand,
+                            },
+                            taken,
+                        )
                     }
                 }
             }
@@ -2175,11 +2299,8 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             // `BranchingPlayerChoiceContext`: a card or potion whose choice
             // is another player's ends here, as the choice begins. The rest
             // goes on as that player's hook action, once they answer.
-            let branches = !effect.branched
-                && next.players.len() > 1
-                && effect
-                    .reaching(next, seat)
-                    .is_some_and(|chooser| chooser != seat);
+            let branches =
+                !effect.branched && next.players.len() > 1 && effect.chooser_elsewhere(next, seat);
             if branches {
                 let mut end = effect.clone();
                 // A card's `OnPlayWrapper` goes on past its `OnPlay`: the
@@ -2978,7 +3099,7 @@ fn auto_play_kept<V: Rules, S: LendsCombat>(
     if let Some(ended) = board.ended() {
         return Some(ended);
     }
-    auto_play_taken::<V>(seat, next, streams.combat(), belts, kept, false, true)
+    auto_play_taken::<V>(seat, next, streams.combat(), belts, kept, false, true, None)
 }
 
 /// `AfterCardPlayedLate`, with the energy the play's started entry spent.

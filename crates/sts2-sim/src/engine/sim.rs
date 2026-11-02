@@ -158,6 +158,11 @@ pub(super) fn decide<V: Rules>(
     seat: sts2_core::SeatIndex,
     decision: &Decision<V>,
 ) -> Result<Settled<V>, Error> {
+    // What another player does on a screen of their own machine, which
+    // this one never shows. Its results reach this machine as messages.
+    if state.answers_elsewhere(seat, decision) {
+        return Ok(Ok(sts2_core::Decided::Resolved));
+    }
     let pending = state.pending(seat);
     // A reward screen leaves the belt open, so a discard is the one
     // other decision it takes.

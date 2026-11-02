@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Threading.Tasks;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer;
 
@@ -92,4 +96,41 @@ internal static class EmptyAfterATurnedAwayAction
 
     private static void Postfix(ActionQueueSet __instance) =>
         CheckIfQueuesEmpty.Invoke(__instance, null);
+}
+
+/// <summary>
+/// Finishes a potion discard whose slot is empty without cancelling it.
+/// </summary>
+/// <remarks>
+/// <c>DiscardPotionGameAction</c> cancels itself when the slot it names holds
+/// no potion. That happens on another player's machine while the player's
+/// own machine is still in a purchase, such as Cauldron's potions, whose
+/// results have not come yet. The action then finishes in the cancelled
+/// state, and <c>GameAction.Execute</c> reports that. The game in a window
+/// logs it as an error and goes on. Without a window it throws, which stops
+/// the action executor. The cancel does nothing else here: with no potion,
+/// <c>CancelAction</c> touches nothing. This logs the game's own warning
+/// and finishes the action, as the game in a window does.
+/// </remarks>
+[HarmonyPatch(typeof(DiscardPotionGameAction), "ExecuteAction")]
+internal static class DiscardOfAnEmptySlotFinishes
+{
+    private static readonly AccessTools.FieldRef<DiscardPotionGameAction, Player> Owner =
+        AccessTools.FieldRefAccess<DiscardPotionGameAction, Player>("_player");
+
+    private static readonly AccessTools.FieldRef<DiscardPotionGameAction, uint> Slot =
+        AccessTools.FieldRefAccess<DiscardPotionGameAction, uint>("_potionSlotIndex");
+
+    private static bool Prefix(DiscardPotionGameAction __instance, ref Task __result)
+    {
+        var player = Owner(__instance);
+        var slot = Slot(__instance);
+        if (slot >= player.PotionSlots.Count || player.PotionSlots[(int)slot] != null)
+        {
+            return true;
+        }
+        Log.Warn($"DiscardPotionGameAction: potion at slot index {slot} is null for player {player.NetId}, canceling");
+        __result = Task.CompletedTask;
+        return false;
+    }
 }
