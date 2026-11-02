@@ -154,18 +154,40 @@ impl<V: Rules> Queues<V> {
     /// # Panics
     ///
     /// Where `answerer`'s own action asks while their queue waits on a
-    /// question. The game queues that action whole behind the one waiting,
-    /// and the sim ran it up to its question already.
+    /// question, other than a choice that branched. The game queues that
+    /// action whole behind the one waiting, and the sim ran it up to its
+    /// question already.
     pub(super) fn stop(
         &mut self,
         owner: sts2_core::SeatIndex,
         answerer: sts2_core::SeatIndex,
         task: Paused<V>,
     ) {
-        if owner == answerer && self.stopped(answerer).is_some() {
+        // A choice that branched has not listed. It waits as a hook action of
+        // its own, as another player's does.
+        let branched = matches!(
+            &task.asking,
+            super::live::Asking {
+                signalled: true,
+                then: super::live::Then::Play { effect, .. },
+                ..
+            } if effect.branched
+        );
+        if owner == answerer && !branched && self.stopped(answerer).is_some() {
             unimplemented!("an action of {owner:?}'s asking while their queue waits on a question");
         }
         self.stopped.push((owner, answerer, task));
+    }
+
+    /// `owner`'s `task` back at the front of `answerer`'s queue, which it
+    /// stood at before it listed.
+    pub(super) fn stop_first(
+        &mut self,
+        owner: sts2_core::SeatIndex,
+        answerer: sts2_core::SeatIndex,
+        task: Paused<V>,
+    ) {
+        self.stopped.insert(0, (owner, answerer, task));
     }
 
     /// The front of `seat`'s queue that waits on their question, the first
@@ -202,14 +224,6 @@ impl<V: Rules> Queues<V> {
     /// Whether any queue's front waits on a question.
     pub(super) fn any_stopped(&self) -> bool {
         !self.stopped.is_empty()
-    }
-
-    /// The front stopped last, made the first of those its answerer's queue
-    /// waits on.
-    pub(super) fn last_to_front(&mut self) {
-        if let Some(last) = self.stopped.pop() {
-            self.stopped.insert(0, last);
-        }
     }
 
     /// The front of `seat`'s queue that waits on their question, taken off
