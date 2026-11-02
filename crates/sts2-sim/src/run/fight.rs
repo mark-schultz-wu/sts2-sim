@@ -337,6 +337,9 @@ impl<V: Rules> State<V> {
             }
             (ended, _) => ended,
         };
+        if let (None, Some(fighting)) = (ended, self.fighting()) {
+            combat::relist_hand_picks(seat, fighting);
+        }
         let ended = self
             .selector_answered(seat, ended)
             .unwrap_or_else(|error| unimplemented!("a pushed selector's answer failing: {error}"));

@@ -1468,12 +1468,13 @@ impl<V: Rules> State<V> {
     /// `FurCoat.AddMarkedRooms` on `map`: the relic's marks kept where every
     /// one stands on a Monster or Elite point, and `count` new ones otherwise.
     /// The new ones are the map's Monster and Elite points, column by column.
-    /// `UnstableShuffle` orders them off a stream of the run's seed and the
-    /// relic's id.
+    /// `UnstableShuffle` orders them off `new Rng(Owner, Id)`: a stream of
+    /// the run's seed, the owner's slot and the relic's id.
     ///
     /// # Panics
     ///
-    /// A relic that is not on the belt.
+    /// A relic that is not on the belt. Another player's relic of the same
+    /// kind that marked points too, whose quests the game leaves out.
     fn mark_combat_points(
         &mut self,
         seat: sts2_core::SeatIndex,
@@ -1488,6 +1489,13 @@ impl<V: Rules> State<V> {
             kind == <V::MapPointType as sts2_core::MapPointKinds>::MONSTER
                 || kind == <V::MapPointType as sts2_core::MapPointKinds>::ELITE
         };
+        if (self.belts.seated()).any(|(other, belt)| {
+            other != seat
+                && (belt.iter())
+                    .any(|held| held.relic == relic && !held.state.marked_points().is_empty())
+        }) {
+            unimplemented!("two players' {relic:?} marking the map");
+        }
         let held = (self.belts[seat].iter_mut())
             .find(|held| held.relic == relic)
             .expect("a relic marking points is on the belt");
@@ -1505,7 +1513,8 @@ impl<V: Rules> State<V> {
             .collect();
         // `GetAllMapPoints` walks the grid a column at a time.
         points.sort_unstable();
-        let mut rng: MegaRng = sts2_core::rng::named::<V, _>(self.shared.raw_seed, name);
+        let seed = self.shared.raw_seed.wrapping_add(u64::from(seat.0));
+        let mut rng: MegaRng = sts2_core::rng::named::<V, _>(seed, name);
         sts2_core::rng::GameRng::unstable_shuffle(&mut rng, &mut points);
         points.truncate(count);
         held.state.mark_points(&points);
