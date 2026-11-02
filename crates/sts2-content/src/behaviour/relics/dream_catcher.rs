@@ -13,7 +13,8 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::RestSiteHealRewards { player, .. } if player == owner => {
             asked.push(HookEffect::OfferRewards(V::DREAM_CATCHER_REWARDS))
         }
-        EventHook::Obtained { .. } => {}
+        // `player != base.Owner`: another player's rest does nothing.
+        EventHook::RestSiteHealRewards { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what DreamCatcher does for {hook:?}"),
     }
 }

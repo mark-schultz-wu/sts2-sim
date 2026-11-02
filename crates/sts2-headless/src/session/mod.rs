@@ -7,8 +7,8 @@
 //! Two ways to hold one. [`Oracle`](game::Oracle) owns a child process and dies
 //! with it. [`Session`](held::Session) reaches one a [`daemon`] is holding, so a
 //! command can be a whole process and still land in a run forty decisions deep.
-//! Both implement [`Play`](sts2_core::Play), which is what lets a front end not
-//! care.
+//! Both are driven the same way, and each has a run table, which is what lets a
+//! front end not care.
 
 pub(crate) mod cached;
 pub(crate) mod config;
@@ -17,6 +17,7 @@ pub(crate) mod error;
 pub(crate) mod game;
 pub(crate) mod held;
 pub(crate) mod seat;
+pub(crate) mod table;
 
 use error::Error;
 use sts2_core::Answered;

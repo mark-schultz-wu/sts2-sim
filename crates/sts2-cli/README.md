@@ -57,16 +57,20 @@ crate's choice, and a second front end can disagree.
 `sts2 show map` draws the whole act. Which room to enter next is the largest decision
 in a run, and you make it from several rows ahead.
 
-## sts2-sim
+## sts2 sim
 
-`sts2-sim` is the same screen as a bare `sts2`, on the simulator. It needs no
+`sts2 sim` is the same screen as a bare `sts2`, on the simulator. It needs no
 game and no daemon. The run lives in the process that draws it, and the run ends
 when you quit. Pick a character and a seed, and the run starts at once.
 
 ```
-$ sts2-sim
-$ sts2-sim --game-version v0.111.0
+$ sts2 sim
+$ sts2 --game-version v0.111.0 sim
 ```
+
+The screen is a player of the run, as `docs/RUNNERS.md` says. The runner asks
+it for each move, and it reads keys until one asks for one. A run at the
+daemon's table and a run at the simulator's are played the same way.
 
 The screen draws in 24-bit colour when `COLORTERM` says the terminal can, and
 in the terminal's own sixteen colours otherwise. `STS2_COLOR=16` or
@@ -76,21 +80,13 @@ The default build is v0.107.1, which the simulator plays to the end of each
 recorded run. A path that the simulator has no port for stops the program, and
 the message names that path.
 
-## sts2-fuzz
+## Playing at random
 
-A second binary. It starts a run, grants itself a hundred `Gorget`, and takes
-legal moves at random until the run ends or something breaks.
+`just fuzz <seed> <character>` plays one run on the game, picking every
+legal move alike, through `sts2-run play --player uniform`. It stops on a
+move the game refuses after listing it, or on an error the game logs.
+`docs/RUNNERS.md` says how.
 
-Three things count as a find, and all three stop the run:
-
-- The game refuses a move that the oracle offered.
-- The game logs an error while it runs a move.
-- The game dies.
-
-The first one is the useful one. It means that the legality the oracle reports
-and the legality the game enforces do not agree. That is the exact fault that a
-simulator copies.
-
-The fuzzer found two real faults in its first three runs. A shop offered a potion
-to a full potion belt. Each run also stopped on floor 17, because the protocol
-had no command to leave a finished act.
+The fuzzer that used to live here found two faults in its first three runs.
+A shop offered a potion to a full potion belt. Each run also stopped on floor
+17, because the protocol had no command to leave a finished act.
