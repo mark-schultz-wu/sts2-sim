@@ -26,6 +26,18 @@ static GOLDEN_PATH: [MapPointType; 16] = [
     MapPointType::RestSite,
 ];
 
+/// The golden path for a run of several players, which
+/// `list.RemoveAt(2)` takes the second Monster out of.
+static GOLDEN_PATH_SEVERAL: [MapPointType; 15] = {
+    let mut path = [MapPointType::Monster; 15];
+    let mut at = 0;
+    while at < path.len() {
+        path[at] = GOLDEN_PATH[if at < 2 { at } else { at + 1 }];
+        at += 1;
+    }
+    path
+};
+
 /// `GoldenPathAct`, which it saves, and nothing before it is picked up.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct State {
@@ -45,8 +57,11 @@ pub(super) fn event_hook<V: crate::Build>(
             state.golden_path_act = Some(act);
             asked.push(HookEffect::RegenerateMap);
         }
-        EventHook::GeneratedMap { act } if state.golden_path_act == Some(act) => {
-            asked.push(HookEffect::FixedPathMap(&GOLDEN_PATH));
+        EventHook::GeneratedMap { act, players } if state.golden_path_act == Some(act) => {
+            asked.push(HookEffect::FixedPathMap(match players > 1 {
+                true => &GOLDEN_PATH_SEVERAL,
+                false => &GOLDEN_PATH,
+            }));
         }
         EventHook::UnknownRoomTypes { act } if state.golden_path_act == Some(act) => {
             // Every room an unknown point can be besides an event.

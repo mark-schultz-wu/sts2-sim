@@ -33,11 +33,12 @@ impl<V: crate::Build> Default for State<V> {
 /// `AfterSideTurnStart` of the player's side counts a turn of sleep off, and
 /// `AfterCombatEnd` wakes it.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State<V>,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    let player = <V as sts2_core::ContentVersion>::CombatSide::PLAYER;
+    let _player = <V as sts2_core::ContentVersion>::CombatSide::PLAYER;
     match hook {
         EventHook::CombatStarting { .. } => {
             asked.push(HookEffect::AddPet(V::Monster::PAELS_LEGION))
@@ -53,7 +54,7 @@ pub(super) fn event_hook<V: crate::Build>(
             state.cooldown = V::Relic::PAELS_LEGION_TURNS;
             state.triggered_block_last_turn = true;
         }
-        EventHook::SideTurnStart { side, .. } if side == player => {
+        EventHook::SideTurnStart { participants, .. } if participants.contains(owner) => {
             state.cooldown -= 1;
             state.triggered_block_last_turn = false;
         }

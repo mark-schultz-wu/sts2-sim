@@ -69,6 +69,11 @@ impl<V: crate::Build> EventBehavior<V> for StoneOfAllTime {
         )
     }
 
+    /// `WillKillPlayer`, for `Push`: its hit point loss.
+    fn kills(&self, _state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 1 && run.hp() <= HP_LOSS
+    }
+
     /// `Lift`: the potion discarded, then the Max HP. `Push`: the damage,
     /// then `FromDeckForEnchantment` for one card, then Vigorous at eight.
     /// Each then draws its line and finishes the event.

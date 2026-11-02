@@ -134,7 +134,7 @@ as a different run. It is refused again, which is noise, or, worse, accepted by
 the implementation being replayed into, which takes the run somewhere the
 original never went. The tape says what the run *was*.
 
-A recording never holds `Play::observe`. It moves nothing, so replaying it only makes
+A recording never holds an observe. It moves nothing, so replaying it only makes
 a replay slower.
 
 ### A tape that fails stops, and does not fail the move
@@ -172,7 +172,7 @@ The fifth is `Reason::Malformed`, and it is the measure of what the typed
 vocabulary bought. About half of the oracle's refusal sites answer a request
 this crate's types cannot build. That is a missing field, a command that is not
 a command, or a number where a name belongs. A `Decision` cannot spell any of
-them, so a caller driving a game through `Play` never sees one. Only `send_raw`
+them, so a caller driving a game through a `RunTable` never sees one. Only `send_raw`
 reaches them, and it exists to test exactly that.
 
 ## The random numbers

@@ -190,10 +190,11 @@ pub(super) fn computed_repeats<V: crate::Build>(
 const WITHER_RAISE: Number = 3;
 
 /// `Aeonglass.AfterCardGeneratedForCombat`: a Wither made in the fight takes
-/// every fake upgrade the Aeonglass has given the ones before it.
+/// every fake upgrade the Aeonglass has given the ones before it. One made
+/// for a dead player is in no pile, and its upgrades reach nothing.
 pub(super) fn wither_generated<V: crate::Build>(
     model: &crate::behaviour::monsters::Model<V>,
-    at: sts2_core::CardAt<V>,
+    at: Option<sts2_core::CardAt<V>>,
     card: V::Card,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -203,7 +204,10 @@ pub(super) fn wither_generated<V: crate::Build>(
     else {
         unreachable!("an Aeonglass holding {model:?}")
     };
-    if card == V::Card::WITHER && wither_upgrades > 0 {
+    if let Some(at) = at
+        && card == V::Card::WITHER
+        && wither_upgrades > 0
+    {
         asked.push(sts2_core::HookEffect::ModifyCards {
             to: sts2_core::Writing::One(at),
             change: sts2_core::Change::Raise(
@@ -484,17 +488,21 @@ pub(super) fn perform<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
             }
             fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(3));
         }
-        // `IncreasingIntensityMove`: every Wither the player holds takes a
+        // `IncreasingIntensityMove`: every Wither each player holds takes a
         // fake upgrade, the next ones one more, and then the Withers and the
         // Strength.
         (__c0, __c1)
             if (__c0 == V::Monster::AEONGLASS && __c1 == V::MoveId::INCREASING_INTENSITY_MOVE) =>
         {
             let wither = V::Card::WITHER;
-            fight.modify_cards(
-                sts2_core::Writing::EveryCopyOf(wither),
-                sts2_core::Change::Raise(V::CardVar::DAMAGE, WITHER_RAISE),
-            );
+            for player in fight.players() {
+                fight.for_player(player, |fight| {
+                    fight.modify_cards(
+                        sts2_core::Writing::EveryCopyOf(wither),
+                        sts2_core::Change::Raise(V::CardVar::DAMAGE, WITHER_RAISE),
+                    );
+                });
+            }
             // The Withers it gives read the count this raises.
             let bonus = fight.model(|model| {
                 let crate::behaviour::monsters::Model::Aeonglass {
