@@ -311,7 +311,13 @@ pub trait CardTable: Table {
     /// build spells as an exact decimal. [`num_traits::ToPrimitive`] is how a
     /// printed number reaches the run: it yields nothing for one no integer
     /// can hold.
-    type Number: std::fmt::Debug + Copy + Eq + std::hash::Hash + num_traits::ToPrimitive + 'static;
+    type Number: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + num_traits::ToPrimitive
+        + Into<crate::Decimal>
+        + 'static;
 
     /// The character whose pool holds it, or `None` for one held by no
     /// character: colourless, curses, statuses, tokens, quest and event cards.
@@ -455,6 +461,13 @@ impl Fixed {
             self.coefficient < 0,
             self.scale as u32,
         )
+    }
+}
+
+/// The game's `decimal`, exactly.
+impl From<Fixed> for crate::Decimal {
+    fn from(number: Fixed) -> Self {
+        number.exact()
     }
 }
 
@@ -1347,6 +1360,72 @@ pub struct DamageResult<V: ContentVersion> {
 /// each naming its hit.
 pub type AttackResults<V> = smallvec::SmallVec<[DamageResult<V>; 4]>;
 
+/// Whose a played card is once its play is over, which
+/// `GetResultLocationForCardPlay`'s `player` names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultHolder {
+    /// Its owner's, as the base class answers.
+    Owner,
+    /// A living teammate's, other than the owner, drawn off `CombatTargets`,
+    /// as The Ball's override picks. Where none stands, the base location
+    /// stands instead.
+    RandomTeammate,
+}
+
+/// Where a played card goes once its play is over, where in that pile, and
+/// whose it is then.
+pub type CardResult = (Option<crate::Pile>, PilePosition, ResultHolder);
+
+/// The most players a fight holds.
+pub const MAX_PLAYERS: usize = 4;
+
+/// Each player's `TurnNumber`, by seat. A seat the fight lacks holds zero.
+pub type PlayerTurns<V> = [<V as ContentVersion>::Count; MAX_PLAYERS];
+
+/// The most creatures a side's turn names as taking part.
+///
+/// Four players and a pet each, or an encounter's six slots and their
+/// summons. Fixed, so an [`EventHook`] stays `Copy` and no larger than its
+/// other variants make it.
+pub const PARTICIPANTS: usize = 10;
+
+/// The creatures a side's turn hook names as taking part, which is its
+/// `participants`.
+///
+/// A turn's start names the creatures starting it: the side's, or in an
+/// extra turn its takers' alone. The player side's end names the players
+/// ending the turn, and the enemy side's end the enemies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Participants([Option<crate::CombatId>; PARTICIPANTS]);
+
+impl Participants {
+    /// `participants.Contains(creature)`.
+    #[inline]
+    pub fn contains(&self, creature: crate::CombatId) -> bool {
+        self.0.contains(&Some(creature))
+    }
+
+    /// Each one, in the order the game lists them.
+    pub fn iter(&self) -> impl Iterator<Item = crate::CombatId> + '_ {
+        self.0.iter().map_while(|c| *c)
+    }
+}
+
+impl FromIterator<crate::CombatId> for Participants {
+    /// # Panics
+    ///
+    /// More than [`PARTICIPANTS`] creatures.
+    fn from_iter<I: IntoIterator<Item = crate::CombatId>>(creatures: I) -> Self {
+        let mut list = [None; PARTICIPANTS];
+        for (at, creature) in creatures.into_iter().enumerate() {
+            *list.get_mut(at).unwrap_or_else(|| {
+                unimplemented!("more than {PARTICIPANTS} creatures taking part in a turn")
+            }) = Some(creature);
+        }
+        Self(list)
+    }
+}
+
 /// The player's current and maximum hit points.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayerHealth<V: ContentVersion> {
@@ -1379,6 +1458,10 @@ pub struct CardSource<V: ContentVersion> {
     pub upgraded: bool,
     /// Whether an enchantment sits on it.
     pub enchanted: bool,
+    /// `EnergyCost.GetWithModifiers(CostModifiers.All)`, for a card not
+    /// being played, as a preview reads it. Nothing while it is played,
+    /// where the play's own spending is in the history.
+    pub cost: Option<Cost>,
 }
 
 /// A number an enchantment works out for the card it is on.
@@ -1991,9 +2074,16 @@ pub trait FightView<V: ContentVersion> {
     /// `Creature.Monster`, or nothing for a player.
     fn monster(&self, creature: crate::CombatId) -> Option<V::Monster>;
 
-    /// The player's creature, which a card's `Owner.Creature` is. A fight
-    /// here has one player.
-    fn player(&self) -> crate::CombatId;
+    /// `Creature.IsPlayer`: whether `creature` is a player's own creature. A
+    /// pet is not one.
+    fn is_player(&self, creature: crate::CombatId) -> bool;
+
+    /// `Creature.Side`, or nothing for a creature not in the fight.
+    fn side_of(&self, creature: crate::CombatId) -> Option<V::CombatSide>;
+
+    /// `CombatState.GetTeammatesOf(creature)`: its side's creatures, itself
+    /// and dead ones included, in fight order.
+    fn teammates(&self, creature: crate::CombatId) -> smallvec::SmallVec<[crate::CombatId; 8]>;
 
     /// The first of `AttackCommand.Results` whose receiver is `creature`, for
     /// the attack whose `AfterAttack` is being raised. Nothing outside one.
@@ -2229,6 +2319,15 @@ pub trait Fight<V: ContentVersion> {
         });
         self.attack(Scaling::Dynamic, |fight| {
             for _ in 0..repeats {
+                // `if (Attacker.IsDead) break;` before each hit. A hit the
+                // attacker died during still lands on every target.
+                let actor = fight.actor();
+                let alive = (fight.creatures())
+                    .find(|creature| creature.id() == actor)
+                    .is_some_and(|creature| creature.alive());
+                if !alive {
+                    break;
+                }
                 let hit = |fight: &mut Self, target| {
                     let attack = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
@@ -2356,6 +2455,18 @@ pub trait Fight<V: ContentVersion> {
         _pile: crate::Pile,
     ) -> Option<crate::CardAt<V>> {
         unimplemented!("a card added to the fight")
+    }
+
+    /// [`Fight::add_generated_cards`] with the player who made them named:
+    /// `CardPileCmd.AddGeneratedCardsToCombat(cards, pile, creator)`.
+    fn add_generated_cards_by(
+        &mut self,
+        _card: crate::CardIdent<V>,
+        _pile: crate::Pile,
+        _count: usize,
+        _creator: crate::CombatId,
+    ) -> Vec<crate::CardAt<V>> {
+        unimplemented!("adding generated cards a named player made")
     }
 
     /// Add copies of a generated card to one combat pile.
@@ -3106,6 +3217,19 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a power instance's model written in a fight")
     }
 
+    /// [`Fight::modify_power_amount`] of the `nth` instance of `power` the
+    /// creature `at` carries, in the order they were applied.
+    fn modify_power_at(
+        &mut self,
+        _at: crate::CombatId,
+        _power: V::Power,
+        _nth: usize,
+        _amount: V::Number,
+        _applier: Option<crate::CombatId>,
+    ) {
+        unimplemented!("a power instance's amount moved")
+    }
+
     /// `GetPowerInstances`: the `Target` and the stack of each instance of
     /// `power` the creature `at` carries, in the order they were applied.
     fn power_instances(&self, _at: crate::CombatId, _power: V::Power) -> PowerInstances<V> {
@@ -3266,6 +3390,9 @@ pub enum Played<V: ContentVersion, R> {
     Done,
     /// The play stopped on a `CardSelectCmd`, which is a question.
     Asking {
+        /// The player who picks, from their own pile, which is
+        /// `CardSelectCmd`'s `player`. Nothing for the card's owner.
+        of: Option<crate::CombatId>,
         /// The pile it selects from.
         pile: crate::Pile,
         /// How many it takes, which decides whether it asks at all.
@@ -3273,11 +3400,12 @@ pub enum Played<V: ContentVersion, R> {
         /// Where the card stopped, in the card's own words.
         at: R,
     },
-    /// The play stopped on a `CardSelectCmd` whose filter lets these cards
-    /// through, which are the ones it offers. They stand in one pile, in its
-    /// order.
+    /// The play stopped on a `CardSelectCmd` over the cards of `pile` that
+    /// `filter` lets through. The command lists them once its choice has
+    /// signalled, which [`Rules::among`] does.
     AskingAmong {
-        cards: smallvec::SmallVec<[crate::CardAt<V>; MAX_CARDS_IN_HAND]>,
+        pile: crate::Pile,
+        filter: V::CardFilter,
         /// How many it takes, which decides whether it asks at all.
         selection: Selection,
         at: R,
@@ -3972,7 +4100,11 @@ impl<V: ContentVersion> DecisionHook<V> {
 pub enum EventHook<V: ContentVersion> {
     /// `AfterSideTurnStartLate`, once every listener has answered
     /// [`EventHook::SideTurnStart`].
-    SideTurnStartLate { side: V::CombatSide },
+    SideTurnStartLate {
+        side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
+    },
     /// `BeforePotionUsed`, as the player drinks a potion in a fight, before
     /// it leaves the belt.
     PotionUsing {
@@ -4057,6 +4189,8 @@ pub enum EventHook<V: ContentVersion> {
         /// Whether the game's decimal was above nothing. A fraction below one
         /// is, though `amount` floors it to nothing.
         positive: bool,
+        /// `CombatState.CurrentSide`: whose turn the gain falls in.
+        side: V::CombatSide,
     },
     /// `AfterPreventingDraw`, once a listener answered no to `ShouldDraw`.
     DrawPrevented,
@@ -4072,8 +4206,9 @@ pub enum EventHook<V: ContentVersion> {
         /// `RunState.CurrentActIndex`.
         act: usize,
     },
-    /// `ModifyGeneratedMap`, as the act at this index has its map generated.
-    GeneratedMap { act: usize },
+    /// `ModifyGeneratedMap`, as the act at this index has its map generated,
+    /// in a run of `players` players.
+    GeneratedMap { act: usize, players: usize },
     /// `ModifyGeneratedMapLate`, once every listener has heard
     /// [`EventHook::GeneratedMap`].
     GeneratedMapLate { act: usize },
@@ -4201,6 +4336,8 @@ pub enum EventHook<V: ContentVersion> {
     /// turn ends.
     BeforeSideTurnEndVeryEarly {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         /// The player's `Block`, which a relic reads off its owner.
         block: V::Number,
     },
@@ -4410,6 +4547,8 @@ pub enum EventHook<V: ContentVersion> {
         side: V::CombatSide,
         /// `IsDupe`: the copy is a dupe, made to be played once.
         dupe: bool,
+        /// `CardPlay.IsFirstInSeries`: the first of the card's replays.
+        first: bool,
     },
     /// `AfterCardDrawnEarly`, the pass `Hook.AfterCardDrawn` makes over every
     /// listener before the one [`EventHook::CardDrawn`] names.
@@ -4451,6 +4590,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `RoundNumber`, which an extra turn does not move on.
     BeforeSideTurnStart {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         turn: V::Count,
         round: V::Count,
     },
@@ -4458,6 +4599,8 @@ pub enum EventHook<V: ContentVersion> {
     /// this type.
     SideTurnStart {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         turn: V::Count,
         /// `RoundNumber`, which an extra turn does not move on.
         round: V::Count,
@@ -4471,6 +4614,8 @@ pub enum EventHook<V: ContentVersion> {
     },
     BeforeSideTurnEndEarly {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         /// The player's plays finished this turn that no auto-play made,
         /// which a listener reads off `CardPlaysFinished`, at most 255.
         plays: u8,
@@ -4482,6 +4627,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `BeforeSideTurnEnd`, the last of the three before a side's turn ends.
     BeforeSideTurnEnd {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         /// The player's `PlayerCombatState.Energy`, which a listener reads.
         energy: V::Count,
         /// How many cards the player's hand holds, which a card in it reads
@@ -4490,11 +4637,17 @@ pub enum EventHook<V: ContentVersion> {
     },
     SideTurnEnd {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         /// The player's `Creature.Block`, which a listener reads.
         block: V::Number,
     },
     /// `AfterSideTurnEndLate`, once every `AfterSideTurnEnd` has run.
-    SideTurnEndLate { side: V::CombatSide },
+    SideTurnEndLate {
+        side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
+    },
     /// `AfterStarsSpent`: `SpendStars` took `amount` from `player`, which is
     /// more than none.
     StarsSpent {
@@ -4702,8 +4855,12 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterCardGeneratedForCombat`, once a card made in the fight has
     /// landed where `at` says.
     CardGeneratedForCombat {
-        at: crate::CardAt<V>,
+        /// Nothing for a card made for a dead player, which
+        /// `CardPileCmd.Add` puts in no pile.
+        at: Option<crate::CardAt<V>>,
         card: V::Card,
+        /// `card.Owner.Creature`.
+        player: crate::CombatId,
         /// The player that made it. Nothing for a card a monster gave.
         creator: Option<crate::CombatId>,
     },
@@ -5141,10 +5298,11 @@ pub struct TurnHistory<V: ContentVersion> {
     pub round: V::Count,
     /// `CurrentSide` of that turn.
     pub side: V::CombatSide,
-    /// The player's `TurnNumber` through that turn. It counts up as the
-    /// player's side takes a turn, so the enemies' turn after a player's
+    /// Each player's `TurnNumber` through that turn, by seat, which is what
+    /// `CombatHistoryEntry` keeps for each player. A player's counts up as
+    /// that player takes a turn, so the enemies' turn after a player's
     /// shares its number.
-    pub player_turn: V::Count,
+    pub player_turns: PlayerTurns<V>,
     /// Where its entries end among the fight's. They start where the turn
     /// before it ends them.
     end: u32,
@@ -5202,8 +5360,8 @@ impl<V: ContentVersion> Default for PastTurns<V> {
 }
 
 impl<V: ContentVersion> PastTurns<V> {
-    /// The turn at `round` on `side`, in the player's turn `player_turn`, is
-    /// over, with `entries`, oldest first.
+    /// The turn at `round` on `side`, with each player's `TurnNumber` in
+    /// `player_turns`, is over, with `entries`, oldest first.
     ///
     /// # Panics
     ///
@@ -5212,14 +5370,14 @@ impl<V: ContentVersion> PastTurns<V> {
         &mut self,
         round: V::Count,
         side: V::CombatSide,
-        player_turn: V::Count,
+        player_turns: PlayerTurns<V>,
         entries: impl IntoIterator<Item = HistoryEntry<V>>,
     ) {
         self.entries.extend(entries);
         self.turns.push(TurnHistory {
             round,
             side,
-            player_turn,
+            player_turns,
             end: u32::try_from(self.entries.len()).expect("a fight's entries fit a u32"),
         });
     }
@@ -5275,11 +5433,14 @@ impl<V: ContentVersion> History<'_, V> {
         turn: V::Count,
     ) -> impl Iterator<Item = PlayFinished<V>> + '_ {
         let last = turn - num_traits::one::<V::Count>();
+        // The players come first among the fight's creatures, so a player's
+        // creature is its seat.
+        let seat = usize::from(self.player.get());
         self.before
             .into_iter()
             .flat_map(PastTurns::latest_first)
-            .take_while(move |(before, _)| before.player_turn >= last)
-            .filter(move |(before, _)| before.player_turn == last)
+            .take_while(move |(before, _)| before.player_turns[seat] >= last)
+            .filter(move |(before, _)| before.player_turns[seat] == last)
             .flat_map(|(_, entries)| entries.iter())
             .filter_map(|entry| match entry {
                 HistoryEntry::Finished(finished) if finished.player == self.player => {
@@ -5459,6 +5620,16 @@ impl<V: ContentVersion> History<'_, V> {
         })
     }
 
+    /// How many `CardExhaustedEntry` the fight holds, every player's.
+    pub fn exhausted_this_fight(&self) -> usize {
+        let before = self.before.into_iter().flat_map(PastTurns::entries);
+        self.this_turn
+            .iter()
+            .chain(before)
+            .filter(|entry| matches!(entry, HistoryEntry::Exhausted { .. }))
+            .count()
+    }
+
     /// How many `CardGeneratedEntry` of the fight name the reader's player as
     /// their `Creator`.
     pub fn generated_by_player(&self) -> usize {
@@ -5563,6 +5734,9 @@ pub enum PoolFilter {
 pub enum PilePosition {
     Top,
     Bottom,
+    /// `CardPilePosition.Random`: a place drawn off `Shuffle`, as
+    /// `CardPileCmd.Add` draws one.
+    Random,
 }
 
 /// A card about to leave play, as `ModifyCardPlayResultPileTypeAndPosition`
@@ -6122,6 +6296,14 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the
     /// listener's owner, for a number no power scales.
     DamageOpponents(V::Number),
+    /// `CoveredPower.AfterApplied`: `power`, which is Intercept, onto
+    /// `interceptor` from `covered` unless it carries one, then `covered`
+    /// added to those it covers.
+    Cover {
+        interceptor: crate::CombatId,
+        covered: crate::CombatId,
+        power: V::Power,
+    },
     /// `PowerCmd.Apply<P>(target, amount, applier)`, onto a creature the
     /// listener names, from the creature it names or from nobody.
     ApplyPower {
@@ -6738,6 +6920,14 @@ pub enum HookEffect<V: ContentVersion> {
     /// [`crate::EventBehavior::potion_thrown`] carries out. It is the whole
     /// of the potion's use.
     PotionThrownAtEvent(V::Potion),
+    /// `CreateCloneForPlayer(Owner.Player)` of the card about to be played,
+    /// as it stands, kept outside every pile by the power that asked.
+    /// [`Hooks::power_kept_card`] gives that power the clone's id.
+    KeepCloneOfPlaying,
+    /// `PowerCmd.Decrement(this)`, then `CardCmd.AutoPlay` of the clone the
+    /// power keeps as `kept`, with no target named. The play pile takes the
+    /// clone first, since it stands in no pile.
+    DecrementAndAutoPlayKept(crate::CardId<V>),
 }
 
 /// One build's relic models, which is what a run holds a relic as.
@@ -6929,6 +7119,22 @@ pub trait PowerModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq
     ///
     /// A computed type nobody has ported.
     fn debuff(&self) -> bool;
+
+    /// Whether the effects this power's own hook asked for are being carried
+    /// out, which the fight sets around them. A power that guards against
+    /// hearing itself, as Beacon of Hope's `HasAlreadyBeenGivenBlock` does,
+    /// keeps it. Any other ignores it.
+    fn mark_busy(&mut self, _busy: bool) {}
+
+    /// `InterceptPower.AddCoveredCreature`: `creature` among those it covers,
+    /// once.
+    ///
+    /// # Panics
+    ///
+    /// A power that covers nobody.
+    fn add_covered(&mut self, _creature: crate::CombatId) {
+        unimplemented!("{:?} covering a creature", self.power())
+    }
 }
 
 /// What a card reads off its owner's side of the fight.
@@ -6980,6 +7186,12 @@ pub struct CardOwner<'a, V: ContentVersion> {
     /// How many of the owner's cards in the fight, every pile included, are
     /// tagged `OstyAttack`, this one left out.
     pub osty_attacks_besides: usize,
+    /// `Block` of the creature the card is pointed at, where it is pointed
+    /// at one.
+    pub target_block: Option<V::Number>,
+    /// The creatures on the owner's `Side`, the owner among them, living or
+    /// not.
+    pub allies: &'a [crate::CombatId],
 }
 
 /// What one copy of a card prints, as a rule reads it.
@@ -7223,7 +7435,7 @@ pub trait Hooks: ContentVersion {
     fn card_result_pile(
         card: Self::Card,
         base: (Option<crate::Pile>, PilePosition),
-    ) -> crate::HookResponse<(Option<crate::Pile>, PilePosition)>;
+    ) -> crate::HookResponse<CardResult>;
 
     /// `write` carried out on the deck card a fight's copy came from.
     fn write_deck_card(card: &mut DeckCard<Self>, write: Self::DeckWrite);
@@ -7656,6 +7868,10 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
     /// For a fight of kind `K`: a stopped play holds the rest of itself, and
     /// that rest reaches the fight through `K`'s type.
     type Resume<K: FightKind<Self>>: std::fmt::Debug + Clone + Eq + std::hash::Hash + 'static;
+
+    /// The filter a `CardSelectCmd` lists one pile's cards through, which
+    /// [`Rules::among`] applies.
+    type CardFilter: std::fmt::Debug + Clone + Eq + std::hash::Hash + 'static;
 
     /// Where a card sits in one of a fight's piles.
     ///
@@ -8136,6 +8352,14 @@ pub trait Rules: Hooks + Engine {
     /// `CardModel.OnTurnEnd`, for a card that remains in the hand.
     fn on_card_turn_end<F: Fight<Self>>(card: Self::Card, fight: &mut F);
 
+    /// The cards of `pile` that `filter` lets through, in the pile's order,
+    /// as a `CardSelectCmd` lists them for the fight's player.
+    fn among<F: Fight<Self>>(
+        fight: &F,
+        pile: crate::Pile,
+        filter: &Self::CardFilter,
+    ) -> smallvec::SmallVec<[crate::CardAt<Self>; MAX_CARDS_IN_HAND]>;
+
     /// Continue a card that stopped, with the answer it awaited.
     ///
     /// `at` identifies the card grouping and the point where it stopped.
@@ -8589,6 +8813,10 @@ pub trait Rules: Hooks + Engine {
         state: &Self::EventState,
         run: &impl crate::EventView<Self>,
     ) -> crate::Room<Self>;
+
+    /// [`crate::EventBehavior::kills`] for the event entered.
+    fn event_kills(state: &Self::EventState, option: u8, run: &impl crate::EventView<Self>)
+    -> bool;
 
     /// Whether the event's `BeforeEventStarted` sets `CanRemovePotions` off,
     /// which its `OnEventFinished` puts back.
