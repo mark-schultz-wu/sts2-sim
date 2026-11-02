@@ -28,7 +28,11 @@ pub(super) fn event_hook<V: crate::Build>(
                 RewardAlternative::Sacrifice,
             ));
         }
-        EventHook::CardRewardAlternativeChosen(RewardAlternative::Sacrifice) => {
+        EventHook::CardRewardAlternativeChosen { player, .. } if player != owner => {}
+        EventHook::CardRewardAlternativeChosen {
+            alternative: RewardAlternative::Sacrifice,
+            ..
+        } => {
             state.rewards_sacrificed = (state.rewards_sacrificed.checked_add(1))
                 .unwrap_or_else(|| unimplemented!("more sacrifices than a byte counts"));
             if state

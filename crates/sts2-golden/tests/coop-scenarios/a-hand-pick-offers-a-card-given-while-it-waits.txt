@@ -1,0 +1,12 @@
+# The Ironclad plays Armaments, whose pick waits on their hand. The
+# Regent plays Largesse at them meanwhile, and its card joins that hand.
+# The hand screen shows the hand as it stands, through the pick's filter,
+# so the pick offers the new card too.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"REGENT"},{"character":"IRONCLAD"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"ARMAMENTS","target":1001,"seat":0}
+{"cmd":"grant","card":"LARGESSE","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":null,"seat":1}
+{"cmd":"play_card","index":5,"target":1,"seat":0}
+{"cmd":"answer","pick":5,"seat":1}
+{"cmd":"answer","done":true,"seat":1}

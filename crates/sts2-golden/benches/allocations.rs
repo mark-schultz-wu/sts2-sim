@@ -20,7 +20,7 @@
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::Digested;
-use sts2_core::{Construct, Play, Start, Step};
+use sts2_core::{Start, Step};
 use sts2_golden::bench::{kind, named, reached, upto};
 use sts2_golden::{Counted, allocations, every_run, recording};
 use sts2_sim::Sim;
@@ -35,7 +35,7 @@ fn main() {
         let recorded = recording::<V>(&name).expect("a recorded run reads");
         let start = recorded.start().clone();
         let steps: Vec<Step<V>> = recorded.steps().to_vec();
-        let supported = reached::<V, Sim<V>>(&start, &steps);
+        let supported = reached::<V>(&start, &steps);
 
         kinds(&name, &start, &steps, supported);
         whole(&name, &start, &steps, supported);
@@ -125,7 +125,7 @@ fn per_step(start: &Start<V>, steps: &[Step<V>], supported: usize) {
 
 /// Replays a prefix known to be supported.
 fn played(start: &Start<V>, steps: &[Step<V>]) -> usize {
-    let mut sim = Sim::<V>::begin((), start).expect("a recording starts a run");
+    let mut sim = Sim::<V>::begin(start).expect("a recording starts a run");
     for step in steps {
         assert!(matches!(sim.step(step), Ok(Ok(_))));
     }
