@@ -10,10 +10,10 @@ pub struct State {
 }
 
 /// `AfterRoomEntered` in a combat room, and `AfterCombatEnd`, clear the
-/// flag. `AfterCardExhausted` of a Skill, with the flag clear, adds a clone
-/// of that card to its owner's hand and sets it. A relic's owner is the
-/// player, and a fight here has one, so every card is its owner's.
+/// flag. `AfterCardExhausted` of one of its owner's Skills, with the flag
+/// clear, adds a clone of that card to its owner's hand and sets it.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
@@ -23,9 +23,9 @@ pub(super) fn event_hook<V: crate::Build>(
             state.used = false
         }
         EventHook::CombatEnd { .. } => state.used = false,
-        EventHook::CardExhausted { card, id, .. }
-            if !state.used && V::card_kind(card) == Some(CardKind::Skill) =>
-        {
+        EventHook::CardExhausted {
+            card, id, player, ..
+        } if player == owner && !state.used && V::card_kind(card) == Some(CardKind::Skill) => {
             asked.push(HookEffect::CloneIntoHand {
                 card: id,
                 count: 1,

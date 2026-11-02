@@ -21,7 +21,7 @@ use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_107_1::characters::Character;
 use sts2_content::v0_107_1::runstate::RunRngType;
 use sts2_core::rng::{GameRng as _, stream_seed};
-use sts2_core::{ContentVersion, Play as _, Seed, Start};
+use sts2_core::{ContentVersion, Seed, Start};
 use sts2_sim::Sim;
 use sts2_sim::rng::MegaRng;
 use sts2_sim::run::Opening;
@@ -130,7 +130,7 @@ fn run(cli: Cli) -> Result<(), Error> {
             seed: seed.clone(),
             source,
         };
-        let mut run = Sim::<V>::begin((), &start).map_err(sim)?;
+        let mut run = Sim::<V>::begin(&start).map_err(sim)?;
         let seen = run.observe().map_err(sim)?;
         let position = seen.observation.rng.run[&RunRngType::UnknownMapPoint];
         let words = position.words.ok_or_else(|| Error::NoWords(seed.clone()))?;

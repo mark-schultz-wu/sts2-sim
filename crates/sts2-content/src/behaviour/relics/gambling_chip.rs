@@ -10,9 +10,17 @@ const PICKS: usize = 999_999_999;
 /// for any number of cards, then `CardCmd.DiscardAndDraw` of those picked
 /// with as many drawn. Nothing, for none picked.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // `player != Owner`: another player's turn is not its owner's.
+    if let EventHook::PlayerTurnStart { player, .. } = hook
+        && player != owner
+    {
+        return;
+    }
     if let EventHook::PlayerTurnStart { turn, .. } = hook
         && turn <= 1
     {

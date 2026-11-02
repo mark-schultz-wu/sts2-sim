@@ -238,17 +238,20 @@ Each step is one PR, with the golden replays, the census and
 1. **Scenarios for the three orders above** (done). The second agrees
    with the game, and its scenario pins the order. No run can reach the
    other two.
-2. **The turn loop as a coroutine.** End of turn, enemy turn and turn start
-   become one coroutine in the fight. The turn variants of `Deferred` go,
-   and so does `start.rs`'s duplicate. `Listening::join` becomes a yield.
-   The order does not change yet.
-3. **Queues and ids.** Card plays, potions, end turn and hook tasks go
-   through the queues, and the executor picks by id. `Live::paused` and
-   `Live::asking` go into the actions. The `Combat` tails in the enemy
-   turn keep the order their scenario pins.
-4. **Action types and gating.** `CombatPlayPhaseOnly` waits for the play
-   phase, as the game's does. The cancellations follow: end of turn, and
-   a `FromHand` pick.
+2. **The turn loop as a coroutine** (done). End of turn, enemy turn and
+   turn start are one coroutine in the fight. The turn variants of
+   `Deferred` went, and so did `start.rs`'s duplicate. `Listening::join`
+   is a yield.
+3. **Queues and ids.** The paused hook actions wait in a queue for each
+   seat, with ids (done). With one player, the rest changes nothing: one
+   action runs at a time, and a paused one blocks the only queue. So card
+   plays, potions and the turn's end join the queues with co-op fights.
+   The question moves into the action that asked it then too.
+   A second seat makes each of them testable there. Mark chose this on
+   2026-10-26.
+4. **Action types and gating**, with co-op fights too. With one player
+   the gating already matches, and nothing the player drives is ever
+   queued and not run, so the cancellations have nothing to cancel.
 5. **Command frames as coroutines**, one carrier at a time.
 6. **Co-op**: a turn loop over players, a question for each seat, and
    cross-player boundaries.

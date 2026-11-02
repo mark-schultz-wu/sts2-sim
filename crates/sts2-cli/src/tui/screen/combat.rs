@@ -23,7 +23,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use sts2_core::{CombatId, Play, SeenCreature, SeenFight};
+use sts2_core::{CombatId, SeenCreature, SeenFight};
 
 use crate::render::spelling;
 use crate::tui::app::App;
@@ -47,11 +47,9 @@ const YOU_ROWS: u16 = 3;
 /// the fight beside the log, not between related combatants.
 const AIR_MAX: u16 = 8;
 
-pub fn draw<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, combat: &SeenFight<V>)
+pub fn draw<V>(frame: &mut Frame, area: Rect, app: &App<V>, combat: &SeenFight<V>)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     let (mine, them) = sides(combat);
 
@@ -313,11 +311,9 @@ fn you_row<V: crate::tui::Build>(frame: &mut Frame, area: Rect, combat: &SeenFig
 // The hand.
 // ---------------------------------------------------------------------------
 
-fn hand_row<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, combat: &SeenFight<V>)
+fn hand_row<V>(frame: &mut Frame, area: Rect, app: &App<V>, combat: &SeenFight<V>)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     let block = titled(&format!("hand ({})", combat.legal.len()));
     let inner = block.inner(area);

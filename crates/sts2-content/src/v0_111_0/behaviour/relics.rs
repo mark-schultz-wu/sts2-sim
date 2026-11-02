@@ -9,7 +9,6 @@ use super::super::generated::potions::Potion;
 use super::super::generated::powers::Power;
 use super::super::generated::relics::Relic;
 use crate::behaviour::relics::State;
-use crate::generated::runstate::CombatSide;
 
 /// `DiamondDiadem`'s `BlockVar(20m, ValueProp.Unpowered)`, which v0.107.1's
 /// Diadem lacks.
@@ -35,6 +34,7 @@ pub(crate) fn own_relic_state(relic: Relic) -> Option<OwnRelic> {
 /// `EventHook` for a relic of this build's own.
 pub(crate) fn own_relic_event_hook(
     state: &mut State<V>,
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -51,8 +51,13 @@ pub(crate) fn own_relic_event_hook(
         }
         // `DiamondDiadem.AfterSideTurnStart`: on its owner's first turn, its
         // block, unpowered, then one Blur on its owner.
-        (State::DiamondDiadem(_), EventHook::SideTurnStart { side, turn, .. }) => {
-            if side == CombatSide::Player && turn <= 1 {
+        (
+            State::DiamondDiadem(_),
+            EventHook::SideTurnStart {
+                participants, turn, ..
+            },
+        ) => {
+            if participants.contains(owner) && turn <= 1 {
                 asked.extend([
                     HookEffect::GainBlock(DIAMOND_DIADEM_BLOCK),
                     HookEffect::ApplyToOwner(Power::BlurPower, PowerAmount::Counted(1)),
@@ -90,6 +95,7 @@ pub(crate) fn own_relic(relic: Relic) -> bool {
 /// A shared relic's `EventHook`, for a hook this build answers itself.
 pub(crate) fn own_shared_relic_event_hook(
     state: &mut State<V>,
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) -> Option<()> {
@@ -97,6 +103,14 @@ pub(crate) fn own_shared_relic_event_hook(
     use crate::ids::CardIds as _;
     use crate::vars::RelicVars as _;
 
+    // `player != Owner`: another player's turn is not its owner's, for each
+    // relic here that hears it.
+    if let EventHook::BeforeHandDraw { player, .. } = hook
+        && player != owner
+        && matches!(state, State::JeweledMask | State::PollinousCore(_))
+    {
+        return Some(());
+    }
     match (state, hook) {
         // `MassiveScroll.AfterObtained` lists the character's pool and then
         // the colorless one, where v0.107.1's `Concat` put colorless first.
@@ -161,8 +175,8 @@ pub(crate) fn own_shared_relic_event_hook(
         ) => Some(()),
         // `HistoryCourse.AfterAutoPrePlayPhaseEntered` replays the last
         // Attack alone, where v0.107.1's took a Skill too.
-        (State::HistoryCourse, EventHook::AutoPrePlayPhase { turn }) => {
-            if turn > 1 {
+        (State::HistoryCourse, EventHook::AutoPrePlayPhase { player, turn }) => {
+            if player == owner && turn > 1 {
                 asked.push(HookEffect::AutoPlayDupeOfLastPlay {
                     kinds: &[sts2_core::CardKind::Attack],
                 });
@@ -178,17 +192,16 @@ pub(crate) fn own_shared_relic_event_hook(
                 creature,
                 breaker,
                 pet_of,
-                player,
             },
         ) => {
             use crate::ids::PowerIds as _;
 
-            if (breaker == Some(player) || pet_of == Some(player)) && creature != player {
+            if (breaker == Some(owner) || pet_of == Some(owner)) && creature != owner {
                 asked.push(HookEffect::ApplyPower {
                     target: creature,
                     power: <V as sts2_core::ContentVersion>::Power::VULNERABLE_POWER,
                     amount: PowerAmount::Counted(Relic::HAND_DRILL_VULNERABLE_POWER),
-                    applier: Some(player),
+                    applier: Some(owner),
                 });
             }
             Some(())
@@ -214,8 +227,15 @@ pub(crate) fn own_shared_relic_event_hook(
         // that hold a card reward, where v0.107.1's counted on
         // `AfterCombatEnd`. It runs once they are made, so the reward it
         // adds to comes on an odd count.
-        (State::LastingCandy(state), EventHook::CombatRewardOffering { card_reward }) => {
-            if card_reward {
+        // `rewards.Player != Owner`: another player's rewards are not its own.
+        (
+            State::LastingCandy(state),
+            EventHook::CombatRewardOffering {
+                player,
+                card_reward,
+            },
+        ) => {
+            if card_reward && player == owner {
                 state.combats_seen += 1;
             }
             Some(())
@@ -239,7 +259,7 @@ pub(crate) fn own_shared_relic_event_hook(
         (State::Regalite(state), EventHook::CardGeneratedForCombat { creator, .. }) => {
             use crate::vars::RelicVars as _;
 
-            if creator.is_some() && !state.used_this_turn {
+            if creator == Some(owner) && !state.used_this_turn {
                 state.used_this_turn = true;
                 asked.push(HookEffect::GainBlock(Relic::REGALITE_BLOCK));
             }
@@ -247,8 +267,8 @@ pub(crate) fn own_shared_relic_event_hook(
         }
         // `BeforeSideTurnStart` on its owner's side, and `AfterCombatEnd`,
         // clear the turn's use.
-        (State::Regalite(state), EventHook::BeforeSideTurnStart { side, .. }) => {
-            if side == CombatSide::Player {
+        (State::Regalite(state), EventHook::BeforeSideTurnStart { participants, .. }) => {
+            if participants.contains(owner) {
                 state.used_this_turn = false;
             }
             Some(())
@@ -290,11 +310,18 @@ pub(crate) fn own_shared_relic_event_hook(
 /// A shared relic's `ModifyHook`, for a hook this build answers itself.
 pub(crate) fn own_shared_relic_modify_hook(
     state: &State<V>,
+    owner: sts2_core::CombatId,
     hook: sts2_core::ModifyHook<V>,
 ) -> Option<sts2_core::Modify<i32>> {
     use crate::vars::RelicVars as _;
 
     match (state, hook) {
+        // `player != base.Owner`: another player's draw is left as it is.
+        (State::PollinousCore(_), sts2_core::ModifyHook::HandDraw { player, .. })
+            if player != owner =>
+        {
+            Some(sts2_core::Modify::Nothing)
+        }
         // `PollinousCore.ModifyHandDraw`: its cards once it has seen its
         // turns or more, where v0.107.1's paid on that turn alone.
         (State::PollinousCore(state), sts2_core::ModifyHook::HandDraw { .. }) => {
