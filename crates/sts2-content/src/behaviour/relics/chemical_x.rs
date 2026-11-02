@@ -5,11 +5,16 @@ use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 
-/// `ModifyXValue`: its increase on every X. A fight here has one player, so
-/// every card is its owner's.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+/// `ModifyXValue`: its increase on every X of its owner's cards.
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
-        ModifyHook::XValue => Modify::Added(V::Relic::CHEMICAL_X_INCREASE),
+        ModifyHook::XValue { player } if player == owner => {
+            Modify::Added(V::Relic::CHEMICAL_X_INCREASE)
+        }
+        ModifyHook::XValue { .. } => Modify::Nothing,
         hook => unimplemented!("what ChemicalX does for {hook:?}"),
     }
 }

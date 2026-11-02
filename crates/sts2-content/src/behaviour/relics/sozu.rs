@@ -5,11 +5,13 @@ use sts2_core::{DecisionHook, HookResponse, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 
-/// `ShouldProcurePotion`: no for its owner. A relic's owner is the player,
-/// and a run here has one.
-pub(super) fn decide_hook<V: crate::Build>(hook: DecisionHook<V>) -> HookResponse<bool> {
+/// `ShouldProcurePotion`: no for its owner.
+pub(super) fn decide_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: DecisionHook<V>,
+) -> HookResponse<bool> {
     match hook {
-        DecisionHook::ShouldProcurePotion { .. } => HookResponse::Decision(false),
+        DecisionHook::ShouldProcurePotion { player, .. } => HookResponse::Decision(player != owner),
         hook => unimplemented!("what Sozu decides for {hook:?}"),
     }
 }
