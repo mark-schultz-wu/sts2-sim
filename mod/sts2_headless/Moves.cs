@@ -258,7 +258,7 @@ public static class Moves
 
                 IReadOnlyList<EventOption> options = ev.CurrentOptions;
                 return Enumerable.Range(0, options.Count)
-                    .Where(i => !options[i].IsLocked && !options[i].WasChosen)
+                    .Where(i => !options[i].IsLocked && !options[i].WasChosen && !Kills(ev, options[i]))
                     .Select(Choosing)
                     .ToList();
             }
@@ -270,6 +270,15 @@ public static class Moves
                 return new List<Dictionary<string, object?>>();
         }
     }
+
+    /// <summary>
+    /// <c>NEventOptionButton.OnRelease</c>: in a run of several players, an option
+    /// whose <c>WillKillPlayer</c> holds for the event's player does nothing.
+    /// </summary>
+    internal static bool Kills(EventModel ev, EventOption option) =>
+        ev.Owner is { } owner
+        && owner.RunState.Players.Count > 1
+        && (option.WillKillPlayer?.Invoke(owner) ?? false);
 
     /// <summary>Each entry stocked, affordable, and not blocked, which is what <c>buy</c> refuses on.</summary>
     private static List<Dictionary<string, object?>> Buying(MerchantInventory inventory, Player me)
