@@ -1,0 +1,9 @@
+# An extra turn starts only for the player taking it, so Osty's block is
+# not cleared and nothing hears it cleared. His Block Next Turn waits
+# through Pael's Eye's turn, and pays out once the next round starts.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","relic":"PAELS_EYE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"BLOCK_NEXT_TURN_POWER","amount":5,"target":2}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

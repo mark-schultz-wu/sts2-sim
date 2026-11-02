@@ -45,9 +45,9 @@ pub fn rarity_above<V: Rules>(rarity: Rarity<V>) -> Option<Rarity<V>> {
     }
 }
 
-/// `RelicModel.IsAllowed` for a run of one player, `floor` floors in.
-fn allowed_now<V: Rules>(relic: V::Relic, floor: usize) -> bool {
-    V::relic_allowed(relic, floor, 1)
+/// `RelicModel.IsAllowed` for a run of `players`, `floor` floors in.
+fn allowed_now<V: Rules>(relic: V::Relic, floor: usize, players: usize) -> bool {
+    V::relic_allowed(relic, floor, players)
 }
 
 impl<V: Rules> RelicBag<V> {
@@ -93,8 +93,14 @@ impl<V: Rules> RelicBag<V> {
     /// # Panics
     ///
     /// A bag with nothing left, which the game refreshes. That is not reached.
-    pub fn front(&self, rarity: Rarity<V>, dealt: &[V::Relic], floor: usize) -> V::Relic {
-        self.pull(rarity, dealt, floor, |_| true, false)
+    pub fn front(
+        &self,
+        rarity: Rarity<V>,
+        dealt: &[V::Relic],
+        floor: usize,
+        players: usize,
+    ) -> V::Relic {
+        self.pull(rarity, dealt, (floor, players), |_| true, false)
     }
 
     /// [`Self::front`] through a filter, which a rarity's deque is walked
@@ -104,9 +110,10 @@ impl<V: Rules> RelicBag<V> {
         rarity: Rarity<V>,
         dealt: &[V::Relic],
         floor: usize,
+        players: usize,
         allowed: impl Fn(V::Relic) -> bool,
     ) -> V::Relic {
-        self.pull(rarity, dealt, floor, allowed, false)
+        self.pull(rarity, dealt, (floor, players), allowed, false)
     }
 
     /// `RelicGrabBag.PullFromBack`, which is what a merchant stocks from.
@@ -119,9 +126,10 @@ impl<V: Rules> RelicBag<V> {
         rarity: Rarity<V>,
         dealt: &[V::Relic],
         floor: usize,
+        players: usize,
         allowed: impl Fn(V::Relic) -> bool,
     ) -> V::Relic {
-        self.pull(rarity, dealt, floor, allowed, true)
+        self.pull(rarity, dealt, (floor, players), allowed, true)
     }
 
     /// `RelicGrabBag.HasAvailableRelics`: whether a deal from the front finds
@@ -134,15 +142,15 @@ impl<V: Rules> RelicBag<V> {
     ///
     /// A bag with nothing left, where the game refreshes a spent deque or
     /// falls back to a relic of its own. Neither is reached.
-    pub fn has_left(&self, dealt: &[V::Relic], floor: usize) -> bool {
+    pub fn has_left(&self, dealt: &[V::Relic], floor: usize, players: usize) -> bool {
         let left = self
             .deques
             .iter()
             .filter(|(rarity, _)| Rarity::<V>::DRAFTED.contains(rarity))
             .any(|(_, relics)| {
-                relics
-                    .iter()
-                    .any(|&relic| !dealt.contains(&relic) && allowed_now::<V>(relic, floor))
+                relics.iter().any(|&relic| {
+                    !dealt.contains(&relic) && allowed_now::<V>(relic, floor, players)
+                })
             });
         if !left {
             unimplemented!("a relic bag with nothing left to deal");
@@ -155,7 +163,7 @@ impl<V: Rules> RelicBag<V> {
         &self,
         rarity: Rarity<V>,
         dealt: &[V::Relic],
-        floor: usize,
+        (floor, players): (usize, usize),
         allowed: impl Fn(V::Relic) -> bool,
         from_back: bool,
     ) -> V::Relic {
@@ -163,7 +171,9 @@ impl<V: Rules> RelicBag<V> {
         loop {
             let held = self.deques.get(&rarity).map(|relics| {
                 let left = relics.iter().copied().filter(|&relic| {
-                    !dealt.contains(&relic) && allowed_now::<V>(relic, floor) && allowed(relic)
+                    !dealt.contains(&relic)
+                        && allowed_now::<V>(relic, floor, players)
+                        && allowed(relic)
                 });
                 match from_back {
                     true => left.last(),
@@ -210,9 +220,10 @@ impl<V: Rules> RelicBag<V> {
         rarity: Rarity<V>,
         refilled: bool,
         floor: usize,
+        players: usize,
         gone: impl Fn(V::Relic) -> bool,
     ) -> Option<V::Relic> {
-        let left = |relic: &V::Relic| !gone(*relic) && allowed_now::<V>(*relic, floor);
+        let left = |relic: &V::Relic| !gone(*relic) && allowed_now::<V>(*relic, floor, players);
         match refilled {
             true => (self.originals.iter())
                 .filter(|relic| relic.rarity() == rarity)

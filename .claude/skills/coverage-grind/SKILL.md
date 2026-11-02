@@ -91,8 +91,8 @@ scenario. `{"cmd":"fight","encounter":...}` reaches any encounter.
   over 0.3%, or cut it.
 - `cargo xtask coverage` again. Each row in the batch rises, and no row
   falls.
-- The census: `cargo build -q --release -p sts2-golden --example
-  random_run && timeout 1500 cargo xtask census --runs 300 --top 30`.
+- The census: `cargo build -q --release -p sts2-run && timeout
+  1500 cargo xtask census --runs 300 --top 30`.
   Every character's lowest stop holds or rises, and nothing panics. An
   act count moves by a few when new content changes what random play
   picks. Explain any drop, and fix one that is a bug.

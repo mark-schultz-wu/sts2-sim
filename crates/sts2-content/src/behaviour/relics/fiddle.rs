@@ -8,12 +8,17 @@ use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
 
 /// `ShouldDraw`: no for a draw that is not the hand's own while the player's
-/// side takes its turn. A fight here has one player.
-pub(super) fn decide_hook<V: crate::Build>(hook: DecisionHook<V>) -> HookResponse<bool> {
+/// side takes its turn.
+pub(super) fn decide_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: DecisionHook<V>,
+) -> HookResponse<bool> {
     match hook {
         DecisionHook::ShouldDraw {
-            hand_draw, side, ..
-        } => HookResponse::Decision(hand_draw || side != CombatSide::Player),
+            player,
+            hand_draw,
+            side,
+        } => HookResponse::Decision(player != owner || hand_draw || side != CombatSide::Player),
         hook => unimplemented!("what Fiddle decides for {hook:?}"),
     }
 }

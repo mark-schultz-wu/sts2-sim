@@ -30,7 +30,7 @@ pub(super) fn event_hook<V: crate::Build>(
             state.triggered_this_turn = true;
             asked.push(HookEffect::Heal(unblocked));
         }
-        EventHook::BeforeSideTurnStart { side, .. } if side == own => {
+        EventHook::BeforeSideTurnStart { participants, .. } if participants.contains(owner) => {
             state.triggered_this_turn = false;
         }
         EventHook::DamageReceived { .. }
