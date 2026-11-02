@@ -429,12 +429,12 @@ pub(super) enum Deferred<V: Rules> {
         slot: u8,
         relic: V::Relic,
     },
-    /// `CardPileCmd.Draw` of `count` cards. `resumed` for the rest of a draw
-    /// a shuffle's question stopped, which asked `ShouldDraw` already.
+    /// `CardPileCmd.Draw` of `count` cards. `resume` says whether it is the
+    /// rest of a draw a question stopped, and what it owes first.
     Draw {
         count: usize,
         hand_draw: bool,
-        resumed: bool,
+        resume: super::board::DrawResume<V>,
         /// What an effect's draw drew before it stood still, which the
         /// effect waits on. Nothing for any other draw.
         drew: Option<sts2_core::Drew<V>>,
@@ -2882,10 +2882,6 @@ pub(crate) struct Live<V: Rules> {
     /// stopped, with what the listeners after each asked. The outermost comes
     /// first. The draw that resumes finishes them before its own.
     pub(super) hook_draws: smallvec::SmallVec<[super::board::HookDraw<V>; 2]>,
-    /// The card whose auto-play asked as it was drawn, and whether the draw
-    /// was the hand's. The draw that resumes runs its late `AfterCardDrawn`
-    /// pass first.
-    pub(super) drawn_late: Option<(CardId<V>, bool)>,
     /// Every copy an effect's draw drew, once a question stood it still and
     /// it is over. The effect that waited on it resumes with them.
     pub(super) drew: Option<sts2_core::Drew<V>>,
@@ -3218,7 +3214,6 @@ impl<V: Rules> Clone for Live<V> {
             detached: self.detached.clone(),
             created: self.created.clone(),
             hook_draws: self.hook_draws.clone(),
-            drawn_late: self.drawn_late,
             drew: self.drew.clone(),
             powers: self.powers.clone(),
             card_ids: self.card_ids.clone(),
@@ -3262,7 +3257,6 @@ impl<V: Rules> Clone for Live<V> {
             detached,
             created,
             hook_draws,
-            drawn_late,
             drew,
             creatures,
             powers,
@@ -3310,7 +3304,6 @@ impl<V: Rules> Clone for Live<V> {
         detached.clone_from(&source.detached);
         created.clone_from(&source.created);
         hook_draws.clone_from(&source.hook_draws);
-        *drawn_late = source.drawn_late;
         drew.clone_from(&source.drew);
         creatures.copy_from(&source.creatures);
         powers.clone_from(&source.powers);
@@ -4658,7 +4651,6 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             detached: Vec::new(),
             created: Vec::new(),
             hook_draws: smallvec::SmallVec::new(),
-            drawn_late: None,
             drew: None,
             creatures: creatures.into_iter().collect(),
             powers: PowerStore::new(),

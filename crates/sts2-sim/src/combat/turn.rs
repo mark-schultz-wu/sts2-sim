@@ -1911,15 +1911,19 @@ pub(super) fn hand_draw<V: Rules>(
 }
 
 /// What a draw inside `SetupPlayerTurn` came to.
-pub(super) enum Drew {
+pub(super) enum Drew<V: Rules> {
     /// The draw is over, and how it ended the fight if it did.
     Done(Option<super::Ended>),
-    /// A question stopped it, with `left` cards still to draw.
-    Parked { left: usize },
+    /// A question stopped it, with `left` cards still to draw after what
+    /// `resume` says it owes first.
+    Parked {
+        left: usize,
+        resume: super::board::DrawResume<V>,
+    },
 }
 
 /// Draw `left` cards for `SetupPlayerTurn`: the turn's `hand`, or one a
-/// listener asked for. `resumed` for a draw that a question paused.
+/// listener asked for. `resume` for a draw that a question paused.
 ///
 /// A card auto-played as it is drawn can end the fight, and an ending fight
 /// hands the hooks after it no listeners.
@@ -1932,8 +1936,8 @@ pub(super) fn draw_in_setup<V: Rules>(
     ascension: V::AscensionLevel,
     mut left: usize,
     hand: bool,
-    mut resumed: bool,
-) -> Drew {
+    mut resume: super::board::DrawResume<V>,
+) -> Drew<V> {
     loop {
         match draw_step::<V>(
             seat,
@@ -1943,13 +1947,13 @@ pub(super) fn draw_in_setup<V: Rules>(
             ascension,
             left,
             hand,
-            resumed,
+            resume,
         ) {
             Ok(drew) => return drew,
             // A shuffle took its pick unasked, and the draw goes on.
             Err(more) => {
                 left = more;
-                resumed = true;
+                resume = super::board::DrawResume::Stopped;
             }
         }
     }
@@ -1966,8 +1970,8 @@ fn draw_step<V: Rules>(
     ascension: V::AscensionLevel,
     left: usize,
     hand: bool,
-    resumed: bool,
-) -> Result<Drew, usize> {
+    resume: super::board::DrawResume<V>,
+) -> Result<Drew<V>, usize> {
     Ok(
         match super::board::draw_pausing::<V>(
             seat,
@@ -1977,13 +1981,13 @@ fn draw_step<V: Rules>(
             ascension,
             left,
             hand,
-            resumed,
+            resume,
             None,
         ) {
             super::board::Drawn::Done(ended) => Drew::Done(ended),
             // A card auto-played as it was drawn asked, and the rest of the draw
             // waits for its play.
-            super::board::Drawn::Asked { left } => Drew::Parked { left },
+            super::board::Drawn::Asked { left, resume } => Drew::Parked { left, resume },
             super::board::Drawn::Paused {
                 left,
                 asks: (pile, selection, act),
@@ -1991,12 +1995,18 @@ fn draw_step<V: Rules>(
                 if pauses::<V>(live, belts) {
                     let question = super::live::Asked::Pile { pile, selection };
                     ask_setup::<V>(live, act, question, true);
-                    return Ok(Drew::Parked { left });
+                    return Ok(Drew::Parked {
+                        left,
+                        resume: super::board::DrawResume::Stopped,
+                    });
                 }
                 match select::<V>(seat, live, rngs, belts, pile, selection, act) {
                     Err(question) => {
                         ask_setup::<V>(live, act, question, false);
-                        Drew::Parked { left }
+                        Drew::Parked {
+                            left,
+                            resume: super::board::DrawResume::Stopped,
+                        }
                     }
                     Ok(Some(ended)) => Drew::Done(Some(ended)),
                     Ok(None) => return Err(left),

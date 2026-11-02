@@ -7,6 +7,7 @@
 
 use sts2_core::{CombatId, Rules, SeatIndex};
 
+use super::board::DrawResume;
 use super::listen::{self, Walking};
 use super::live::Live;
 use super::turn::{Drew, Listened};
@@ -86,20 +87,23 @@ pub(super) fn setup<V: Rules>(
         Ok(drawn) => drawn,
         Err(ended) => return Some(ended),
     };
-    let mut resumed: bool = false;
+    let mut resume: DrawResume<V> = DrawResume::Fresh;
     loop {
-        let drew: Drew = {
+        let drew: Drew<V> = {
             let (live, rngs, belts) = resumed!().parts();
             crate::combat::turn::draw_in_setup::<V>(
-                seat, live, rngs, belts, ascension, left, true, resumed,
+                seat, live, rngs, belts, ascension, left, true, resume,
             )
         };
         match drew {
             Drew::Done(Some(ended)) => return Some(ended),
             Drew::Done(None) => break,
-            Drew::Parked { left: more } => {
+            Drew::Parked {
+                left: more,
+                resume: then,
+            } => {
                 left = more;
-                resumed = true;
+                resume = then;
                 yield_!(());
                 if let Some(ended) = resumed!().ended {
                     return Some(ended);
@@ -158,20 +162,23 @@ pub(super) fn setup<V: Rules>(
             return ended;
         };
         left = count;
-        resumed = false;
+        resume = DrawResume::Fresh;
         loop {
-            let drew: Drew = {
+            let drew: Drew<V> = {
                 let (live, rngs, belts) = resumed!().parts();
                 crate::combat::turn::draw_in_setup::<V>(
-                    seat, live, rngs, belts, ascension, left, false, resumed,
+                    seat, live, rngs, belts, ascension, left, false, resume,
                 )
             };
             match drew {
                 Drew::Done(Some(ended)) => return Some(ended),
                 Drew::Done(None) => break,
-                Drew::Parked { left: more } => {
+                Drew::Parked {
+                    left: more,
+                    resume: then,
+                } => {
                     left = more;
-                    resumed = true;
+                    resume = then;
                     yield_!(());
                     if let Some(ended) = resumed!().ended {
                         let (live, _, belts) = resumed!().parts();

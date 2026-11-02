@@ -121,7 +121,6 @@ pub(crate) fn enter<V: Rules>(
         detached: Vec::new(),
         created: Vec::new(),
         hook_draws: smallvec::SmallVec::new(),
-        drawn_late: None,
         drew: None,
         creatures: super::live::Creatures::new(),
         powers: PowerStore::new(),

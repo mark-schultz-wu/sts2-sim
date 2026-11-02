@@ -414,22 +414,25 @@ v0.111.0. All 4 are fixed. A fourth round, from seed 30000, parted 3 on
 v0.107.1 and 2 on v0.111.0, and all 5 are fixed.
 
 A fifth round, from seed 40000, parted 2 on v0.107.1 and 3 on v0.111.0.
-Three are fixed. Two v0.111.0 runs are left:
+Four are fixed. One v0.111.0 run is left. DEFECT C000040507 with HOARDER
+parts at 248 in the deck.
 
-1. DEFECT C000040507 with HOARDER parts at 248 in the deck. A Thieving
-   Hopper stole a White Noise+, and a reward gave it back. The deck held
-   three: the one a card reward gave, and Hoarder's two copies of it. The
-   simulator stole a copy, which Hoarder does not copy again. The game
-   copied the card it got back, so it stole the card the reward gave.
-   Nothing compares which of three like cards stands where. The game's
-   draw pile is the deck in order, then shuffled, as ours is. To find
-   where the order parts, the mod's trace needs to name each card.
-2. IRONCLAD C000040448 with DEADLY_EVENTS parts at 792 in the legal
-   moves: Cinder+ costs 3 in the simulator and 2 in the game. The player
-   is Confused by Snecko Eye, and the turn's hand draw shuffles.
-   Stratagem asks for a card of the draw pile. Each card drawn after that
-   takes a cost off `CombatEnergyCosts`, so the two take a cost for a
-   different card.
+- A Thieving Hopper stole a White Noise+, and a reward gave it back.
+- The deck held three: the one a card reward gave, and Hoarder's two copies
+  of it. The simulator stole a copy, which Hoarder does not copy again.
+- The game copied the card it got back, so it stole the card the reward
+  gave. Its trace shows no other add that takes a copy off Hoarder's list,
+  and no reload of the run.
+- The two sides agree on these:
+  - Both add the original, then its copies, to the deck's bottom.
+  - The first shuffle of each fight starts from the deck's order.
+  - A reshuffle sorts the discard pile, then the draw pile, with .NET's
+    introsort.
+  - The theft picks from the draw pile, then the discard pile.
+- The stolen card came to hand in the fight's first draw.
+
+To find where the order of the three parts, the mod's trace needs to name
+each card.
 
 Then hunt both builds again toward 3,000 runs in a row with no split.
 
