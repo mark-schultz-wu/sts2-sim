@@ -16,8 +16,6 @@ use std::path::Path;
 use sts2_core::Digested;
 
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::Construct;
-use sts2_core::Play;
 use sts2_golden::{every_run, golden_dir, oracle_or_explain, recording, render_map, render_room};
 
 type V = V0_107_1;
@@ -36,7 +34,8 @@ fn the_committed_files_say_what_the_game_said() {
         let mut oracle = oracle_or_explain(&name, recorded.start());
 
         let mut digests = String::new();
-        let opening = Play::<V>::observe(&mut oracle)
+        let opening = oracle
+            .observe::<V>()
             .unwrap_or_else(|e| panic!("{name}: observing the start: {e}"));
         let map = render_map(&opening.observation.map);
         let room = render_room(opening.observation.room.as_ref());
@@ -45,7 +44,8 @@ fn the_committed_files_say_what_the_game_said() {
                 .step(step)
                 .unwrap_or_else(|e| panic!("{name}: step {at}: {e}"))
                 .unwrap_or_else(|refusal| panic!("{name}: step {at}: {refusal}"));
-            let standing = Play::<V>::observe(&mut oracle)
+            let standing = oracle
+                .observe::<V>()
                 .unwrap_or_else(|e| panic!("{name}: step {at}: {e}"));
 
             let _ = writeln!(digests, "{}", standing.observation.rules_digest());
