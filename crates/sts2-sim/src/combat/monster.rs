@@ -63,10 +63,11 @@ fn monster_hps<V: Rules>(creatures: &[Fighter<V>]) -> SmallVec<[V::Health; CREAT
 /// `GenerateInternalCombatState`: the health each of an encounter's
 /// monsters rolls as a `Combat`-layout event builds its fight, in the order
 /// they stand. `CombatState.CreateCreature` rolls it off `Niche` against the
-/// ones before.
+/// ones before, then scales it for the players the fight already holds.
 pub(crate) fn roll_layout<V: Rules>(
     monsters: &[sts2_core::Spawned<V>],
     ascension: V::AscensionLevel,
+    scaling: Scaling,
     niche: &mut MegaRng,
 ) -> SmallVec<[V::Health; 2]> {
     let mut rolled: SmallVec<[V::Health; 2]> = SmallVec::new();
@@ -78,7 +79,7 @@ pub(crate) fn roll_layout<V: Rules>(
             &rolled,
             niche,
         );
-        rolled.push(hp);
+        rolled.push(scaling.health::<V>(hp));
     }
     rolled
 }
@@ -236,11 +237,9 @@ pub(crate) fn initialize<V: Rules>(
     ) in monsters.iter().enumerate()
     {
         let state = spawned_model(&monsters[index]);
-        // A fight an event built as it opened rolled its health then.
+        // A fight an event built as it opened rolled its health then, scaled
+        // already.
         let hp = match rolled.get(index) {
-            Some(_) if scaling.players > 1 => {
-                unimplemented!("health an event rolled in a fight of several players")
-            }
             Some(&hp) => hp,
             // `SetUniqueMonsterHpValue`, against the health of those standing
             // already, then `ScaleMonsterHpForMultiplayer`.
@@ -342,22 +341,34 @@ pub(crate) fn added_to_room<V: Rules>(
             .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
             .map(|creature| creature.id)
             .collect();
-        // Each lands on the monster, an enemy, and scales.
+        let players: SmallVec<[CombatId; 2]> = creatures
+            .iter()
+            .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
+            .filter(|creature| creature.owner.is_none())
+            .map(|creature| creature.id)
+            .collect();
+        // Each lands on the monster, an enemy, and scales: once, or once for
+        // each creature it is aimed at.
         let scaled = |power, amount| match amount {
             sts2_core::PowerAmount::Counted(amount) => {
                 sts2_core::PowerAmount::Counted(scaling.power::<V>(power, amount))
             }
             endless => endless,
         };
-        for (power, amount) in V::monster_starting_aimed_powers(monster) {
-            for &opponent in &opponents {
-                let amount = Stacked::from(scaled(power, amount));
-                starting::<V>(powers, id, power, amount, Some(id), Some(opponent));
-            }
-        }
         for (power, amount) in V::monster_starting_powers(monster, ascension, side, &held.state) {
             let amount = Stacked::from(scaled(power, amount));
-            starting::<V>(powers, id, power, amount, Some(id), None);
+            match V::monster_starting_power_aim(monster, power) {
+                None => starting::<V>(powers, id, power, amount, Some(id), None),
+                Some(aim) => {
+                    let aimed = match aim {
+                        sts2_core::Aim::EachOpponent => &opponents,
+                        sts2_core::Aim::EachPlayer => &players,
+                    };
+                    for &target in aimed {
+                        starting::<V>(powers, id, power, amount, Some(id), Some(target));
+                    }
+                }
+            }
         }
         for (power, amount) in V::monster_starting_opponent_powers(monster, ascension) {
             for &opponent in &opponents {

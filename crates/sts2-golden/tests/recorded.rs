@@ -20,13 +20,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_111_0::V0_111_0;
-use sts2_core::{Construct as _, Gift, Play as _, SeatIndex, Setup};
-use sts2_golden::recorded::{Ending, Followed, Recorded, Run, follow, position};
-use sts2_sim::{Sim, SimSeat};
-
-#[path = "../examples/carried/mod.rs"]
-mod carried;
-use carried::{carried, carried_by_every_seat};
+use sts2_core::RunTable as _;
+use sts2_golden::recorded::{Ending, Followed, Recorded, Run, follow};
+use sts2_run::Carried;
+use sts2_sim::SimTable;
 
 type V = V0_107_1;
 
@@ -104,75 +101,33 @@ fn holds_every_census_run(recorded: &Recorded, build: &sts2_core::Version) {
     }
 }
 
-/// The positions of `run` the simulator agrees with, from the start.
-fn matched<V: sts2_content::Build>(run: &Run) -> usize {
-    let mut sim = Sim::<V>::begin((), &run.start()).expect("the run starts");
-    for (relic, count) in carried::<V>() {
-        for _ in 0..count {
-            sim.setup(&Setup::Grant(Gift::Relic(relic)))
-                .expect("a grant applies")
-                .expect("and is not refused");
-        }
-    }
-    match follow(run, &mut sim) {
-        Followed::Whole => run.digests.len(),
-        Followed::PartedAt { step, .. } => step,
-    }
-}
-
-/// The positions of the co-op `run` that the simulator agrees with, from
-/// the start. Each seat has a simulator of its own, as each player has a
-/// machine. Each plays every seat's moves, as `coop_run --hunt` does beside
-/// the games. A position is compared on the seat that played from it.
+/// The positions of `run` the simulator agrees with, from the start, as
+/// [`follow`] compares them.
 ///
-/// A hunt whose runs reach further replaces `coop-v0.111.0.bin` with its
-/// `target/coop/runs.bin`, and raises the count.
-fn matched_coop<V: sts2_content::Build>(run: &Run) -> usize {
-    let start = run.start::<V>();
-    let grants = carried_by_every_seat::<V>(run.players.len());
-    let mut sims: Vec<SimSeat<V>> = (0..run.players.len())
-        .map(|at| {
-            let mut sim = SimSeat::begin(&start, SeatIndex(u8::try_from(at).expect("a seat")));
-            for grant in &grants {
-                sim.construct(grant)
-                    .expect("a grant applies")
-                    .expect("and is not refused");
-            }
-            sim
+/// A hunt stops a run on the move a simulator panicked on, and the run ends
+/// there, parted. That move is a known gap. A panic on any move before it is
+/// not.
+fn matched<V: sts2_content::Build>(run: &Run) -> usize {
+    let agreed = AtomicUsize::new(0);
+    let followed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut table =
+            Carried::<SimTable<V>>::begin((), &run.start()).expect("the run starts and carries");
+        follow(run, &mut table, true, |count| {
+            agreed.store(count, Ordering::Relaxed)
         })
-        .collect();
-    let moves = run.moves.iter().zip(&run.seats);
-    for (step, (&want, (&at, &seat))) in run.digests.iter().zip(moves).enumerate() {
-        let seen = sims[seat.at()].observe();
-        if position(&seen) != want {
-            return step;
+        .unwrap_or_else(|fault| panic!("following the run: {fault}"))
+    }));
+    match followed {
+        Ok(Followed::Whole) => run.digests.len(),
+        Ok(Followed::PartedAt { step, .. }) => step,
+        Err(_)
+            if run.ending == Ending::Parted
+                && agreed.load(Ordering::Relaxed) == run.moves.len() =>
+        {
+            run.moves.len()
         }
-        let decision = seen.observation.moves[usize::from(at)];
-        // A hunt stops a run on the move a simulator panicked on, refused or
-        // failed, and the run ends there, parted. That move is a known gap.
-        // A failure on any move before it is not.
-        let last = step + 1 == run.moves.len() && run.ending == Ending::Parted;
-        for sim in &mut sims {
-            let played = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                sim.play(seat, &decision)
-            }));
-            match played {
-                Ok(Ok(Ok(_))) => {}
-                _ if last => return step + 1,
-                Err(payload) => std::panic::resume_unwind(payload),
-                Ok(Err(e)) => panic!("playing {decision:?} at step {step}: {e}"),
-                Ok(Ok(Err(refusal))) => panic!("{decision:?} refused at step {step}: {refusal}"),
-            }
-        }
+        Err(payload) => std::panic::resume_unwind(payload),
     }
-    // Then where each seat stands once the last move is played.
-    let ends = &run.digests[run.moves.len()..];
-    let ended = sims
-        .iter()
-        .zip(ends)
-        .take_while(|(sim, want)| position(&sim.observe()) == **want)
-        .count();
-    run.moves.len() + ended
 }
 
 #[test]
@@ -208,7 +163,7 @@ fn the_simulator_follows_the_coop_runs_no_less_far() {
     follows_no_less_far(
         "coop-v0.111.0.bin",
         "coop-v0.111.0.matched",
-        matched_coop::<V0_111_0>,
+        matched::<V0_111_0>,
     );
 }
 

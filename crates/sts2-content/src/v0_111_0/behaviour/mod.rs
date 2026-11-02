@@ -11,6 +11,7 @@ pub(crate) mod cards;
 pub(crate) mod enchantments;
 pub mod events;
 pub(crate) mod monsters;
+pub(crate) mod orbs;
 pub(crate) mod potions;
 pub(crate) mod powers;
 pub(crate) mod relics;
@@ -61,10 +62,11 @@ impl crate::build::OwnRules for V {
 
     fn own_relic_event_hook(
         state: &mut crate::behaviour::relics::State<V>,
+        owner: sts2_core::CombatId,
         hook: sts2_core::EventHook<V>,
         asked: &mut sts2_core::HookEffects<V>,
     ) {
-        relics::own_relic_event_hook(state, hook, asked);
+        relics::own_relic_event_hook(state, owner, hook, asked);
     }
 
     fn own_card_hooks(card: <V as sts2_core::ContentVersion>::Card) -> bool {
@@ -73,17 +75,25 @@ impl crate::build::OwnRules for V {
 
     fn own_card_event_hook(
         card: <V as sts2_core::ContentVersion>::Card,
+        id: sts2_core::CardId<V>,
         owner: sts2_core::CombatId,
+        history: sts2_core::History<'_, V>,
         hook: sts2_core::EventHook<V>,
         asked: &mut sts2_core::HookEffects<V>,
     ) -> Option<()> {
-        cards::own_card_event_hook(card, owner, hook, asked)
+        cards::own_card_event_hook(card, id, owner, history, hook, asked)
+    }
+
+    fn own_card_fields(
+        card: <V as sts2_core::ContentVersion>::Card,
+    ) -> Option<crate::behaviour::cards::Fields> {
+        cards::own_fields(card)
     }
 
     fn own_card_result_pile(
         card: <V as sts2_core::ContentVersion>::Card,
         base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>> {
+    ) -> Option<sts2_core::HookResponse<sts2_core::CardResult>> {
         cards::result_pile(card, base)
     }
 
@@ -194,6 +204,20 @@ impl crate::build::OwnRules for V {
         fight: &mut K::Fight<'a>,
     ) -> crate::behaviour::Played<V, K> {
         super::generated::monster_moves::perform::<K>(monster, move_id, fight)
+    }
+
+    fn own_orb_passive<F: sts2_core::Fight<V>>(
+        orb: &mut sts2_core::Channelled<V>,
+        fight: &mut F,
+    ) -> Option<()> {
+        orbs::own_passive(orb, fight)
+    }
+
+    fn own_orb_evoke<F: sts2_core::Fight<V>>(
+        orb: &sts2_core::Channelled<V>,
+        fight: &mut F,
+    ) -> Option<sts2_core::Opponents> {
+        orbs::own_evoke(orb, fight)
     }
 
     fn own_power_death<F: sts2_core::Fight<V>>(

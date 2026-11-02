@@ -167,8 +167,9 @@ enum Resolved<V: Rules> {
         play: Option<sts2_core::PlayAt>,
         /// `cardSource`: which copy gives it.
         source: Option<CardId<V>>,
-        /// The belts whose block hooks changed it.
-        modifying: SmallVec<[V::Relic; 1]>,
+        /// The relics whose block hooks changed it, each beside the seat
+        /// whose belt holds it.
+        modifying: Modifying<V>,
         /// Whether the decimal was above nothing before the floor.
         positive: bool,
     },
@@ -656,8 +657,8 @@ impl<'a, V: Rules> Board<'a, V> {
     ///
     /// # Panics
     ///
-    /// A power that stacks there, an endless one, or one whose class answers
-    /// `AfterApplied`, which nothing has needed.
+    /// A power that stacks onto one there, an endless one, or one whose class
+    /// answers `AfterApplied`, which nothing has needed.
     fn land_on_created(
         &mut self,
         id: CombatId,
@@ -676,10 +677,14 @@ impl<'a, V: Rules> Board<'a, V> {
                 .expect("the creature was made")
         };
         let at = created(self.live);
-        if self.live.created[at]
-            .powers
-            .iter()
-            .any(|held| held.power() == power)
+        // An instanced power builds another instance beside any there, as
+        // the Fat Gremlin takes a Heist for each Thievery.
+        let fresh = power.instanced() && !power.per_applier();
+        if !fresh
+            && self.live.created[at]
+                .powers
+                .iter()
+                .any(|held| held.power() == power)
         {
             unimplemented!("{power:?} stacking on a creature not yet in the fight");
         }
@@ -871,15 +876,23 @@ impl<'a, V: Rules> Board<'a, V> {
             .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
             .map(|creature| creature.id)
             .collect();
-        for (power, amount) in V::monster_starting_aimed_powers(monster) {
-            for &opponent in &opponents {
-                self.land_aimed(id, power, amount, Some(id), opponent);
-            }
-        }
+        // `CombatState.Players`.
+        let players: SmallVec<[CombatId; 4]> = sts2_core::Fight::players(self);
         let entering: SmallVec<[_; 2]> =
             V::monster_starting_powers(monster, self.live.ascension, side, &model).collect();
         for (power, amount) in entering {
-            self.land(id, power, amount, Some(id));
+            match V::monster_starting_power_aim(monster, power) {
+                None => self.land(id, power, amount, Some(id)),
+                Some(aim) => {
+                    let aimed = match aim {
+                        sts2_core::Aim::EachOpponent => &opponents,
+                        sts2_core::Aim::EachPlayer => &players,
+                    };
+                    for &target in aimed {
+                        self.land_aimed(id, power, amount, Some(id), target);
+                    }
+                }
+            }
         }
         let given: SmallVec<[_; 2]> =
             V::monster_starting_opponent_powers(monster, self.live.ascension).collect();
@@ -934,12 +947,18 @@ impl<'a, V: Rules> Board<'a, V> {
         );
         if asked.contains(&HookEffect::DowngradeUpgraded) {
             asked.retain(|effect| *effect != HookEffect::DowngradeUpgraded);
-            let downgraded = self.downgrade_upgraded();
+            let downgraded = self.downgrade_upgraded(id);
             self.live.kept_mut(id, power).cards.extend(downgraded);
         }
-        let (owned, cards): (SmallVec<[_; 2]>, SmallVec<[_; 2]>) = asked
-            .into_iter()
-            .partition(|effect| matches!(effect, HookEffect::ApplyToOwner(..)));
+        let (owned, cards): (SmallVec<[_; 2]>, SmallVec<[_; 2]>) =
+            asked.into_iter().partition(|effect| {
+                matches!(
+                    effect,
+                    HookEffect::ApplyToOwner(..)
+                        | HookEffect::ApplyPower { .. }
+                        | HookEffect::Cover { .. }
+                )
+            });
         // The cards it writes on are its holder's, whoever applied it.
         let listener = Listener::Power {
             owner: id,
@@ -947,10 +966,33 @@ impl<'a, V: Rules> Board<'a, V> {
             power,
         };
         self.as_listener(listener, |board| board.write_cards(cards));
-        // `PowerCmd.Apply` on the power's owner, from nobody.
+        // `PowerCmd.Apply` on the power's owner from nobody, or on another
+        // creature from whom the power names.
         for effect in owned {
-            if let HookEffect::ApplyToOwner(power, amount) = effect {
-                self.land(id, power, amount, None);
+            match effect {
+                HookEffect::ApplyToOwner(power, amount) => self.land(id, power, amount, None),
+                HookEffect::ApplyPower {
+                    target,
+                    power,
+                    amount,
+                    applier,
+                } => self.land(target, power, amount, applier),
+                HookEffect::Cover {
+                    interceptor,
+                    covered,
+                    power,
+                } => {
+                    let carries =
+                        (self.live.powers.of(interceptor)).any(|held| held.power() == power);
+                    if !carries {
+                        let one = sts2_core::PowerAmount::Counted(num_traits::one());
+                        self.land(interceptor, power, one, Some(covered));
+                    }
+                    sts2_core::Fight::write_power(self, interceptor, power, |state| {
+                        sts2_core::PowerModel::add_covered(state, covered)
+                    });
+                }
+                _ => unreachable!("only applications were set apart"),
             }
         }
     }
@@ -966,6 +1008,7 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     /// [`Board::modify_amount`] for the creature whose command it is.
+    #[inline(always)]
     fn modify_amount_from(
         &mut self,
         id: CombatId,
@@ -976,14 +1019,57 @@ impl<'a, V: Rules> Board<'a, V> {
         // `FindExistingInstanceForStacking`: a power kept apart by its applier
         // stacks onto that applier's instance alone.
         let per_applier = sts2_core::PowerTable::per_applier(power);
-        let stacks = |held: &super::live::HeldPower<V>| {
-            held.power() == power && (!per_applier || held.applier == applier)
-        };
-        if !self.live.powers.of(id).any(stacks) {
-            return;
+        let nth = self
+            .live
+            .powers
+            .of(id)
+            .filter(|held| held.power() == power)
+            .position(|held| !per_applier || held.applier == applier);
+        if let Some(nth) = nth {
+            self.modify_nth_from(id, power, nth, offset, applier);
         }
+    }
+
+    /// `PowerCmd.ModifyAmount` on the power instance `instance` that `id`
+    /// carries, from nobody. Nothing once it is off.
+    pub(super) fn modify_instance(
+        &mut self,
+        id: CombatId,
+        instance: super::live::PowerInstance,
+        offset: V::Number,
+    ) {
+        let Some(power) = (self.live.powers.of(id))
+            .find(|held| held.instance == instance)
+            .map(|held| held.power())
+        else {
+            return;
+        };
+        let nth = (self.live.powers.of(id))
+            .filter(|held| held.power() == power)
+            .position(|held| held.instance == instance);
+        if let Some(nth) = nth {
+            self.modify_nth_from(id, power, nth, offset, None);
+        }
+    }
+
+    /// `PowerCmd.ModifyAmount` on the `nth` instance of `power` that `id`
+    /// carries, in the order they were applied.
+    fn modify_nth_from(
+        &mut self,
+        id: CombatId,
+        power: V::Power,
+        nth: usize,
+        offset: V::Number,
+        applier: Option<CombatId>,
+    ) {
         let (offset, modifiers) = self.received(id, power, offset, applier);
-        let Some(held) = self.live.powers.of_mut(id).find(|held| stacks(held)) else {
+        let Some(held) = self
+            .live
+            .powers
+            .of_mut(id)
+            .filter(|held| held.power() == power)
+            .nth(nth)
+        else {
             return;
         };
         let had = held
@@ -1000,7 +1086,17 @@ impl<'a, V: Rules> Board<'a, V> {
         // `ShouldRemoveDueToAmount`, and `PowerCmd.Remove` for a power it
         // says is done.
         if spent {
-            self.remove_power_carried(id, power);
+            let at = self
+                .live
+                .powers
+                .of(id)
+                .enumerate()
+                .filter(|(_, held)| held.power() == power)
+                .nth(nth)
+                .map(|(at, _)| at);
+            if let Some(at) = at {
+                self.remove_carried_at(id, at);
+            }
         }
     }
 
@@ -1082,13 +1178,14 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
-    /// `CardCmd.Downgrade` on every upgraded copy the player holds, in
-    /// `AllCards` order, and the level each had.
+    /// `CardCmd.Downgrade` on every upgraded copy that `holder`'s player
+    /// holds, in `AllCards` order, and the level each had.
     ///
     /// `Downgrade` does nothing while the fight is ending, but the level is
     /// still what the copy had.
-    fn downgrade_upgraded(&mut self) -> Vec<(CardId<V>, u8)> {
-        let seat = self.seat();
+    fn downgrade_upgraded(&mut self, holder: CombatId) -> Vec<(CardId<V>, u8)> {
+        let seat = (self.live.seat_of(holder))
+            .unwrap_or_else(|| unreachable!("a power that downgrades cards is on a player"));
         let upgraded: Vec<(CardId<V>, u8)> = [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust]
             .into_iter()
             .flat_map(|pile| self.live.players[seat].cards.iter(pile))
@@ -1108,9 +1205,24 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// `PowerCmd.Remove`, with what its `AfterRemoved` asks carried out.
     pub(super) fn remove_power_carried(&mut self, id: CombatId, power: V::Power) {
+        let at = self
+            .live
+            .powers
+            .of(id)
+            .position(|held| held.power() == power);
+        if let Some(at) = at {
+            self.remove_carried_at(id, at);
+        }
+    }
+
+    /// [`Board::remove_power_carried`] of the instance at `at` among `id`'s
+    /// powers.
+    fn remove_carried_at(&mut self, id: CombatId, at: usize) {
+        let power = self.live.powers.of(id).nth(at).map(|held| held.power());
+        let Some(power) = power else { return };
         // What it does to cards is to its holder's player's.
         let seat = self.live.seat_of(id).unwrap_or_else(|| self.actor_seat());
-        for effect in self.live.remove_power_asking(seat, id, power) {
+        for effect in self.live.remove_power_at_asking(seat, id, at) {
             match effect {
                 HookEffect::KillCreature(creature) => self.kill_outright(creature, true),
                 // `CardCmd.Upgrade` on a copy that has left the fight writes on
@@ -1191,6 +1303,7 @@ impl<'a, V: Rules> Board<'a, V> {
                     let block = resolve::<V>(
                         self.actor_seat(),
                         self.walk(),
+                        None,
                         None,
                         Effect::GainBlock {
                             recipient: owner,
@@ -1569,7 +1682,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             side: self.live.side,
                             fully_blocked: aimed && fully_blocked,
                             unblockable,
-                            turn: self.live.turn,
+                            turn: self.live.turn_of(receiver),
                             in_progress: self.live.in_progress,
                         },
                     );
@@ -1589,7 +1702,6 @@ impl<'a, V: Rules> Board<'a, V> {
         amount: V::Number,
         unblockable: bool,
     ) {
-        let seat = self.seat();
         // `CreatureCmd.Damage` lands nothing from a dealer with no hit points
         // left, though its death is still to come.
         if dealer
@@ -1598,7 +1710,7 @@ impl<'a, V: Rules> Board<'a, V> {
         {
             return;
         }
-        let damage = modified::<V>(seat, self.walk(), dealer, Some(target), None, amount, false);
+        let damage = modified::<V>(self.walk(), dealer, Some(target), None, amount, false);
         self.hit(dealer, target, damage, false, unblockable, None, false);
     }
 
@@ -1746,7 +1858,7 @@ impl<'a, V: Rules> Board<'a, V> {
         let seat = self.seat();
         use sts2_core::rng::GameRng as _;
 
-        if self.stopped() {
+        if self.stopped() || self.generated_for_the_dead(card, creator) {
             return None;
         }
         let places: i32 = num_traits::cast(self.live.players[seat].cards.len(pile) + 1)
@@ -1762,7 +1874,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
         let at = CardAt::new(id, pile, index);
         self.card_entered_combat(at, card, false);
-        self.card_generated(at, card, creator);
+        self.card_generated(Some(at), card, creator);
         Some(at)
     }
 
@@ -1800,10 +1912,23 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
+    /// Whether the player the fight acts for is dead, for a card generated
+    /// for them. `AddGeneratedCardsToCombat` still counts it in the history
+    /// and raises `AfterCardGeneratedForCombat` for it. `CardPileCmd.Add`
+    /// puts it nowhere, so no place is drawn and it enters no pile.
+    fn generated_for_the_dead(&mut self, card: V::Card, creator: Option<CombatId>) -> bool {
+        if self.live.player(self.seat()).alive {
+            return false;
+        }
+        self.card_generated(None, card, creator);
+        true
+    }
+
     /// `Hook.AfterCardGeneratedForCombat`, once a card made in the fight has
     /// landed at `at`, and what it asked for. `CardPileCmd.Add` has raised
-    /// `AfterCardEnteredCombat` for it first.
-    fn card_generated(&mut self, at: CardAt<V>, card: V::Card, creator: Option<CombatId>) {
+    /// `AfterCardEnteredCombat` for it first. A card made for a dead player
+    /// lands nowhere.
+    fn card_generated(&mut self, at: Option<CardAt<V>>, card: V::Card, creator: Option<CombatId>) {
         let seat = self.seat();
         self.live.history.generated(creator);
         // `IterateCombatHookListeners` hands a fight that is ending no
@@ -1814,7 +1939,12 @@ impl<'a, V: Rules> Board<'a, V> {
         let mut walking = super::listen::Walking::begin(
             self.live,
             self.belts,
-            sts2_core::EventHook::CardGeneratedForCombat { at, card, creator },
+            sts2_core::EventHook::CardGeneratedForCombat {
+                at,
+                card,
+                player: seat.creature(),
+                creator,
+            },
         );
         let mut rest: SmallVec<[(Listener<V>, HookEffect<V>); 4]> = SmallVec::new();
         while let Some((listener, effect)) =
@@ -1836,17 +1966,46 @@ impl<'a, V: Rules> Board<'a, V> {
         // lends it no enchantment.
         let playing = self.playing.take();
         for (listener, effect) in rest {
-            self.listener_asked(listener, effect);
+            match (listener, effect) {
+                // New copies into the power owner's draw pile, made by the
+                // owner. The power is busy while they land, which a power
+                // guarding against hearing itself reads.
+                (
+                    Listener::Power {
+                        owner, instance, ..
+                    },
+                    HookEffect::AddToDrawAtRandom {
+                        card,
+                        count,
+                        by_owner,
+                    },
+                ) => {
+                    let count: usize = num_traits::cast(count)
+                        .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
+                    self.mark_busy(owner, instance, true);
+                    self.as_listener(listener, |board| {
+                        for _ in 0..count {
+                            board.add_to_draw_at_random(card, by_owner.then_some(owner));
+                        }
+                    });
+                    self.mark_busy(owner, instance, false);
+                }
+                (listener, effect) => self.listener_asked(listener, effect),
+            }
         }
         self.playing = playing;
     }
 
-    /// Who a card the acting creature makes is made by: the player, where
-    /// the player acts. A monster's cards are made by nobody.
+    /// Who a card the acting creature makes is made by: the acting player.
+    /// That holds where they make it for a teammate too, as Glimpse Beyond
+    /// names its owner for every player's Souls. A monster's cards are made
+    /// by nobody.
     fn creator(&self) -> Option<CombatId> {
-        let seat = self.seat();
-        let player = self.live.player(seat).id;
-        (self.actor == player).then_some(player)
+        let players = self.live.players.len();
+        self.live.creatures[..players]
+            .iter()
+            .any(|player| player.id == self.actor)
+            .then_some(self.actor)
     }
 
     /// `CardPileCmd.AddGeneratedCardsToCombat` of `count` new copies into
@@ -1864,9 +2023,12 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let mut added = Vec::with_capacity(count);
         for _ in 0..count {
+            if self.generated_for_the_dead(card.card, creator) {
+                continue;
+            }
             let at = self.put(card, pile);
             added.push(at);
-            self.card_generated(at, card.card, creator);
+            self.card_generated(Some(at), card.card, creator);
         }
         added
     }
@@ -1889,9 +2051,12 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let mut added = Vec::with_capacity(count);
         for _ in 0..count {
+            if self.generated_for_the_dead(card.card, creator) {
+                continue;
+            }
             let at = self.put_written(card, pile, writes);
             added.push(at);
-            self.card_generated(at, card.card, creator);
+            self.card_generated(Some(at), card.card, creator);
         }
         added
     }
@@ -1979,7 +2144,13 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// Write on each card `to` names.
     fn write_on(&mut self, to: sts2_core::Writing<V>, write: impl Fn(&mut Face<V>)) {
-        let seat = self.seat();
+        // One card is in its owner's piles, whichever player the walk is for.
+        let seat = match to {
+            sts2_core::Writing::One(at) => {
+                self.live.card_seat(at.id()).unwrap_or_else(|| self.seat())
+            }
+            _ => self.seat(),
+        };
         match to {
             sts2_core::Writing::One(at) => {
                 let index = self.standing(at);
@@ -2152,16 +2323,31 @@ impl<'a, V: Rules> Board<'a, V> {
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
+            // `AddExtraReward(Target.Player, ..)`: a power hands back to the
+            // player it is aimed at.
+            let to = match listener {
+                Listener::Power {
+                    owner, instance, ..
+                } => self
+                    .live
+                    .powers
+                    .of(owner)
+                    .find(|held| held.instance == instance)
+                    .and_then(|held| held.target)
+                    .and_then(|target| self.live.seat_of(target))
+                    .unwrap_or(seat),
+                _ => seat,
+            };
             match effect {
                 HookEffect::ReturnCard(card) => self
                     .live
                     .extra_rewards
-                    .push(super::live::ExtraReward::Returned(card)),
+                    .push((to, super::live::ExtraReward::Returned(card))),
                 // `CombatRoom.AddExtraReward` of a `GoldReward`.
                 HookEffect::AddGoldReward(amount) => self
                     .live
                     .extra_rewards
-                    .push(super::live::ExtraReward::Gold(amount)),
+                    .push((to, super::live::ExtraReward::Gold(amount))),
                 effect => unimplemented!("{listener:?} asking for {effect:?} before a death"),
             }
         }
@@ -2218,7 +2404,17 @@ impl<'a, V: Rules> Board<'a, V> {
             self.live.players[seat].potions.deafen();
             self.live.players[seat].cards.deafen();
             if standing {
-                self.died_beside_others(seat);
+                // `HandlePlayerDeath` reads `IsDead`, hit points at nothing.
+                // A player the same command brought there counts as dead
+                // already, though their own death is still to come.
+                let beside_living = self.live.creatures.iter().any(|creature| {
+                    creature.side == <V::CombatSide as SideKinds>::PLAYER
+                        && creature.owner.is_none()
+                        && creature.hp > num_traits::zero()
+                });
+                if beside_living {
+                    self.died_beside_others(seat);
+                }
                 return;
             }
             self.ended = Some(super::Ended::Lost);
@@ -2382,29 +2578,30 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     /// `HandlePlayerDeath` for a player who died while another stands, and
-    /// the end of turn `CreatureCmd.Kill` asks for them. Their cards leave
-    /// the fight, and their energy and stars go to nothing. On their side's
-    /// turn they are ready to end it.
-    ///
-    /// # Panics
-    ///
-    /// A death inside the player's own card or potion, whose cards the game
-    /// takes once the effect is over. A death that leaves every standing
-    /// player ready, which ends the turn.
+    /// `CreatureCmd.Kill`'s end of turn for them. Their cards leave, and
+    /// their energy and stars go while the fight is not ending. On their
+    /// side's turn they are ready, and the last ready asks for the turn to
+    /// end. A death inside their own card or potion leaves the cards until
+    /// the outermost effect is over, as `EndCardOrPotionEffect` does.
     fn died_beside_others(&mut self, seat: sts2_core::SeatIndex) {
+        // `PlayerCmd.SetEnergy` and `SetStars` do nothing once the fight is
+        // ending, as it is where the last enemy fell first.
+        let ending = self.ending();
         let player = &mut self.live.players[seat];
-        if player.effect_depth > 0 {
-            unimplemented!("a player dying inside their own card or potion beside a living one");
-        }
         // `RemoveDeadPlayerCardsFromCombat`, which raises no hook.
-        player.cards.clear();
-        player.energy = num_traits::zero();
-        player.stars = num_traits::zero();
-        if self.live.side == <V::CombatSide as SideKinds>::PLAYER {
+        if player.effect_depth == 0 {
+            player.cards.clear();
+        }
+        if !ending {
+            player.energy = num_traits::zero();
+            player.stars = num_traits::zero();
+        }
+        // A player who was ready already died as the turn ended, which goes on.
+        if self.live.side == <V::CombatSide as SideKinds>::PLAYER && !player.ready {
             player.ready = true;
             let live = &*self.live;
             if super::turn::seats(live).all(|other| live.players[other].ready) {
-                unimplemented!("a player's death leaving every player ready to end the turn");
+                self.live.players[seat].ending_turn = true;
             }
         }
     }
@@ -2676,7 +2873,7 @@ impl<'a, V: Rules> Board<'a, V> {
             if let Some(fresh) = fresh {
                 match self.live.asking.is_some() {
                     true => {
-                        let mut task = self.live.set_aside(seat, fresh);
+                        let mut task = self.live.set_aside(fresh);
                         // `CardSelectCmd` lists the pile as it asks. The play
                         // can change the pile before the question comes up,
                         // and the list stays as it was. A build that signals
@@ -2704,7 +2901,11 @@ impl<'a, V: Rules> Board<'a, V> {
                                     CardAt::new(held.id, pile, at)
                                 })
                                 .collect();
-                            task.asking.question = super::live::Asked::Among { cards, selection };
+                            task.asking.question = super::live::Asked::Among {
+                                cards,
+                                selection,
+                                hand: None,
+                            };
                         }
                         self.live.queues.enqueue_hook(seat, task);
                         paused = Some(listener);
@@ -2915,7 +3116,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 Listener::Relic { seat, slot } => self.relic_asked(seat, slot, effect),
                 listener => unimplemented!("{listener:?} asking for {effect:?} after Doom kills"),
             }
-            listening.leave(seat, self.live, boundary);
+            listening.leave(self.live, boundary);
         }
         let seat = self.seat();
         listening.queue(seat, self.live);
@@ -3231,6 +3432,7 @@ impl<'a, V: Rules> Board<'a, V> {
                         self.actor_seat(),
                         self.walk(),
                         None,
+                        None,
                         Effect::Attack {
                             dealer: owner,
                             target,
@@ -3513,32 +3715,30 @@ fn after_osty<V: Rules>(
 /// The target is absent for a hit previewed against nobody, and the hook
 /// runs anyway. `powered` is `IsPoweredAttack`, which each listener reads.
 pub(crate) fn modified<V: Rules>(
-    seat: sts2_core::SeatIndex,
     fight: Walk<'_, V>,
     dealer: Option<CombatId>,
     target: Option<CombatId>,
-    card: Option<&CardInstance<V>>,
+    card: Option<(sts2_core::SeatIndex, &CardInstance<V>)>,
     damage: V::Number,
     powered: bool,
 ) -> V::Number {
-    let (added, scale) = enchanted_hit::<V>(card, powered);
-    let phases = hit_phases::<V>(seat, fight, dealer, target, card, powered);
+    let (added, scale) = enchanted_hit::<V>(card.map(|(_, held)| held), powered);
+    let phases = hit_phases::<V>(fight, dealer, target, card, powered);
     scaled_by::<V>(fight, damage + added, scale, &phases).max(V::Number::zero())
 }
 
 /// [`modified`] before the floor, which is the decimal `Hook.ModifyDamage`
 /// hands back.
 fn modified_exactly<V: Rules>(
-    seat: sts2_core::SeatIndex,
     fight: Walk<'_, V>,
     dealer: Option<CombatId>,
     target: Option<CombatId>,
-    card: Option<&CardInstance<V>>,
+    card: Option<(sts2_core::SeatIndex, &CardInstance<V>)>,
     damage: Decimal,
     powered: bool,
 ) -> Decimal {
-    let (added, scale) = enchanted_hit::<V>(card, powered);
-    let phases = hit_phases::<V>(seat, fight, dealer, target, card, powered);
+    let (added, scale) = enchanted_hit::<V>(card.map(|(_, held)| held), powered);
+    let phases = hit_phases::<V>(fight, dealer, target, card, powered);
     scaled_exactly::<V>(fight, damage + exact::<V>(added), scale, &phases)
 }
 
@@ -3590,18 +3790,19 @@ pub(crate) fn enchant_scaled<V: Rules>(
 }
 
 /// `Hook.ModifyDamage`'s three phases for one hit.
+///
+/// A dealing card comes with the seat of the player whose piles hold it.
 fn hit_phases<V: Rules>(
-    seat: sts2_core::SeatIndex,
     fight: Walk<'_, V>,
     dealer: Option<CombatId>,
     target: Option<CombatId>,
-    card: Option<&CardInstance<V>>,
+    card: Option<(sts2_core::SeatIndex, &CardInstance<V>)>,
     powered: bool,
 ) -> [ModifyHook<V>; 3] {
     // `cardSource` is the model as it stands now. An attack's own numbers
     // are the ones it was built with, but a listener reads the card live, as
     // after Dampen comes off in the middle of the hits.
-    let card = card.map(|held| {
+    let card = card.map(|(seat, held)| {
         let (playing, ident) = (fight.live.players[seat].cards.standing_ident(held.id))
             .unwrap_or((false, &held.face.ident));
         sts2_core::CardSource {
@@ -3611,6 +3812,7 @@ fn hit_phases<V: Rules>(
             playing,
             upgraded: ident.upgrade > 0,
             enchanted: ident.enchantment.is_some(),
+            cost: (!playing).then(|| super::legal::costs::<V>(seat, held, None, fight).0),
         }
     });
     [
@@ -3667,7 +3869,7 @@ pub(crate) fn max_energy<V: Rules>(
         base,
         &[ModifyHook::MaxEnergy {
             player,
-            turn: fight.live.turn,
+            turn: fight.live.players[seat].turn,
         }],
     );
     num_traits::cast(energy).expect("a max energy fits the build's count type")
@@ -3684,6 +3886,15 @@ pub(crate) fn orb_value<V: Rules>(
     let player = seat.creature();
     modified_by::<V>(fight, base, &[ModifyHook::OrbValue { player, orb }])
 }
+
+/// The relics whose answer moved a number, each beside the seat whose belt
+/// holds it.
+pub(super) type Modifying<V> = SmallVec<
+    [(
+        sts2_core::SeatIndex,
+        <V as sts2_core::ContentVersion>::Relic,
+    ); 1],
+>;
 
 /// One block gain after every listener in the fight has had its say, which
 /// is `Hook.ModifyBlock`.
@@ -3704,7 +3915,7 @@ pub(super) fn blocked<V: Rules>(
     card: Option<V::Card>,
     play: Option<sts2_core::PlayAt>,
     source: Option<CardId<V>>,
-) -> (V::Number, bool, SmallVec<[V::Relic; 1]>) {
+) -> (V::Number, bool, Modifying<V>) {
     let player = source
         .and_then(|id| fight.live.card_seat(id))
         .map(sts2_core::SeatIndex::creature);
@@ -3759,9 +3970,9 @@ pub(super) fn blocked<V: Rules>(
                     answer => unimplemented!("a relic answering {answer:?} for block"),
                 };
                 let (seat, slot) = super::relic::place_of::<V>(fight.belts, state);
-                let held = &fight.belts[seat][slot];
-                if moved && !modifying.contains(&held.relic) {
-                    modifying.push(held.relic);
+                let held = (seat, fight.belts[seat][slot].relic);
+                if moved && !modifying.contains(&held) {
+                    modifying.push(held);
                 }
             });
         }
@@ -3947,6 +4158,7 @@ pub(crate) fn resolve<V: Rules>(
     seat: sts2_core::SeatIndex,
     fight: Walk<'_, V>,
     playing: Option<&CardInstance<V>>,
+    target: Option<CombatId>,
     effect: Effect<V>,
 ) -> ResolvedEffect<V> {
     let effect = match effect {
@@ -3969,11 +4181,10 @@ pub(crate) fn resolve<V: Rules>(
                     (damage, _) => {
                         let damage = carried::<V>(seat, playing, fight, damage, Some(target));
                         modified::<V>(
-                            seat,
                             fight,
                             Some(dealer),
                             Some(target),
-                            playing,
+                            playing.map(|held| (seat, held)),
                             damage,
                             powered,
                         )
@@ -3988,7 +4199,7 @@ pub(crate) fn resolve<V: Rules>(
         } => {
             // A block effect names who gains it, and no creature the card
             // points at.
-            let amount = carried::<V>(seat, playing, fight, amount, None);
+            let amount = carried::<V>(seat, playing, fight, amount, target);
             // `Hook.ModifyBlock` asks the played card's enchantment whatever
             // the block's props, since `GainBlock` always runs it.
             let amount = match playing.and_then(|held| {
@@ -4050,15 +4261,14 @@ pub(crate) fn card_hit<V: Rules>(
 ) -> V::Number {
     if !held.face.fractional() {
         let damage = var::<V>(seat, held, key, fight, target);
-        return modified::<V>(seat, fight, dealer, target, Some(held), damage, powered);
+        return modified::<V>(fight, dealer, target, Some((seat, held)), damage, powered);
     }
     let damage = exact_var::<V>(seat, held, key, fight, target);
     whole::<V>(modified_exactly::<V>(
-        seat,
         fight,
         dealer,
         target,
-        Some(held),
+        Some((seat, held)),
         damage,
         powered,
     ))
@@ -4148,6 +4358,11 @@ pub(crate) fn var<V: Rules>(
                 .iter(Pile::Hand)
                 .map(|held| held.face.ident.card)
                 .collect();
+            let side = live.player(seat).side;
+            let allies: SmallVec<[CombatId; 8]> = (live.creatures.iter())
+                .filter(|creature| creature.side == side)
+                .map(|creature| creature.id)
+                .collect();
             let owner = sts2_core::CardOwner {
                 powers: &powers::<V>(live, seat),
                 osty,
@@ -4206,6 +4421,12 @@ pub(crate) fn var<V: Rules>(
                         .count_all(|face| osty_attack(face.ident.card))
                         - usize::from(osty_attack(held.face.ident.card))
                 },
+                target_block: target.and_then(|target| {
+                    (live.creatures.iter())
+                        .find(|creature| creature.id == target)
+                        .map(|creature| creature.block)
+                }),
+                allies: &allies,
             };
             V::calculated_card_var(held.face.ident.card, key, held, owner)
         }
@@ -4345,7 +4566,7 @@ impl<V: Rules> Board<'_, V> {
         if let Some(at) = created {
             self.card_entered_combat(at, card, false);
             let player = self.live.player(seat).id;
-            self.card_generated(at, card, Some(player));
+            self.card_generated(Some(at), card, Some(player));
         }
         // `Hook.AfterForge`.
         if !super::listen::heard::<V>(self.live, self.belts, sts2_core::ModelHook::AfterForge) {
@@ -4387,6 +4608,17 @@ impl<V: Rules> Board<'_, V> {
         }
     }
 
+    /// [`sts2_core::PowerModel::mark_busy`] on the power instance `instance`
+    /// that `owner` carries, where it still does.
+    fn mark_busy(&mut self, owner: CombatId, instance: super::live::PowerInstance, busy: bool) {
+        use sts2_core::PowerModel as _;
+
+        if let Some(held) = (self.live.powers.of_mut(owner)).find(|held| held.instance == instance)
+        {
+            held.state.mark_busy(busy);
+        }
+    }
+
     /// `Hook.AfterBlockGained`, once `CreatureCmd.GainBlock` gave `creature`
     /// `amount`. The game raises it for a gain the modifiers left at none.
     pub(super) fn block_gained(&mut self, creature: CombatId, amount: V::Number, positive: bool) {
@@ -4398,6 +4630,7 @@ impl<V: Rules> Board<'_, V> {
             creature,
             amount,
             positive,
+            side: self.live.side,
         };
         let mut walking = super::listen::Walking::begin(self.live, self.belts, hook);
         while let Some((listener, effect)) =
@@ -4406,6 +4639,18 @@ impl<V: Rules> Board<'_, V> {
             match (listener, effect) {
                 (Listener::Power { .. }, effect @ HookEffect::DamageRandomOpponent { .. }) => {
                     self.listener_asked(listener, effect)
+                }
+                // The power is busy while the block it gives lands, which a
+                // power guarding against hearing itself reads.
+                (
+                    Listener::Power {
+                        owner, instance, ..
+                    },
+                    effect @ HookEffect::GainBlockOf { .. },
+                ) => {
+                    self.mark_busy(owner, instance, true);
+                    super::hook::apply::<V, _>(self, [effect]);
+                    self.mark_busy(owner, instance, false);
                 }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} once block is gained")
@@ -4492,7 +4737,7 @@ impl<V: Rules> Board<'_, V> {
         self.live.players[seat].cards.push(pile, face.named(id));
         let at = CardAt::new(id, pile, index);
         self.card_entered_combat(at, face.ident.card, true);
-        self.card_generated(at, face.ident.card, creator);
+        self.card_generated(Some(at), face.ident.card, creator);
         Some(at)
     }
 
@@ -4548,6 +4793,7 @@ impl<V: Rules> Board<'_, V> {
                             let hit = resolve::<V>(
                                 seat,
                                 board.walk(),
+                                None,
                                 None,
                                 Effect::Attack {
                                     dealer: owner,
@@ -4692,7 +4938,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 effect: Resolved::Held(effect),
             };
         }
-        resolve::<V>(seat, self.walk(), self.acting().as_ref(), effect)
+        resolve::<V>(
+            seat,
+            self.walk(),
+            self.acting().as_ref(),
+            self.target,
+            effect,
+        )
     }
 
     fn orb_value(&self, orb: V::Orb, base: V::Number) -> V::Number {
@@ -4781,18 +5033,20 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 positive,
             } => {
                 // `CreatureCmd.GainBlock` gives nothing once the fight is over
-                // or ending, as after a hit that killed the player.
-                if self.over() {
+                // or ending, as after a hit that killed the player, nor to a
+                // dead creature.
+                if self.over()
+                    || self
+                        .at(recipient)
+                        .is_none_or(|at| !self.live.creatures[at].alive)
+                {
                     return;
                 }
                 // `Hook.AfterModifyingBlockAmount`, asked of each relic that
-                // changed the gain, before it lands. They are the belt of the
-                // player who gains it.
-                let seat = match modifying.is_empty() {
-                    true => sts2_core::SeatIndex(0),
-                    false => self.live.seat_of(recipient).unwrap_or_else(|| self.seat()),
-                };
-                for relic in modifying {
+                // changed the gain, before it lands, on its own player's belt.
+                // A relic on the giver's belt, as Vambrace is, changes the
+                // block its owner's card gives a teammate.
+                for (seat, relic) in modifying {
                     let hook = sts2_core::EventHook::BlockAmountModified { amount, source };
                     if let Some(effect) =
                         super::listen::ask_relic(&*self.live, seat, self.belts, relic, hook).first()
@@ -4983,7 +5237,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn add_card_reward(&mut self) {
-        self.live.extra_rewards.push(super::live::ExtraReward::Card);
+        let seat = self.seat();
+        self.live
+            .extra_rewards
+            .push((seat, super::live::ExtraReward::Card));
     }
 
     fn death_triggers_fatal(&self, creature: CombatId) -> bool {
@@ -5444,7 +5701,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // by the card's owner.
         let player = self.live.player(seat).id;
         self.card_generated(
-            CardAt::new(id, card.pile(), card.index()),
+            Some(CardAt::new(id, card.pile(), card.index())),
             into.card,
             Some(player),
         );
@@ -5494,7 +5751,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let player = self.live.player(seat).id;
         for (pile, at, into, id) in left {
             let index = num_traits::NumCast::from(at).expect("a pile's index fits a hand index");
-            self.card_generated(CardAt::new(id, pile, index), into.card, Some(player));
+            self.card_generated(Some(CardAt::new(id, pile, index)), into.card, Some(player));
         }
     }
 
@@ -5808,6 +6065,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
         let pausable = self.pausable();
         let ascension = self.ascension;
+        // Another player's potion aimed at `seat` plays the cards in its
+        // drinker's context.
+        let context = (self.reaching)
+            .and(self.live.seat_of(self.actor))
+            .filter(|&drinker| drinker != seat);
         let ended = auto_play_from_draw::<V>(
             seat,
             self.live,
@@ -5818,6 +6080,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 left: count,
                 taken: SmallVec::new(),
                 force_exhaust,
+                context,
             },
             pausable,
             false,
@@ -5866,7 +6129,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let seat = self.seat();
         self.ran_on();
         let dealer = Some(self.actor);
-        let damage = modified::<V>(seat, self.walk(), dealer, Some(target), None, amount, false);
+        let damage = modified::<V>(self.walk(), dealer, Some(target), None, amount, false);
         let card = self
             .playing
             .and_then(|id| self.live.players[seat].cards.named(id))
@@ -5923,11 +6186,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .expect("a card stands where it was found");
         let player = self.live.player(seat).id;
         modified_exactly::<V>(
-            seat,
             self.walk(),
             Some(player),
             None,
-            Some(&held),
+            Some((seat, &held)),
             damage,
             true,
         )
@@ -6215,6 +6477,70 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
+    fn write_power_at(
+        &mut self,
+        at: CombatId,
+        power: V::Power,
+        nth: usize,
+        write: impl FnOnce(&mut V::PowerState),
+    ) {
+        let held = self
+            .live
+            .powers
+            .of_mut(at)
+            .filter(|held| held.power() == power)
+            .nth(nth);
+        if let Some(held) = held {
+            write(&mut held.state);
+        }
+    }
+
+    fn modify_power_at(
+        &mut self,
+        at: CombatId,
+        power: V::Power,
+        nth: usize,
+        amount: V::Number,
+        applier: Option<CombatId>,
+    ) {
+        self.modify_nth_from(at, power, nth, amount, applier);
+    }
+
+    fn power_instances(&self, at: CombatId, power: V::Power) -> sts2_core::PowerInstances<V> {
+        self.live
+            .powers
+            .of(at)
+            .filter(|held| held.power() == power)
+            .map(|held| (held.target, held.amount.amount()))
+            .collect()
+    }
+
+    fn apply_aimed(
+        &mut self,
+        at: CombatId,
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+        applier: Option<CombatId>,
+        target: CombatId,
+    ) {
+        self.land_aimed(at, power, amount, applier, target);
+    }
+
+    fn players(&self) -> SmallVec<[CombatId; 4]> {
+        self.live
+            .players
+            .seats()
+            .map(sts2_core::SeatIndex::creature)
+            .collect()
+    }
+
+    fn for_player(&mut self, player: CombatId, act: impl FnOnce(&mut Self)) {
+        let seat = self.live.seat_of(player);
+        let was = std::mem::replace(&mut self.reaching, seat);
+        act(self);
+        self.reaching = was;
+    }
+
     fn give_cards(&mut self, card: V::Card, count: usize) {
         self.ran_on();
         // Every opponent takes its own copies, into its own discard pile, one
@@ -6412,6 +6738,17 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.ran_on();
         let creator = self.creator();
         self.generate(card, pile, count, creator)
+    }
+
+    fn add_generated_cards_by(
+        &mut self,
+        card: CardIdent<V>,
+        pile: Pile,
+        count: usize,
+        creator: CombatId,
+    ) -> Vec<CardAt<V>> {
+        self.ran_on();
+        self.generate(card, pile, count, Some(creator))
     }
 
     fn cards_in(&self, pile: Pile) -> Vec<CardAt<V>> {
@@ -7096,17 +7433,33 @@ impl<V: Rules> Board<'_, V> {
                 (Listener::Power { owner, .. }, HookEffect::GainBlock(amount)) => {
                     self.gain_unpowered(owner, amount);
                 }
-                // A fight here has one player, whose piles take them all.
+                // Each player hit takes the cards for their own unblocked
+                // hits, into their own piles, in the order they were first
+                // hit.
                 (Listener::Power { .. }, HookEffect::GiveCardsPerUnblockedHit { card, per }) => {
-                    let player = self.live.player(self.listener_seat(listener)).id;
-                    let hits = results
-                        .iter()
-                        .filter(|hit| hit.receiver == player && hit.unblocked > V::Number::zero())
-                        .count();
-                    let count = num_traits::cast::<_, usize>(per)
-                        .unwrap_or_else(|| unimplemented!("{per:?} cards for each hit"))
-                        * hits;
-                    self.add_generated_cards(CardIdent::new(card), Pile::Discard, count);
+                    let per = num_traits::cast::<_, usize>(per)
+                        .unwrap_or_else(|| unimplemented!("{per:?} cards for each hit"));
+                    let mut hit: SmallVec<[CombatId; 4]> = SmallVec::new();
+                    for result in &results {
+                        let player = (self.live.seat_of(result.receiver))
+                            .is_some_and(|seat| self.live.player(seat).id == result.receiver);
+                        if player && !hit.contains(&result.receiver) {
+                            hit.push(result.receiver);
+                        }
+                    }
+                    for player in hit {
+                        let hits = results
+                            .iter()
+                            .filter(|r| r.receiver == player && r.unblocked > V::Number::zero())
+                            .count();
+                        self.for_player(player, |board| {
+                            board.add_generated_cards(
+                                CardIdent::new(card),
+                                Pile::Discard,
+                                per * hits,
+                            );
+                        });
+                    }
                 }
                 (
                     Listener::Power { owner, .. },
@@ -7473,6 +7826,9 @@ pub(super) struct AutoPlayFromDraw<V: Rules> {
     pub(super) left: usize,
     pub(super) taken: SmallVec<[CardId<V>; 4]>,
     pub(super) force_exhaust: bool,
+    /// The other player whose effect plays the cards, in whose choice
+    /// context they run.
+    pub(super) context: Option<sts2_core::SeatIndex>,
 }
 
 /// The rest of an `AfterShuffle` walk once its pick is made, and how it
@@ -7516,6 +7872,7 @@ pub(super) fn auto_play_from_draw<V: Rules>(
         left,
         mut taken,
         force_exhaust,
+        context,
     } = from;
     // The `AfterShuffle` listeners that waited for the pick this resumes
     // from.
@@ -7554,6 +7911,7 @@ pub(super) fn auto_play_from_draw<V: Rules>(
                         left: left - taking,
                         taken,
                         force_exhaust,
+                        context,
                     }));
                     return None;
                 }
@@ -7569,7 +7927,11 @@ pub(super) fn auto_play_from_draw<V: Rules>(
         // the play pile until it is answered.
         if pausable && live.asking.is_some() {
             for &id in &taken[at..] {
-                live.defer(super::live::Deferred::AutoPlayTaken { id, force_exhaust });
+                live.defer(super::live::Deferred::AutoPlayTaken {
+                    id,
+                    force_exhaust,
+                    context,
+                });
             }
             return None;
         }
@@ -7581,9 +7943,16 @@ pub(super) fn auto_play_from_draw<V: Rules>(
             id,
             force_exhaust,
             pausable,
+            context,
         );
         if ended.is_some() {
             return ended;
+        }
+        // `BranchingPlayerChoiceContext`: a card whose choice is its owner's
+        // ends as the choice begins, which waits on its owner's queue. The
+        // drinker's effect goes on with the next card.
+        if context.is_some() && super::play::branched(live) {
+            live.stop_for_answer(seat);
         }
     }
     None
@@ -8047,6 +8416,7 @@ mod tests {
                 belts: &Belts::new(crate::run::Belt::new(), Vec::new()),
             },
             Some(&card),
+            None,
             Effect::Attack {
                 dealer: player,
                 target: player,
