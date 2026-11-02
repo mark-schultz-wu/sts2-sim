@@ -1,0 +1,11 @@
+# Seat 0's Lightning kills the Nibbit as the turn ends. The game checks
+# the win only once every player's turn end is over, and each turn end
+# runs its orbs first. So seat 1's Dark orb still grows, after the fight
+# is won.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"DEFECT"},{"character":"DEFECT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"DARKNESS","target":1001,"seat":0}
+{"cmd":"hp","hp":3,"target":2,"seat":0}
+{"cmd":"end_turn","seat":0}
+{"cmd":"play_card","index":5,"target":null,"seat":1}
+{"cmd":"end_turn","seat":1}

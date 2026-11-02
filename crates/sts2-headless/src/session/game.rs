@@ -12,13 +12,13 @@ use std::marker::PhantomData;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::process::{Child, Command as Proc, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use sts2_core::{Answered, Construct, Decision, Play, Setup, Snapshot, Start};
+use sts2_core::{Answered, Decision, Setup, Snapshot, Start, Step};
 
 /// A running game, and the process behind it.
 ///
-/// The name is what it is *for*. [`Play`] and [`Construct`] are the whole of
-/// what it offers a caller driving a run, and everything inherent below is
-/// oracle-specific.
+/// The name is what it is *for*. `begin`, `play`, `observe` and `setup` are
+/// the whole of what it offers a caller driving a run. [`crate::OracleTable`]
+/// is the run table over one.
 ///
 /// Dropping this closes the connection, which the game treats as a normal
 /// shutdown, and then reaps the process. There is no `quit`: the protocol's is
@@ -185,8 +185,7 @@ impl<V: sts2_content_wire::WireContentVersion> Oracle<V> {
 
     /// What the game logged while running the most recent command.
     ///
-    /// Oracle-specific, and so not on [`Play`], because a simulator has no
-    /// engine log to report. Never an error on its own. The command can have
+    /// Oracle-specific, because a simulator has no engine log to report. Never an error on its own. The command can have
     /// half-happened, and only the caller decides whether to trust the state it
     /// produced.
     pub fn logged(&self) -> &[String] {
@@ -195,7 +194,8 @@ impl<V: sts2_content_wire::WireContentVersion> Oracle<V> {
 
     /// The most recent reply, as the protocol sent it.
     ///
-    /// The envelope [`Play`] drops, none of which is a fact about the run.
+    /// The envelope a run's report drops, none of which is a fact about the
+    /// run.
     ///
     /// The digest is the reason this exists. The mod computes one over the
     /// state it built, and [`sts2_core::Observation::digest`] over what
@@ -274,18 +274,13 @@ impl<V: sts2_content_wire::WireContentVersion> Oracle<V> {
     }
 }
 
-impl<V: sts2_content_wire::WireContentVersion> Play<V> for Oracle<V> {
-    type Error = Error;
-
-    /// Where the game is. This holder owns the process, so it has to be told.
-    type Host = Config;
-
-    /// Launches a game and starts a run on it.
+impl<V: sts2_content_wire::WireContentVersion> Oracle<V> {
+    /// Launches the game `config` says where to find, and starts a run on it.
     ///
     /// One run per process here: the child is this value's, and it dies with
     /// it. A holder that outlives a run is [`Session`](super::held::Session),
     /// where the daemon owns the game and says whether a run is already open.
-    fn begin(config: Self::Host, start: &Start<V>) -> Result<Self, Error> {
+    pub fn begin(config: Config, start: &Start<V>) -> Result<Self, Error> {
         // The game's `start` begins a solo run. A co-op seat is a `GameSeat`.
         start.alone();
         let mut oracle = Self::launch(config)?;
@@ -298,7 +293,8 @@ impl<V: sts2_content_wire::WireContentVersion> Play<V> for Oracle<V> {
         }
     }
 
-    fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Error> {
+    /// Plays one decision and reports what it produced.
+    pub fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Error> {
         let reply = self.dispatch(decision)?;
         super::receive(reply, &mut self.last)
     }
@@ -306,19 +302,27 @@ impl<V: sts2_content_wire::WireContentVersion> Play<V> for Oracle<V> {
     /// Straight down the socket rather than through `dispatch`: there
     /// is no [`Decision`] that spells this, which is the point of it being its
     /// own method.
-    fn observe(&mut self) -> Result<Snapshot<V>, Error> {
+    pub fn observe(&mut self) -> Result<Snapshot<V>, Error> {
         let reply = parse_reply::<V>(&self.send_line(r#"{"cmd":"observe"}"#)?)?;
         match super::receive(reply, &mut self.last)? {
             Ok(applied) => Ok(applied.snapshot()),
             Err(refusal) => Err(Error::NotObserved(refusal.to_string())),
         }
     }
-}
 
-impl<V: sts2_content_wire::WireContentVersion> Construct<V> for Oracle<V> {
-    fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Error> {
+    /// Puts the run into a position, without playing to it, with one of the
+    /// game's own debug commands.
+    pub fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Error> {
         let reply = self.dispatch(step)?;
         super::receive(reply, &mut self.last)
+    }
+
+    /// Plays one line of a recording, whichever half it is.
+    pub fn step(&mut self, step: &Step<V>) -> Result<Answered<V>, Error> {
+        match step {
+            Step::Decision(decision) => self.play(decision),
+            Step::Setup(setup) => self.setup(setup),
+        }
     }
 }
 

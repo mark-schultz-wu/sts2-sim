@@ -2,12 +2,14 @@
 
 use sts2_core::{DecisionHook, EventHook, HookResponse};
 
-/// `ShouldForcePotionReward`: for a fight's room. A run here has one
-/// player, who owns it.
-pub(super) fn decide_hook<V: crate::Build>(hook: DecisionHook<V>) -> HookResponse<bool> {
+/// `ShouldForcePotionReward`: for a fight's room, for its owner.
+pub(super) fn decide_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: DecisionHook<V>,
+) -> HookResponse<bool> {
     match hook {
-        DecisionHook::ShouldForcePotionReward { room } => {
-            HookResponse::Decision(crate::behaviour::relics::combat_room(room))
+        DecisionHook::ShouldForcePotionReward { player, room } => {
+            HookResponse::Decision(player == owner && crate::behaviour::relics::combat_room(room))
         }
         _ => HookResponse::DoesNotImplement,
     }

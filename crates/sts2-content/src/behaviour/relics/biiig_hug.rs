@@ -9,6 +9,7 @@ use crate::ids::CardIds as _;
 /// A relic's owner is the player, and a fight here has one, so every
 /// shuffle is its owner's.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -19,12 +20,15 @@ pub(super) fn event_hook<V: crate::Build>(
             act: DeckAct::Remove,
             count: (V::Relic::BIIIG_HUG_CARDS as usize),
         }),
-        // `AfterShuffle`: a Soot into the draw pile at a random place.
-        EventHook::Shuffled => asked.push(HookEffect::AddToDrawAtRandom {
-            card: V::Card::SOOT,
-            count: 1,
-            by_owner: true,
-        }),
+        // `AfterShuffle` of its owner's: a Soot into the draw pile at a random
+        // place.
+        EventHook::Shuffled { player } if player == owner => {
+            asked.push(HookEffect::AddToDrawAtRandom {
+                card: V::Card::SOOT,
+                count: 1,
+                by_owner: true,
+            })
+        }
         _ => {}
     }
 }

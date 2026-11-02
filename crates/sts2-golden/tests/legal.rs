@@ -6,7 +6,7 @@
 //! move it makes was legal where it made it, and has to be on the list.
 
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::{Answer, Construct, Decision, Play, Question, Step};
+use sts2_core::{Answer, Decision, Question, Step};
 use sts2_golden::bench::reached;
 use sts2_golden::{every_run, recording};
 use sts2_sim::Sim;
@@ -19,8 +19,8 @@ fn every_move_a_recording_played_was_on_the_list() {
         let recorded = recording::<V>(&name).expect("a recorded run reads");
         let start = recorded.start().clone();
         let steps: Vec<Step<V>> = recorded.steps().to_vec();
-        let supported = reached::<V, Sim<V>>(&start, &steps);
-        let mut sim = Sim::<V>::begin((), &start).expect("a recording starts a run");
+        let supported = reached::<V>(&start, &steps);
+        let mut sim = Sim::<V>::begin(&start).expect("a recording starts a run");
 
         for (at, step) in steps[..supported].iter().enumerate() {
             // A selection is offered a click at a time. A recording answers

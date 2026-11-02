@@ -15,7 +15,8 @@ pub(super) fn modify_hook<V: crate::Build>(
         // `player != base.Owner`: another player's number is left as it is.
         ModifyHook::MaxEnergy { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::MaxEnergy { .. } => Modify::Added(V::Relic::ECTOPLASM_ENERGY),
-        ModifyHook::GoldGained => Modify::Replaced(0),
+        ModifyHook::GoldGained { player } if player != owner => Modify::Nothing,
+        ModifyHook::GoldGained { .. } => Modify::Replaced(0),
         hook => unimplemented!("what Ectoplasm does for {hook:?}"),
     }
 }

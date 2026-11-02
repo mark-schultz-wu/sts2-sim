@@ -114,7 +114,7 @@ pub(super) fn setup<V: Rules>(
         let player = live.player(seat).id;
         let hook = sts2_core::EventHook::PlayerTurnStart {
             player,
-            turn: live.turn,
+            turn: live.players[seat].turn,
         };
         walk = listen::Walking::begin(live, belts, hook).map(Box::new);
         player
