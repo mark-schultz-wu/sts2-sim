@@ -1,0 +1,23 @@
+# The Necrobinder's deck is mostly Lift, and they play Catastrophe. Each
+# Lift it plays needs an ally, which `AutoPlay` draws off `CombatTargets`
+# from the other living players. Osty is no player, so every Lift blocks
+# the Ironclad.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"NECROBINDER"},{"character":"IRONCLAD"}]}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"grant","card":"LIFT","target":1,"seat":0}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"CATASTROPHE","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":null,"seat":0}

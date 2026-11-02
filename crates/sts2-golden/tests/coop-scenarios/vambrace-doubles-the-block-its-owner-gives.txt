@@ -1,0 +1,9 @@
+# The Ironclad's Rally gives each player block, its first block from a card
+# this fight. Vambrace doubles both, the Silent's as well, since the card is
+# its owner's. Its `AfterModifyingBlockAmount` is asked on the Ironclad's
+# belt, where it is.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"grant","relic":"VAMBRACE","target":1,"seat":0}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"RALLY","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":null,"seat":0}

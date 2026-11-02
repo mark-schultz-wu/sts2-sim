@@ -98,10 +98,11 @@ pub(crate) fn enter<V: Rules>(
     let mut live = Box::new(Live {
         players: crate::seats::BySeat::new(host_combat, others_combat),
         ascension,
-        turn: num_traits::one(),
         modifiers,
         round: num_traits::one(),
         starting: sts2_core::Participants::default(),
+        turns_apart: false,
+        taking: 0,
         ending: sts2_core::Participants::default(),
         side: <V::CombatSide as SideKinds>::PLAYER,
         history: super::live::CombatHistory::new(),
@@ -631,6 +632,7 @@ fn player_combat<V: Rules>(
     let character = player.character;
     super::live::PlayerCombat {
         character,
+        turn: num_traits::one(),
         phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
         energy: num_traits::cast(V::max_energy(character))
             .expect("the starting energy fits the build's count type"),
