@@ -62,6 +62,11 @@ impl<V: crate::Build> EventBehavior<V> for DenseVegetation {
         crate::behaviour::events::page::<V>(V::Event::DENSE_VEGETATION, options, state.chosen)
     }
 
+    /// `WillKillPlayer`, for `TrudgeOn`: its hit point loss.
+    fn kills(&self, state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        matches!(state.page, Page::Initial) && option == 0 && run.hp() <= HP_LOSS
+    }
+
     /// `TrudgeOn`: the damage, then the gold, which finishes the event.
     /// `Rest`: `PlayerCmd.MimicRestSiteHeal`, whose rewards the first page
     /// stands behind, then [`Self::resume`]. `Fight`: the event's

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Godot;
@@ -24,8 +25,12 @@ namespace Sts2Net;
 /// <param name="Character">The character this seat plays.</param>
 /// <param name="Seed">The run's seed, which the host sets.</param>
 /// <param name="Unlocks">What each player starts with unlocked.</param>
+/// <param name="JoinAfter">A file the client before this one writes once it
+/// has joined, which this client waits for.</param>
+/// <param name="Joined">A file this client writes once it has joined.</param>
 public sealed record Session(
-    bool Host, ushort Port, ulong NetId, int Seats, CharacterModel Character, string Seed, UnlockState Unlocks);
+    bool Host, ushort Port, ulong NetId, int Seats, CharacterModel Character, string Seed, UnlockState Unlocks,
+    string? JoinAfter = null, string? Joined = null);
 
 /// <summary>
 /// Co-op over the game's ENet transport, with no Steam and no lobby screen.
@@ -67,6 +72,13 @@ public static class Net
             while (lobby.Players.Count < session.Seats)
             {
                 await tree.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+            }
+            // The run's players follow the lobby's join order, which the
+            // clients keep to seat order.
+            if (!InSeatOrder(lobby.Players.Select(player => player.id).ToList(), session.Seats))
+            {
+                throw new InvalidOperationException(
+                    $"the clients joined out of seat order: {string.Join(", ", lobby.Players.Select(player => player.id))}");
             }
             lobby.SetReady(true);
         }
@@ -119,6 +131,12 @@ public static class Net
     /// </summary>
     private static async Task<(JoinFlow, JoinResult)> Join(Session session, SceneTree tree)
     {
+        // The client before this one joins first, so the lobby seats the
+        // clients in seat order.
+        while (session.JoinAfter != null && !File.Exists(session.JoinAfter))
+        {
+            await tree.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+        }
         while (true)
         {
             JoinFlow join = NetApi.NewJoin();
@@ -126,6 +144,10 @@ public static class Net
             {
                 JoinResult joined = await join.Begin(
                     new ENetClientConnectionInitializer(session.NetId, "127.0.0.1", session.Port), tree);
+                if (session.Joined != null)
+                {
+                    File.WriteAllText(session.Joined, session.NetId.ToString());
+                }
                 return (join, joined);
             }
             catch (ClientConnectionFailedException e)
@@ -135,6 +157,19 @@ public static class Net
             }
         }
     }
+
+    /// <summary>The net id the first client plays under, as the driver gives it.</summary>
+    private const ulong FirstClientNetId = 1001;
+
+    /// <summary>
+    /// Whether the players' net ids, in join order, are the host's and then
+    /// the clients' up to <paramref name="count"/> players, in seat order and
+    /// no more.
+    /// </summary>
+    private static bool InSeatOrder(IReadOnlyList<ulong> ids, int count) =>
+        ids.Count == count
+        && ids.Select((id, at) => id == (at == 0 ? 1UL : FirstClientNetId + (ulong)at - 1))
+            .All(inPlace => inPlace);
 
     private static async Task Pump(INetGameService service, SceneTree tree)
     {
