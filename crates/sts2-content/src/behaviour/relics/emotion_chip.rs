@@ -17,22 +17,29 @@ pub struct State {
 /// `AfterPlayerTurnStart`: `OrbCmd.Passive` on each orb, where its owner
 /// lost health in its last turn, or in the enemies' turn after it.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // `player != Owner`: another player's turn is not its owner's.
+    if let EventHook::PlayerTurnStart { player, .. } = hook
+        && player != owner
+    {
+        return;
+    }
     match hook {
         // The history it reads is the fight's own, which the next fight
         // starts empty.
         EventHook::CombatEnd { .. } => *state = State::default(),
         EventHook::DamageReceived {
             target,
-            player,
             fully_blocked,
             turn,
             in_progress: true,
             ..
-        } if target == player && !fully_blocked && state.hurt[0] != Some(turn) => {
+        } if target == owner && !fully_blocked && state.hurt[0] != Some(turn) => {
             state.hurt = [Some(turn), state.hurt[0]];
         }
         EventHook::PlayerTurnStart { turn, .. }

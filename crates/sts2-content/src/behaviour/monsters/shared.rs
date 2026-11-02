@@ -25,12 +25,11 @@ pub(super) fn starting_powers<V: crate::Build>(
 
 /// Perform one of these monsters' moves, where the generator left it to a
 /// hand port.
-pub(super) fn perform<V: crate::Build, F: Fight<V>>(
+pub(super) fn perform<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     monster: V::Monster,
     move_id: V::MoveId,
-    step: u8,
-    fight: &mut F,
-) -> Option<u8> {
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
     match (monster, move_id) {
         // `IsBurrowed` and `IsCharging`, which it sets first, pick its
         // animation.
@@ -42,7 +41,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
                 PowerAmount::Counted(CHARGE_UP_STRENGTH),
             );
         }
-        (monster, move_id) => return V::generated_move(monster, move_id, step, fight),
+        (monster, move_id) => return V::generated_move::<K>(monster, move_id, fight),
     }
-    None
+    crate::behaviour::Played::Done
 }
