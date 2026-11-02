@@ -1360,6 +1360,22 @@ pub struct DamageResult<V: ContentVersion> {
 /// each naming its hit.
 pub type AttackResults<V> = smallvec::SmallVec<[DamageResult<V>; 4]>;
 
+/// Whose a played card is once its play is over, which
+/// `GetResultLocationForCardPlay`'s `player` names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultHolder {
+    /// Its owner's, as the base class answers.
+    Owner,
+    /// A living teammate's, other than the owner, drawn off `CombatTargets`,
+    /// as The Ball's override picks. Where none stands, the base location
+    /// stands instead.
+    RandomTeammate,
+}
+
+/// Where a played card goes once its play is over, where in that pile, and
+/// whose it is then.
+pub type CardResult = (Option<crate::Pile>, PilePosition, ResultHolder);
+
 /// The most players a fight holds.
 pub const MAX_PLAYERS: usize = 4;
 
@@ -3384,11 +3400,12 @@ pub enum Played<V: ContentVersion, R> {
         /// Where the card stopped, in the card's own words.
         at: R,
     },
-    /// The play stopped on a `CardSelectCmd` whose filter lets these cards
-    /// through, which are the ones it offers. They stand in one pile, in its
-    /// order.
+    /// The play stopped on a `CardSelectCmd` over the cards of `pile` that
+    /// `filter` lets through. The command lists them once its choice has
+    /// signalled, which [`Rules::among`] does.
     AskingAmong {
-        cards: smallvec::SmallVec<[crate::CardAt<V>; MAX_CARDS_IN_HAND]>,
+        pile: crate::Pile,
+        filter: V::CardFilter,
         /// How many it takes, which decides whether it asks at all.
         selection: Selection,
         at: R,
@@ -4189,8 +4206,9 @@ pub enum EventHook<V: ContentVersion> {
         /// `RunState.CurrentActIndex`.
         act: usize,
     },
-    /// `ModifyGeneratedMap`, as the act at this index has its map generated.
-    GeneratedMap { act: usize },
+    /// `ModifyGeneratedMap`, as the act at this index has its map generated,
+    /// in a run of `players` players.
+    GeneratedMap { act: usize, players: usize },
     /// `ModifyGeneratedMapLate`, once every listener has heard
     /// [`EventHook::GeneratedMap`].
     GeneratedMapLate { act: usize },
@@ -4837,8 +4855,12 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterCardGeneratedForCombat`, once a card made in the fight has
     /// landed where `at` says.
     CardGeneratedForCombat {
-        at: crate::CardAt<V>,
+        /// Nothing for a card made for a dead player, which
+        /// `CardPileCmd.Add` puts in no pile.
+        at: Option<crate::CardAt<V>>,
         card: V::Card,
+        /// `card.Owner.Creature`.
+        player: crate::CombatId,
         /// The player that made it. Nothing for a card a monster gave.
         creator: Option<crate::CombatId>,
     },
@@ -5712,6 +5734,9 @@ pub enum PoolFilter {
 pub enum PilePosition {
     Top,
     Bottom,
+    /// `CardPilePosition.Random`: a place drawn off `Shuffle`, as
+    /// `CardPileCmd.Add` draws one.
+    Random,
 }
 
 /// A card about to leave play, as `ModifyCardPlayResultPileTypeAndPosition`
@@ -7410,7 +7435,7 @@ pub trait Hooks: ContentVersion {
     fn card_result_pile(
         card: Self::Card,
         base: (Option<crate::Pile>, PilePosition),
-    ) -> crate::HookResponse<(Option<crate::Pile>, PilePosition)>;
+    ) -> crate::HookResponse<CardResult>;
 
     /// `write` carried out on the deck card a fight's copy came from.
     fn write_deck_card(card: &mut DeckCard<Self>, write: Self::DeckWrite);
@@ -7843,6 +7868,10 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
     /// For a fight of kind `K`: a stopped play holds the rest of itself, and
     /// that rest reaches the fight through `K`'s type.
     type Resume<K: FightKind<Self>>: std::fmt::Debug + Clone + Eq + std::hash::Hash + 'static;
+
+    /// The filter a `CardSelectCmd` lists one pile's cards through, which
+    /// [`Rules::among`] applies.
+    type CardFilter: std::fmt::Debug + Clone + Eq + std::hash::Hash + 'static;
 
     /// Where a card sits in one of a fight's piles.
     ///
@@ -8323,6 +8352,14 @@ pub trait Rules: Hooks + Engine {
     /// `CardModel.OnTurnEnd`, for a card that remains in the hand.
     fn on_card_turn_end<F: Fight<Self>>(card: Self::Card, fight: &mut F);
 
+    /// The cards of `pile` that `filter` lets through, in the pile's order,
+    /// as a `CardSelectCmd` lists them for the fight's player.
+    fn among<F: Fight<Self>>(
+        fight: &F,
+        pile: crate::Pile,
+        filter: &Self::CardFilter,
+    ) -> smallvec::SmallVec<[crate::CardAt<Self>; MAX_CARDS_IN_HAND]>;
+
     /// Continue a card that stopped, with the answer it awaited.
     ///
     /// `at` identifies the card grouping and the point where it stopped.
@@ -8776,6 +8813,10 @@ pub trait Rules: Hooks + Engine {
         state: &Self::EventState,
         run: &impl crate::EventView<Self>,
     ) -> crate::Room<Self>;
+
+    /// [`crate::EventBehavior::kills`] for the event entered.
+    fn event_kills(state: &Self::EventState, option: u8, run: &impl crate::EventView<Self>)
+    -> bool;
 
     /// Whether the event's `BeforeEventStarted` sets `CanRemovePotions` off,
     /// which its `OnEventFinished` puts back.

@@ -6,9 +6,6 @@ use crate::behaviour::paused::{Ask, Lent};
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 use sts2_core::{CardIdent, Fight, FightKind, Pile, PowerAmount};
 
-/// Cards a play offers from the hand.
-type Hand<V> = smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>;
-
 /// One card, as a pick asks for it.
 const ONE: sts2_core::Selection = sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE);
 
@@ -231,9 +228,9 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             if resumed!().fight.waiting() {
                 yield_!(Ask::Waiting);
             }
-            let skills: Hand<V> = playable_skills::<V, _>(resumed!().fight);
             yield_!(Ask::AskingAmong {
-                cards: skills,
+                pile: Pile::Hand,
+                filter: crate::behaviour::CardFilter::PlayableSkill,
                 selection: ONE,
             });
             let picked: Option<sts2_core::CardAt<V>> =
@@ -294,9 +291,9 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             if resumed!().fight.waiting() {
                 yield_!(Ask::Waiting);
             }
-            let colorless: Hand<V> = colorless_in_hand::<V, _>(resumed!().fight);
             yield_!(Ask::AskingAmong {
-                cards: colorless,
+                pile: Pile::Hand,
+                filter: crate::behaviour::CardFilter::Colorless,
                 selection: ONE,
             });
             let Lent { fight, taken } = resumed!();
@@ -580,40 +577,6 @@ pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
         }
         card => unimplemented!("what {card:?} does for {hook:?}"),
     }
-}
-
-/// `DecisionsDecisions`' `FromHand`: the Skills of the hand that can be
-/// played.
-///
-/// # Panics
-///
-/// A card in hand whose type the fight works out.
-fn playable_skills<V: crate::Build, F: Fight<V>>(fight: &F) -> Hand<V> {
-    use sts2_core::CardKind;
-
-    use crate::generated::cards::CardKeyword;
-
-    fight
-        .cards_in(Pile::Hand)
-        .into_iter()
-        .filter(|&at| {
-            let kind = V::card_kind(fight.card_ident(at).card).unwrap_or_else(|| {
-                unimplemented!("Decisions, Decisions reading a card whose type is computed")
-            });
-            kind == CardKind::Skill && !fight.card_keyword(at, CardKeyword::Unplayable)
-        })
-        .collect()
-}
-
-/// The cards of the hand that show as colorless.
-fn colorless_in_hand<V: crate::Build, F: Fight<V>>(fight: &F) -> Hand<V> {
-    use sts2_core::CardTable as _;
-
-    fight
-        .cards_in(Pile::Hand)
-        .into_iter()
-        .filter(|&card| fight.card_ident(card).card.visually_colorless())
-        .collect()
 }
 
 /// `Quasar`'s offer: three distinct colorless cards off

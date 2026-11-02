@@ -44,6 +44,13 @@ impl<V: crate::Build> EventBehavior<V> for HungryForMushrooms {
         room
     }
 
+    /// `FragrantMushroom`'s option: `ThatDoesDamage(15)`.
+    fn kills(&self, state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        crate::behaviour::events::option_relic::<V>(&self.observe(state, run), option)
+            == Some(<V::Relic as crate::ids::RelicIds>::FRAGRANT_MUSHROOM)
+            && run.hp() <= 15
+    }
+
     /// `RelicCmd.Obtain` of the option's mushroom, which finishes the event.
     /// The fragrant one's damage is its own pickup's.
     fn choose<R: sts2_core::rng::GameRng>(

@@ -188,8 +188,8 @@ pub(crate) fn is_playable<V: crate::Build>(
 pub(crate) fn result_pile<V: crate::Build>(
     card: V::Card,
     base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)> {
-    use sts2_core::{HookResponse, Pile};
+) -> sts2_core::HookResponse<sts2_core::CardResult> {
+    use sts2_core::{HookResponse, Pile, ResultHolder};
 
     if let Some(own) = V::own_card_result_pile(card, base) {
         return own;
@@ -197,8 +197,8 @@ pub(crate) fn result_pile<V: crate::Build>(
     match card {
         // `ParticleWall`: back into the hand where the base class discards.
         __c0 if __c0 == V::Card::PARTICLE_WALL => HookResponse::Decision(match base {
-            (Some(Pile::Discard), position) => (Some(Pile::Hand), position),
-            base => base,
+            (Some(Pile::Discard), position) => (Some(Pile::Hand), position, ResultHolder::Owner),
+            (pile, position) => (pile, position, ResultHolder::Owner),
         }),
         _ => HookResponse::DoesNotImplement,
     }
@@ -876,10 +876,15 @@ pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
         // `RocketPunch.AfterCardGeneratedForCombat`: free until played once
         // its owner makes a Status.
         __c0 if __c0 == V::Card::ROCKET_PUNCH => match hook {
-            sts2_core::EventHook::CardGeneratedForCombat { card, creator, .. }
-                if creator == Some(owner)
-                    && <V as sts2_core::Rules>::card_kind(card)
-                        == Some(sts2_core::CardKind::Status) =>
+            sts2_core::EventHook::CardGeneratedForCombat {
+                card,
+                player,
+                creator,
+                ..
+            } if creator == Some(owner)
+                && player == owner
+                && <V as sts2_core::Rules>::card_kind(card)
+                    == Some(sts2_core::CardKind::Status) =>
             {
                 asked.push(sts2_core::HookEffect::ModifySelf {
                     change: sts2_core::Change::SetCost(sts2_core::CostPool::Energy, 0),
@@ -1003,7 +1008,7 @@ const GENETIC_ALGORITHM_BLOCK: Number = 1;
 const SOVEREIGN_BLADE_DAMAGE: Number = 10;
 
 /// `number` as a [`Field`].
-fn field(number: impl TryInto<i16>) -> Field {
+pub(crate) fn field(number: impl TryInto<i16>) -> Field {
     nonmax::NonMaxI16::new(number.try_into().ok()?)
 }
 
@@ -1033,6 +1038,9 @@ fn set<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 
 impl<V: crate::Build> sts2_core::CardFields<V> for Fields {
     fn new(card: V::Card) -> Self {
+        if let Some(own) = V::own_card_fields(card) {
+            return own;
+        }
         let zero = field(0);
         match card {
             __c0 if __c0 == V::Card::CLAW => Self::Claw { extra_damage: zero },
@@ -1223,7 +1231,9 @@ pub(crate) fn deck_event_hook<V: crate::Build>(
         }
         // `SpoilsMap.ModifyGeneratedMap`: a `SpoilsActMap` in place of its
         // act's own.
-        (__c0, _, sts2_core::EventHook::GeneratedMap { act }) if __c0 == V::Card::SPOILS_MAP => {
+        (__c0, _, sts2_core::EventHook::GeneratedMap { act, .. })
+            if __c0 == V::Card::SPOILS_MAP =>
+        {
             if act == SPOILS_ACT {
                 asked.push(sts2_core::HookEffect::SpoilsMap);
             }
