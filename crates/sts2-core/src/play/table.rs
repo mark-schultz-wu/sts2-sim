@@ -62,6 +62,17 @@ pub trait RunTable<V: ContentVersion>: Sized {
     /// machine. A setup that names no player is for that seat's own.
     fn construct(&mut self, seat: SeatIndex, setup: &Setup<V>) -> Result<Settled<V>, Self::Error>;
 
+    /// Puts the run into a position on every machine, in seat order. Each
+    /// machine makes the setup for itself, as each game does.
+    ///
+    /// Games in a lobby wait on each other when one enters a fight. So a
+    /// table of them makes the setup on all of them at once.
+    fn construct_everywhere(&mut self, setup: &Setup<V>) -> Result<Vec<Settled<V>>, Self::Error> {
+        SeatIndex::all(self.seats())
+            .map(|machine| self.construct(machine, setup))
+            .collect()
+    }
+
     /// What the games logged as errors since the last ask, by seat. A table
     /// with no game logs nothing.
     fn logged(&mut self) -> Vec<(SeatIndex, String)> {

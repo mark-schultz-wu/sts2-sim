@@ -99,6 +99,8 @@ fn followed<V>(run: &Run, mode: Mode) -> Result<(), String>
 where
     V: sts2_content::Build + sts2_content_wire::WireContentVersion,
     sts2_core::Seated<V>: Send,
+    sts2_core::Answered<V>: Send,
+    sts2_core::Setup<V>: Sync,
 {
     let start = run.start::<V>();
     match mode {

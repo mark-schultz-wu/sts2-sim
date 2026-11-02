@@ -584,9 +584,13 @@ where
         if let Some((out, mut file)) = recording {
             let run = &mut file.runs[0];
             run.ending = ending;
-            if ends.len() == run.players.len() {
-                run.digests.extend(ends);
+            // A run holds where each seat ended. One a seat gave no end for is
+            // not kept, and the verdict says why the run stopped.
+            if ends.len() != run.players.len() {
+                eprintln!("not keeping the run: a seat gave no position as it ended");
+                return self.table.finish(verdict);
             }
+            run.digests.extend(ends);
             if let Err(e) = std::fs::write(&out, file.encode()) {
                 eprintln!("writing {}: {e}", out.display());
             }
