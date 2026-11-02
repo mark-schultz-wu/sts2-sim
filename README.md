@@ -1,80 +1,102 @@
-# sts
+# sts2
 
-An STS2 simulator, meant to be fast enough to train agents in.
+A simulator of Slay the Spire 2's rules, written in Rust, for AI work.
 
-The real game can be driven programmatically, but only at a few hundred steps/s.
-A training run wants about 10⁹. So the game is not the environment. It is the
-reference that the simulator answers to, step by step, on the same seed.
+It plays whole runs of the game: every character, card, relic, potion, monster
+and event, at each ascension level and with each custom-mode modifier. It plays
+two builds of the game, v0.107.1 and v0.111.0. It plays co-op runs of several
+players too. Each step lists the legal moves, and the same seed and moves give
+the same run.
 
-So far that's five mods, the content they print, and a Rust side that consumes
-both. The simulator itself has not started.
+The simulator answers to the real game. A set of mods runs the game with no
+screen and lets a program drive it. Tools then play the game and the simulator
+side by side on the same seeds, and stop where the two disagree.
+[What it does, and its limits](docs/STATUS.md) gives the numbers.
 
-## The mods
+This is a fan project. Mega Crit did not make it and has no part in it. The game
+and its content are theirs. The code here is ours, and it holds none of the
+game's files, art or text.
 
-| mod | what it does |
-|---|---|
-| [`sts2_determinism`](mod/sts2_determinism/README.md) | makes the game reproducible: same seed, same run |
-| [`sts2_headless`](mod/sts2_headless/README.md) | drives it with no renderer and no human, over a line protocol |
-| [`sts2_dump`](mod/sts2_dump/README.md) | prints the game's own content tables |
-| [`sts2_determinism_test`](mod/sts2_determinism_test/README.md) | measures what the first one claims |
-| [`sts2_headless_test`](mod/sts2_headless_test/README.md) | the legality suite for the second |
+## What you need
 
-Each test mod is installed only to run its suite, so nothing shipped carries
-tests. `mod/deploy.sh` builds and installs all five. The game's own manifest
-`dependencies` field orders them.
+- Rust, at the version `rust-toolchain.toml` names. `rustup` picks it up.
+- For the simulator alone, nothing more.
+- For the game's text in the terminal front end, an install of a supported
+  build. See [The game's text](#the-games-text).
+- To check the simulator against the game, an install of the pinned build, the
+  .NET SDK, and the mods. See [`mod/README.md`](mod/README.md).
 
-[The protocol](mod/sts2_headless/PROTOCOL.md) is the wire contract on one page.
-The mods answer to a standard, split between
-[determinism](mod/sts2_determinism/REQUIREMENTS.md) (D1–D3) and
-[headless](mod/sts2_headless/REQUIREMENTS.md) (H1–H12), so a requirement's
-prefix names the file it lives in.
+## Play a run
+
+The terminal front end plays a run on the simulator:
+
+```sh
+cargo run --release -p sts2-cli --bin sts2 -- sim
+```
+
+A program plays runs through `sts2-run`. This plays one run at random:
+
+```sh
+cargo run --release -p sts2-run -- play C000000042 IRONCLAD --player random
+```
+
+`--build v0.111.0` picks the other build. `IRONCLAD,SILENT` seats two players.
+[docs/RUNNERS.md](docs/RUNNERS.md) says how the runner, its players and its
+layers fit together. `crates/sts2-sim/examples/fight_bench.rs` drives fights
+straight from Rust.
+
+There are no Python bindings yet.
+
+## The game's text
+
+What a card or relic says is the game's own writing, so this repository holds
+none of it. The build script of `sts2-cli` copies it from your install of each
+supported build. It looks in `STS2_GAME_DIR`, `STS2_STEAM_DIR` and
+`$XDG_DATA_HOME/sts2/games/<build>`. It tells an install's build by the hash of
+its `sts2.dll`, which `mod/games/<build>.lock` pins. Without an install, the
+front end shows ids and numbers, and the build prints a warning.
+
+## How it is checked
+
+- About 1,430 single-player and 45 co-op scenarios. Each sets up a position
+  in the real game, plays a few moves, and records what the game did. The
+  simulator has to reach the same positions.
+- Recorded runs, played whole by the game at random. The simulator follows
+  each one step by step, through about 5 million positions in all.
+- Hunts. `cargo xtask hunt --mixed` plays fresh seeds on the game and the
+  simulator side by side, over every ascension level and modifier. It keeps
+  only the runs where they part. Each part found so far is fixed.
+
+The golden tests in `crates/sts2-golden` replay the scenarios and the recorded
+runs without the game.
 
 ## The crates
 
 | crate | what it is |
 |---|---|
-| `sts2-core` | the vocabulary both a game and a simulator answer in |
-| `sts2-content` | the game's content as Rust tables, generated from the dumps |
-| `sts2-headless` | a client for the headless mod: launch, handshake, one typed call per decision |
-| `sts2-sim` | the game engine and its draw stream, checked against the real game |
-| `sts2-run` | `sts2-run`, the one runner: a table, a player for each seat, and layers. See [RUNNERS.md](docs/RUNNERS.md) |
-| [`sts2-cli`](crates/sts2-cli/README.md) | `sts2`, which plays a run at a terminal |
-| `xtask` | `cargo xtask dump` asks the game for its tables, and `codegen` turns them into `sts2-content` |
+| `sts2-core` | the types a game and a simulator both answer in |
+| `sts2-content` | the game's content: tables generated from the game's own data, and the ported rules beside them |
+| `sts2-sim` | the engine: fights, turns, the map, rewards and the random number streams |
+| `sts2-run` | one runner for a run on the simulator or the game, with a player for each seat |
+| `sts2-cli` | `sts2`, the terminal front end |
+| `sts2-headless` | the client for the headless mod |
+| `sts2-golden` | the tests against what the game recorded |
+| `sts2-pack` | reads files out of the game's pack |
+| `xtask` | the tools: dumps, code generation, hunts, the census and the rest |
 
-Content is thirteen domains: acts, afflictions, cards, characters, enchantments,
-encounters, events, modifiers, monsters, orbs, potions, powers and relics. The
-hook surface comes with them. It is measured, but it has no table, because a
-simulator implements it rather than looking it up.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) says where things live, and why.
 
-What a piece of content *does* is code, and gets ported by hand. What it *is* is
-a table. The table is generated, so that nobody types a number the game already
-knows. The generated tree is committed rather than built by a `build.rs`, so a
-content patch reads as a diff.
+## How it was made
 
-Every dump names the build it came from, with two hashes. The content hash covers
-the set of model ids. The assembly hash moves on any code change at all.
+Most of this code was written by Claude, Anthropic's AI model, in Claude Code,
+with Mark Schultz-Wu directing. The history is kept as it happened. Each pull
+request says what it changed and how it was checked.
+[docs/agent-dev/](docs/agent-dev/) holds the working notes of that process.
 
-## More than one build
+## License
 
-STS2 churns 20-50 cards on a minor version, so a pin is what stops a result
-changing because the game did. Each pinned build has a lock under `mod/games/`.
-`STS2_GAME_VERSION` picks which one everything uses. The mods compile against
-it, the dumps land under it, and `sts2` drives it.
+The code is under either the [MIT license](LICENSE-MIT) or the
+[Apache License 2.0](LICENSE-APACHE), at your choice. That covers the code in
+this repository only. Slay the Spire 2 and its content belong to Mega Crit.
 
-Two builds are pinned: v0.107.1 and v0.111.0. Both compile the whole mod set
-from the same sources, with one adapter for each build under every mod's
-`Compat/`. Both ship generated tables. `just check` builds every lock, so a
-change that works only against the build you deployed fails.
-
-v0.107.1 is the floor. It is the build that replaced the game's PRNG with
-xoshiro256\*\*, and `sts2-sim` owns that generator.
-
-One hash alone is not enough. A rebalance that adds no content leaves the content
-hash equal and every generated number wrong. Codegen refuses to generate when two
-dumps disagree, so a table can never quietly come to describe a game that nobody
-talks to.
-
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is where things live, and why. It
-covers the content/code dividing rule, and why ported behaviour belongs beside
-the tables rather than in the engine. It also covers how the hook surface is held
-to what was measured, and the four layers a table has to survive to be believed.
+If Mega Crit asks for anything here to come down, it will.

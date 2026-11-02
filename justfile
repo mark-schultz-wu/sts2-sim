@@ -185,11 +185,18 @@ hooks:
 vendor-game version="v0.107.1":
     ./mod/game.sh fetch-game {{version}}
 
-# Steam is only an acquisition source. This places a historical manifest in a
-# versioned staging directory; `publish-game` promotes it to the private forge.
-[doc("Acquire one exact Steam manifest for later publishing")]
-acquire-game version manifest branch="public":
+# Steam is only an acquisition source. This downloads one exact build into a
+# versioned staging directory, by the manifest `game.sh` names unless one is
+# given. `install-game` puts it where the build looks, and `publish-game`
+# promotes it to the private forge.
+[doc("Acquire one exact Steam manifest")]
+acquire-game version manifest="" branch="public":
     ./mod/game.sh acquire {{version}} {{manifest}} {{branch}}
+
+# For a machine with no forge token. The copy's assemblies must match the lock.
+[doc("Install an acquired or brought copy of the pinned game")]
+install-game version="v0.107.1" source="":
+    ./mod/game.sh install {{version}} {{source}}
 
 # Half of re-pinning: this publishes from an acquired install after a lock under
 # mod/games/ names its package version. Put the hashes it prints in that lock;

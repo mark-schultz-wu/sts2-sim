@@ -432,12 +432,12 @@ mod tests {
              protected override void OnUpgrade() { base.Vars.Amount.Raise(1m); } }",
         )
         .unwrap();
-        assert_eq!(base_class(&toks, "MadeUpCard").as_deref(), Some("CardModel"));
-        let upgrade = method(&toks, "OnUpgrade").unwrap().unwrap();
         assert_eq!(
-            spell(&upgrade),
-            "base.Vars.Amount.Raise(1m);"
+            base_class(&toks, "MadeUpCard").as_deref(),
+            Some("CardModel")
         );
+        let upgrade = method(&toks, "OnUpgrade").unwrap().unwrap();
+        assert_eq!(spell(&upgrade), "base.Vars.Amount.Raise(1m);");
         assert!(method(&toks, "OnTurnEndInHand").unwrap().is_none());
     }
 }

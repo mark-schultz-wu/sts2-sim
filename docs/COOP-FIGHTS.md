@@ -1,6 +1,6 @@
 # Fights of several players
 
-Status: a design, 2026-10-27. It is the first open part of `BLOCKERS.md`
+Status: a design, 2026-10-27. It is the first open part of `agent-dev/BLOCKERS.md`
 item 1, co-op. Co-op runs on v0.111.0. The citations are to its decompiled
 source, `target/decompiled/v0.111.0-1579942752/`.
 

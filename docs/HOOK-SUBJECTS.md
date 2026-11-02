@@ -5,7 +5,7 @@ compares the hook's subject with its own owner, as in `card.Owner !=
 base.Owner` or `player != base.Owner`. It acts on `base.Owner`, never on
 the player whose command raised the hook. The simulator was written for
 one player, so its hooks often name no subject, and a listener's effect
-lands on the acting creature. The co-op audit in `BLOCKERS.md` lists the
+lands on the acting creature. The co-op audit in `agent-dev/BLOCKERS.md` lists the
 sites. This design closes classes A, B and C of that audit in four
 parts. Each part lands on its own, in the order below.
 

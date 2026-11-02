@@ -1,11 +1,11 @@
 ---
 name: blocker-grind
-description: One iteration of the port loop, solo and co-op. Take the first open item in BLOCKERS.md, fix it, update the list with what the fix found, and land it as the next stacked PR. Use it with /loop to grind the list down.
+description: One iteration of the port loop, solo and co-op. Take the first open item in docs/agent-dev/BLOCKERS.md, fix it, update the list with what the fix found, and land it as the next stacked PR. Use it with /loop to grind the list down.
 ---
 
 # Blocker grind
 
-**Goal:** an empty `BLOCKERS.md`, which means every recorded run matches
+**Goal:** an empty `docs/agent-dev/BLOCKERS.md`, which means every recorded run matches
 the simulator to its end. The file says what done means and how the
 list changes. Read it first, every iteration.
 
@@ -25,7 +25,7 @@ fits a PR. Then stop and report in a few lines. `/loop` calls it again.
 
 ## 2. Pick the item
 
-The first item under **Open** in the branch's `BLOCKERS.md`.
+The first item under **Open** in the branch's `docs/agent-dev/BLOCKERS.md`.
 
 - Too big for one PR: split it into items that each fit one, in the
   same commit as the first part.

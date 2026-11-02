@@ -234,12 +234,10 @@ the test is known to catch the bug it was written for.
 
 *Resolved for combat: the game exposes it on the model, not the UI.*
 
-```csharp
-public virtual TargetType TargetType { get; }                              // CardModel:421
-public bool CanPlay(out UnplayableReason reason, out AbstractModel? preventer)  // :1388
-public bool CanPlayTargeting(Creature? target)                             // :1372
-public bool IsValidTarget(Creature? target)
-```
+`CardModel` has a `TargetType` property and three checks. `CanPlay` says
+whether the card can be played, and hands back an `UnplayableReason` and the
+model that prevents it. `CanPlayTargeting` and `IsValidTarget` take a
+creature.
 
 `CanPlay` covers the unplayable keyword, energy and star cost
 (`HasEnoughResourcesFor`), no-living-allies, hook blocks, and card logic.
@@ -254,14 +252,9 @@ wrong. Otherwise we are left to bisect.
 
 *Map legality is also on the model, and reading the graph is wrong.*
 
-```csharp
-public static IEnumerable<MapPoint> GetTravelablePointsFrom(IRunState runState, MapPoint currentPoint)
-{
-    if (Hook.ShouldAllowFreeTravel(runState))
-        return runState.Map.GetPointsInRow(currentPoint.coord.row + 1);
-    return currentPoint.Children;
-}
-```
+`GetTravelablePointsFrom` gives the whole next row when
+`Hook.ShouldAllowFreeTravel` allows free travel. Otherwise it gives the
+current point's children.
 
 The obvious derivation is "the current node's children". It is correct until the
 first run holding `Winged Boots` or the `Flight` modifier. Both override
@@ -675,24 +668,15 @@ the same reachability principle as the prefix, applied at the boundary.
 
 ### The game already has that command vocabulary: its dev console
 
-MegaCrit's own `RelicConsoleCmd` resolves this the same way:
-
-```csharp
-TaskHelper.RunSafely(RelicCmd.Obtain(relicById.ToMutable(), issuingPlayer));
-```
-
-That is `RelicCmd.Obtain`, not a write to `Player.Relics`. It also calls
+MegaCrit's own `RelicConsoleCmd` resolves this the same way. It obtains the
+relic through `RelicCmd.Obtain`, not a write to `Player.Relics`. It also calls
 `.ToMutable()` on the canonical model, which is what keeps `MonsterModel.Rng`
 from silently handing back `Rng.Chaotic`.
 
-**The debug gate lets us in without patching.** `NDevConsole._Ready`:
-
-```csharp
-bool shouldAllowDebugCommands = OS.HasFeature("editor") || TestMode.IsOn
-    || ModManager.IsRunningModded() || SaveManager.Instance.SettingsSave.FullConsole;
-```
-
-We satisfy two of the four. `NGame.IsReleaseGame()` is hardcoded `true`, which
+**The debug gate lets us in without patching.** `NDevConsole._Ready` allows
+debug commands in four cases. They are the editor, test mode, mods loaded,
+and the full console turned on in the settings. We satisfy two of the
+four. `NGame.IsReleaseGame()` is hardcoded `true`, which
 is what made `--autoslay` dead code. This gate is different. It deliberately
 accommodates mods.
 
@@ -717,11 +701,8 @@ format unnecessary.
 
 **Console commands are debug tools, not oracle primitives, and some injected
 nondeterminism on purpose.** `FightConsoleCmd` calls
-`encounterModel.DebugRandomizeRng()`, which is
-
-```csharp
-_rng = new Rng((uint)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds);
-```
+`encounterModel.DebugRandomizeRng()`, which seeds the encounter's generator
+with the seconds since the Unix epoch.
 
 That is wall-clock, at one-second granularity. A scenario built with `fight`
 reproduces for runs landing in the same second, and diverges for runs a second
@@ -822,15 +803,11 @@ construction. It also bisects, so shrinking a divergence to a minimal repro is
 list-shortening.
 
 The prefix is a sequence of **decisions**, not `GameAction`s. Some decisions we
-push onto the action queue. Others the game **pulls** from us mid-action:
-
-```csharp
-public interface ICardSelector    // Core.TestSupport
-{
-    Task<IEnumerable<CardModel>> GetSelectedCards(IEnumerable<CardModel> options, int minSelect, int maxSelect);
-    CardRewardSelection GetSelectedCardReward(IReadOnlyList<CardCreationResult> options, IReadOnlyList<CardRewardAlternative> alternatives);
-}
-```
+push onto the action queue. Others the game **pulls** from us mid-action,
+through `ICardSelector` in `Core.TestSupport`. It has two methods.
+`GetSelectedCards` takes the options and how many to pick at least and at
+most, and returns the picked cards as a task. `GetSelectedCardReward` takes a
+card reward's options and its alternatives.
 
 `CardSelectCmd.UseSelector(selector)` installs it. That call keeps a stack
 and returns an `IDisposable` scope. A prefix of queued actions alone stalls the

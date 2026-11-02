@@ -6,10 +6,11 @@ name: Prose
 #
 # The `edited` type is why this workflow is separate. A description changes
 # more often than the code, and the jobs in `ci.yml` take minutes. Those jobs
-# must not run again when a person only corrects a word.
+# must not run again when a person only corrects a word. It runs on each push
+# too, as main's protection needs this status on the head a merge checks.
 on:
   pull_request:
-    types: [opened, edited, reopened]
+    types: [opened, edited, reopened, synchronize]
 
 jobs:
   description:

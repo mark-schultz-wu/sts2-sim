@@ -1,9 +1,8 @@
 # Architecture
 
-Where things live, and why they live there. Half of this describes crates that
-do not exist yet. The layering was worked out before the engine was started, so
-that the first file written lands in the right place. What is built and what is
-planned is marked below.
+Where things live, and why they live there. This was first written before the
+engine was started, so that the first file written landed in the right place.
+The engine now exists, and the crate map below says what is there.
 
 Three of the decisions here were made wrong first and corrected. The wrong
 versions are kept, because a rejected design is what stops the same design being
@@ -32,50 +31,45 @@ computed costs one method, and the reverse costs a divergence nobody can see.
 
 ## The crates
 
-Built:
-
 ```
-sts2-core       the shared vocabulary: decisions, observations, refusals, and
-                the traits an implementation of the game satisfies. Both the
-                oracle and the engine implement them. See STS2-CORE.md.
-sts2-sim        the engine and concrete draw stream, verified against the game
+sts2-core       the shared vocabulary: decisions, observations, refusals, the
+                hooks and effects content speaks in, and the traits an
+                implementation of the game satisfies. Both the oracle and the
+                engine implement them. See STS2-CORE.md.
 sts2-content    <build>/generated/    xtask writes this, never hand-edited
                 <build>/dumps/        what the game printed
-sts2-headless   a client for the headless mod, the oracle's transport
-                recording.rs          a run, as the decisions that made it
-sts2-cli        `sts2`: a daemon holding one game, and one command per
-                invocation
+                behaviour/            the rules, hand-ported, shared by builds
+                <build>/behaviour/    a build's own rules, where it differs
+sts2-sim        the engine: turn loop, map generation, rewards, shops and run
+                progression, generic over a content version, and verified
+                against the game
 sts2-run        the one runner: every run played or replayed, at the
                 simulator's table or the game's. See RUNNERS.md
-xtask           cargo xtask dump, cargo xtask codegen
+sts2-headless   a client for the headless mod, the oracle's transport
+sts2-cli        `sts2`: the terminal front end, on the simulator or a daemon
+                holding one game
+sts2-golden     the tests against what the game recorded
+sts2-pack       reads files out of the game's pack
+xtask           cargo xtask dump, codegen, hunt, census and the other tools
 ```
 
 `sts2-cli` is a front end, and the parts of it that are opinions say so. How an
 observation reads at a terminal is its choice and not the oracle's, which is why
 none of that lives in `sts2-headless`.
 
-Planned, and the subject of most of this document:
-
-```
-sts2-content    <build>/behaviour/    hand-ported, never generated
-sts2-sim-core   the nouns and the traits. Combat state, creature, piles, and the
-                hook trait content implements. No content, no engine.
-sts2-sim        the engine. Turn loop, map generation, rewards, shops, run
-                progression. Generic over a content version.
-sts2-net        optional retail multiplayer adapter. Version-specific message
-                and model-id tables outside; ordered actions into sts2-sim.
-```
-
-Dependencies run `sts2-content → sts2-sim-core` and `sts2-sim → sts2-sim-core`.
+Dependencies run `sts2-content → sts2-core` and `sts2-sim → sts2-core`.
 Content depends on the traits it implements. The engine depends on the same
-traits and calls them. Neither depends on the other.
+traits and calls them. Neither depends on the other. `sts2-run` is where the two
+meet, and picks a build.
 
-The cycle that forces a third crate is worth stating, because it is not obvious
+The cycle that forces a shared crate is worth stating, because it is not obvious
 and every link in it is load-bearing. Behaviour is version-scoped, so it lives in
-`sts2-content`. Strike's behaviour mutates combat state, so it must name that
-type. Combat state belongs to an engine that is generic over the version, so the
-engine cannot be named by content without pointing back. A crate both can name
-and neither owns is what breaks it.
+`sts2-content`. Strike's behaviour changes combat state, so it must name what
+it changes. Combat state belongs to an engine that is generic over the version,
+so content cannot name the engine without the engine pointing back. A crate
+both can name and neither owns breaks the cycle. The plan named it
+`sts2-sim-core`. In the doing, `sts2-core` took that role: content speaks in its
+hooks and effects, and the engine carries them out.
 
 **Rejected: declaring those nouns and traits in `sts2-content` instead**, to save
 a crate. It breaks the same cycle. Content states what it needs from a combat
@@ -89,10 +83,6 @@ Beside the generated tables it leaves the crate with no one-sentence answer to
 "what belongs here". That question is what codegen, the dumps, the version
 modules and the generated/ vs behaviour/ split are all organised around. A crate
 is cheaper than that rule.
-
-It also kept the dependency honest in a small way. `sts2-core` takes
-`sts2-content` for the `ContentVersion` trait alone. The alternative compiles
-engine declarations it never uses, in `sts2-headless` too.
 
 ## Retail multiplayer is a compatibility target
 
@@ -258,9 +248,8 @@ It earns its place twice. Now, an interface complaint stops being anecdotal. The
 run that read badly can be replayed to the exact decision, as often as the
 rendering needs changing. Later, it is the input to a divergence test. The same
 steps are driven into the oracle and into the simulator and compared step by
-step. The recording is the thing that says what "the same run" means. `just live`
-already runs that shape, with a second game standing in for the simulator that
-does not exist yet.
+step. The recording is the thing that says what "the same run" means. The
+golden tests and `cargo xtask hunt` run that shape now.
 
 ## Why behaviour lives in content
 
@@ -371,7 +360,7 @@ them is forced by the crate layout.
 - **`trait CombatState`.** Engine implements, content calls. Needed only because
   content lives in a different crate from the state.
 
-Both are declared in `sts2-sim-core`, which is what lets the dependency run one
+Both are declared in `sts2-core` (the second as `Fight`), which lets the dependency run one
 way. The second one exists purely to pay for the crate boundary. An engine with
 behaviour inside it needs no such trait at all, and that arrangement was
 rejected for versioning reasons above.
@@ -385,14 +374,9 @@ says which of those points it uses. So the trait is the union, and each version
 implements a subset. That is the game's own shape: `public virtual` with an
 empty body, overridden by a handful of models.
 
-Hooks fold:
-
-```csharp
-foreach (AbstractModel item in IterateCombatHookListeners(combatState))
-    num = item.ModifyOrbValue(orb, num);
-```
-
-so **iteration order is semantics, not style**, for anything non-commutative.
+Hooks fold. A hook such as `ModifyOrbValue` hands each listener from
+`IterateCombatHookListeners` the value the one before it returned. So
+**iteration order is semantics, not style**, for anything non-commutative.
 The order is explicit code in `CombatState.IterateHookListeners`. It runs allies
 then enemies. Per creature it takes powers first, then the monster, or relics in
 slot order then potions. At run level it takes deck cards with their
@@ -493,10 +477,9 @@ Four layers, each catching what the one before cannot.
    typed observation, so both implementations derive it from the same value. The
    mod still sends one of its own, a SHA-256 over a JSON string built in C#.
    That one can only ever compare the game against another copy of the game.
-   `just live` asserts the two agree about whether two runs are the same run.
+   The two are checked to agree about whether two runs are the same run.
    That is what catches an observation that dropped a field the game's state
-   has. `just live` still runs a second game where the simulator will go,
-   because the simulator does not exist yet.
+   has.
 
 5. **The lockstep oracle.** Before retail multiplayer is claimed,
    `sts2-headless` exposes the game's `NetFullCombatState` and checksum after
