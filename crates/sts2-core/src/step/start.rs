@@ -2,7 +2,8 @@
 //!
 //! Not a [`Decision`](crate::Decision), because it is not a move a player makes
 //! sitting at the game. It is what has to be true before there is a game to sit
-//! at, and [`Play::begin`](crate::Play::begin) is the only thing that takes it.
+//! at, and [`RunTable::begin`](crate::RunTable::begin) is the only thing that
+//! takes it.
 //!
 //! Keeping it out of the decision vocabulary is what lets a run be a type. An
 //! implementation holds a run rather than perhaps holding one, and no decision

@@ -3,12 +3,15 @@
 use sts2_core::{EventHook, HookEffect};
 
 /// `TryModifyRestSiteHealRewards`: two potion rewards for its owner, an
-/// event's heal included. A run here has one player.
+/// event's heal included.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    if let EventHook::RestSiteHealRewards { .. } = hook {
+    if let EventHook::RestSiteHealRewards { player, .. } = hook
+        && player == owner
+    {
         asked.push(HookEffect::OfferRewards(V::TINY_MAILBOX_REWARDS));
     }
 }

@@ -1,0 +1,5 @@
+# The Ironclad picks up Golden Compass, and the act's map is made again as
+# one fixed path. `GoldenPathActMap` takes the path's second Monster out
+# in a run of several players, so it is a point shorter.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"grant","relic":"GOLDEN_COMPASS","target":1,"seat":0}

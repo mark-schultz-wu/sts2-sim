@@ -64,8 +64,8 @@ A mod bug the work exposes gets fixed in the same PR.
   PR.
 - `cargo xtask instructions <label> --vs <last label>`. Explain any cost
   over 0.3%, or cut it.
-- The census: `cargo build -q --release -p sts2-golden --example
-  random_run && timeout 1500 cargo xtask census --runs 300 --top 30`.
+- The census: `cargo build -q --release -p sts2-run && timeout
+  1500 cargo xtask census --runs 300 --top 30`.
   Every character's lowest stop holds, and nothing new panics, unless
   the PR adds the new stop to `BLOCKERS.md` and says why.
 - Once recorded runs exist, they are the measure. A fix moves the

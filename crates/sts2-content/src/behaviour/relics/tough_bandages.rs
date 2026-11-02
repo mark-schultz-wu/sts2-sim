@@ -5,16 +5,18 @@ use sts2_core::{EventHook, HookEffect};
 
 use crate::generated::runstate::CombatSide;
 
-/// `AfterCardDiscarded` in its owner's side's turn: its block on its owner.
-/// A fight here has one player, whose every card is its owner's.
+/// `AfterCardDiscarded` of its owner's card in its owner's side's turn: its
+/// block on its owner.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
         EventHook::CardDiscarded {
+            player,
             side: CombatSide::Player,
-        } => asked.push(HookEffect::GainBlock(V::Relic::TOUGH_BANDAGES_BLOCK)),
+        } if player == owner => asked.push(HookEffect::GainBlock(V::Relic::TOUGH_BANDAGES_BLOCK)),
         EventHook::CardDiscarded { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what ToughBandages does for {hook:?}"),
     }
