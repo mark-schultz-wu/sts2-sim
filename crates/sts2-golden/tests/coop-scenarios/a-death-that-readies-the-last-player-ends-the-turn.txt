@@ -1,0 +1,9 @@
+# The Silent ends the turn. The Ironclad, on 1 hit point, plays
+# Bloodletting and dies of it. Dead, they are ready to end the turn, the
+# last of the players to be, so the turn ends once the play is over.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"SILENT"},{"character":"IRONCLAD"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"BLOODLETTING","target":1001,"seat":0}
+{"cmd":"hp","hp":1,"target":1,"seat":0}
+{"cmd":"end_turn","seat":0}
+{"cmd":"play_card","index":5,"seat":1}

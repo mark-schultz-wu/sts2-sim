@@ -1,7 +1,7 @@
 //! How far the simulator follows the runs the game played, for `coverage`.
 //!
 //! Each run in the build's recorded file, [`recorded_file`], is followed
-//! by `sts2-golden`'s `follow_run`, in a process of its own so a panic names
+//! by `sts2-run follow`, in a process of its own so a panic names
 //! its run. Then, for v0.107.1, whose game played it, the long run
 //! 0RACLE1-REGENT-2, by its `BASELINE`.
 
@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use sts2_core::{End, Verdict};
 
 use crate::codegen::VersionError;
 use crate::coverage::Error;
@@ -21,7 +22,7 @@ const SPLITS: usize = 20;
 /// The long run the divergence test replays.
 const LONG_RUN: &str = "0RACLE1-REGENT-2";
 
-/// One run, as `follow_run` left it.
+/// One run, as `sts2-run follow` left it.
 struct Line {
     character: String,
     /// The positions that agreed, and how many the run has.
@@ -51,13 +52,13 @@ pub(crate) fn recorded_file(root: &Path) -> Result<PathBuf, VersionError> {
 }
 
 pub fn report(root: &Path, out: &mut String) -> Result<(), Error> {
-    let follow = crate::error::build_example(root, "follow_run")?;
+    let follow = crate::error::build_runner(root)?;
     let file = recorded_file(root)?;
-    let counted = crate::error::output(Command::new(&follow).arg(&file))?;
+    let counted = crate::error::output(Command::new(&follow).arg("follow").arg(&file))?;
     let runs: usize = String::from_utf8_lossy(&counted.stdout)
         .trim()
         .parse()
-        .expect("follow_run prints how many runs there are");
+        .expect("`sts2-run follow` prints how many runs there are");
 
     let next = AtomicUsize::new(0);
     let lines = Mutex::new(Vec::with_capacity(runs));
@@ -72,7 +73,10 @@ pub fn report(root: &Path, out: &mut String) -> Result<(), Error> {
                         break;
                     }
                     match crate::error::spawned(
-                        Command::new(&follow).arg(&file).arg(index.to_string()),
+                        Command::new(&follow)
+                            .arg("follow")
+                            .arg(&file)
+                            .arg(index.to_string()),
                     ) {
                         Ok(output) => {
                             let line = read(&output);
@@ -151,47 +155,34 @@ fn row(out: &mut String, name: &str, tally: &Tally) {
     .unwrap();
 }
 
-/// One `follow_run` line, or the panic that ended it.
+/// What `sts2-run follow` said of one run: `run <characters> <positions>`,
+/// then its verdict, whose step is the positions that agreed.
 fn read(output: &std::process::Output) -> Line {
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let words: Vec<&str> = stdout.split_whitespace().collect();
-    match words.as_slice() {
-        [character, positions, "whole"] => Line {
-            character: character.to_string(),
-            matched: positions.parse().expect("a count"),
-            positions: positions.parse().expect("a count"),
-            split: None,
-        },
-        [character, positions, "parted", step, after @ ..] => Line {
-            character: character.to_string(),
-            matched: step.parse().expect("a count"),
-            positions: positions.parse().expect("a count"),
-            split: Some(after.join(" ")),
-        },
-        // The character and the run's length come first, so a panic still
-        // names them, with how many positions agreed before it. The panic
-        // prints its message on the line after where it was.
-        [character, positions, "panicked", agreed] => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let why = stderr
-                .lines()
-                .skip_while(|line| !line.contains("panicked at"))
-                .nth(1)
-                .unwrap_or("no word why");
-            Line {
-                character: character.to_string(),
-                matched: agreed.parse().expect("a count"),
-                positions: positions.parse().expect("a count"),
-                split: Some(format!("panicked: {why}")),
-            }
-        }
-        [_, ..] => panic!(
-            "follow_run printed {stdout:?}: {}",
+    let said = || {
+        format!(
+            "`sts2-run follow` printed {stdout:?}: {}",
             String::from_utf8_lossy(&output.stderr)
-        ),
-        [] => panic!(
-            "follow_run printed nothing: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ),
+        )
+    };
+    let (character, positions) = stdout
+        .lines()
+        .find_map(|line| {
+            let mut words = line.strip_prefix("run ")?.split_whitespace();
+            Some((words.next()?.to_owned(), words.next()?.parse().ok()?))
+        })
+        .unwrap_or_else(|| panic!("{}", said()));
+    let verdict = Verdict::last_in(&stdout).unwrap_or_else(|| panic!("{}", said()));
+    let split = match verdict.end {
+        End::Agreed => None,
+        End::Parted => Some(verdict.detail),
+        End::Panicked => Some(format!("panicked: {}", verdict.detail)),
+        end => Some(format!("{end}: {}", verdict.detail)),
+    };
+    Line {
+        character,
+        matched: verdict.step,
+        positions,
+        split,
     }
 }

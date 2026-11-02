@@ -1,0 +1,12 @@
+# Stampede auto-plays the Silent's attacks as the turn ends, Dagger Throw
+# among them, which asks the Silent which card to discard. The post-play
+# phase waits on the Silent's answer, and the turn's end goes on once it
+# comes.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"power","power":"STAMPEDE_POWER","amount":10,"target":1,"seat":0}
+{"cmd":"grant","card":"DAGGER_THROW","target":1001,"seat":0}
+{"cmd":"end_turn","seat":0}
+{"cmd":"end_turn","seat":1}
+{"cmd":"answer","pick":0,"seat":1}
+{"cmd":"answer","done":true,"seat":1}

@@ -18,6 +18,8 @@ pub struct State {
 /// combat room. `TryModifyCardRewardOptionsLate` upgrades each reward card
 /// that can be, in a combat room where nothing got through.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
@@ -32,10 +34,9 @@ pub(super) fn event_hook<V: crate::Build>(
             target,
             unblocked,
             unblockable,
-            player,
             ..
         } => {
-            if state.combat_room && target == player && unblocked > 0 && !unblockable {
+            if state.combat_room && target == owner && unblocked > 0 && !unblockable {
                 state.took_damage = true;
             }
         }

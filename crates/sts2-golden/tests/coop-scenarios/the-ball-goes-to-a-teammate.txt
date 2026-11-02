@@ -1,0 +1,8 @@
+# The Ironclad plays The Ball at an enemy. Its damage rises by its
+# `Increase`, and once played it goes to a living teammate drawn at
+# random, into their draw pile at a random place. It is the Silent's from
+# then on.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"THE_BALL","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":2,"seat":0}

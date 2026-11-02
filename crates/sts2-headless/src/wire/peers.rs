@@ -6,7 +6,7 @@
 //! host is always 1, and a client picks its own, `1000 + seat`.
 
 use serde::Deserialize;
-use sts2_core::{Peer, Peers, SeatIndex};
+use sts2_core::{Link, Peer, Peers, SeatIndex};
 
 use super::ident;
 use super::observation::{Error, Why};
@@ -17,6 +17,16 @@ struct WirePeers {
     players: Vec<WirePlayer>,
     awaiting: Vec<u64>,
     in_flight: bool,
+    still: bool,
+    links: Vec<WireLink>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct WireLink {
+    net_id: u64,
+    sent: u64,
+    received: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -112,10 +122,19 @@ pub(crate) fn peers(state: &serde_json::Value, seats: usize) -> Result<Peers, Er
         .iter()
         .map(|&net_id| place(net_id))
         .collect::<Result<_, _>>()?;
+    let mut links = vec![Link::default(); seats];
+    for link in &wire.links {
+        links[place(link.net_id)?.at()] = Link {
+            sent: link.sent,
+            received: link.received,
+        };
+    }
     Ok(Peers {
         seats: seated,
         awaiting,
         in_flight: wire.in_flight,
+        still: wire.still,
+        links,
     })
 }
 
@@ -123,7 +142,7 @@ pub(crate) fn peers(state: &serde_json::Value, seats: usize) -> Result<Peers, Er
 mod tests {
     use super::peers;
     use serde_json::json;
-    use sts2_core::{Coord, Peer, SeatIndex};
+    use sts2_core::{Coord, Link, Peer, SeatIndex};
 
     /// The protocol's own example, with the host at seat 0 and the client at
     /// seat 1.
@@ -134,6 +153,8 @@ mod tests {
                         {"netId": 1, "endedTurn": true, "vote": null}],
             "awaiting": [1001],
             "inFlight": false,
+            "still": true,
+            "links": [{"netId": 1001, "sent": 4, "received": 3}],
         }});
         let read = peers(&state, 2).expect("the peers read");
         assert_eq!(
@@ -151,6 +172,13 @@ mod tests {
         );
         assert_eq!(read.awaiting, [SeatIndex(1)]);
         assert!(!read.in_flight);
+        assert_eq!(
+            read.links[1],
+            Link {
+                sent: 4,
+                received: 3
+            }
+        );
     }
 
     #[test]
@@ -159,6 +187,8 @@ mod tests {
             "players": [{"netId": 7, "endedTurn": false, "vote": null}],
             "awaiting": [],
             "inFlight": false,
+            "still": true,
+            "links": [{"netId": 1001, "sent": 4, "received": 3}],
         }});
         assert!(peers(&state, 2).is_err());
     }
