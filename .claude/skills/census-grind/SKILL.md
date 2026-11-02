@@ -26,7 +26,7 @@ few lines. `/loop` calls it again.
 ## 2. Measure
 
 ```sh
-cargo build -q --release -p sts2-golden --example random_run
+cargo build -q --release -p sts2-run
 cargo xtask census --runs 300 --top 20 > $SCRATCH/census-<n>.txt
 ```
 

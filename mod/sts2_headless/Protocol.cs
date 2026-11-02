@@ -624,6 +624,12 @@ internal static class Protocol
                     return;
                 }
 
+                if (Moves.Kills(sync.GetLocalEvent(), options[index]))
+                {
+                    await Error("choose_option", Refusals.OptionWouldKill());
+                    return;
+                }
+
                 // `NEventRoom.OptionButtonClicked` runs a proceed option on
                 // this machine alone, and sends every other through the
                 // synchronizer.
@@ -917,7 +923,7 @@ internal static class Protocol
             return;
         }
 
-        if (!card.CanPlayTargeting(target))
+        if (!Moves.Aimable(card, target))
         {
             await Error("play_card", Refusals.WrongTarget(card, target?.CombatId));
             return;
