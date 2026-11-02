@@ -42,6 +42,11 @@ impl<V: crate::Build> EventBehavior<V> for TrashHeap {
         )
     }
 
+    /// `WillKillPlayer`, for `DiveIn`: its hit point loss.
+    fn kills(&self, _state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 0 && run.hp() <= HP_LOSS
+    }
+
     /// `DiveIn`: the damage, then one relic of `Relics` off the event's
     /// stream. `Grab`: the gold, then one card of `Cards` off the same
     /// stream, into the deck. Each finishes the event.

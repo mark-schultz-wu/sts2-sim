@@ -4,7 +4,6 @@ use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-use crate::generated::runstate::CombatSide;
 
 /// `DamageReceivedThisTurn`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -27,10 +26,9 @@ pub(super) fn event_hook<V: crate::Build>(
             in_progress: true,
             ..
         } if target == owner => state.damage_received_this_turn += unblocked,
-        EventHook::BeforeSideTurnStart {
-            side: CombatSide::Player,
-            ..
-        } => state.damage_received_this_turn = 0,
+        EventHook::BeforeSideTurnStart { participants, .. } if participants.contains(owner) => {
+            state.damage_received_this_turn = 0
+        }
         _ => {}
     }
 }
