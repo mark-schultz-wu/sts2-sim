@@ -20,28 +20,35 @@ pub(crate) type Number = i32;
 
 pub(crate) mod glory;
 pub(crate) mod hive;
-mod overgrowth;
-mod shared;
-mod summoned;
-mod underdocks;
+pub(crate) mod overgrowth;
+pub(crate) mod shared;
+pub(crate) mod summoned;
+pub(crate) mod underdocks;
 
-/// Where a monster's move stopped on the player's answer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume {
-    /// The Knowledge Demon's `ChooseCurse`, for the set at this index.
-    CurseOfKnowledge { set: u8 },
-    /// A move whose attack stood still on a question the player had to
-    /// answer, from this step once the answer is in.
-    Step(u8),
+/// Where a monster's move that waits on a question resumes, under the file
+/// whose move it is.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
+    Glory(glory::paused::State<V, K>),
+    Hive(hive::paused::State<V, K>),
+    Overgrowth(overgrowth::paused::State<V, K>),
+    Summoned(summoned::paused::State<V, K>),
+    Underdocks(underdocks::paused::State<V, K>),
 }
 
-/// Carry a monster's move on with the player's answer.
-pub(crate) fn resume<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    at: Resume,
-    chosen: Option<sts2_core::CardIdent<V>>,
-) -> Played<V, F::Kind> {
-    hive::resume::<V, _>(fight, at, chosen)
+/// A move that stood still on a question, with the answer it waited for.
+pub(crate) fn resume<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
+    fight: &mut K::Fight<'a>,
+    at: Resume<V, K>,
+    taken: sts2_core::Taken<V>,
+) -> Played<V, K> {
+    match at {
+        Resume::Glory(paused) => glory::resume::<V, K>(fight, paused, taken),
+        Resume::Hive(paused) => hive::resume::<V, K>(fight, paused, taken),
+        Resume::Overgrowth(paused) => overgrowth::resume::<V, K>(fight, paused, taken),
+        Resume::Summoned(paused) => summoned::resume::<V, K>(fight, paused, taken),
+        Resume::Underdocks(paused) => underdocks::resume::<V, K>(fight, paused, taken),
+    }
 }
 
 /// `IllusionPower.ReviveMove`: the illusion comes back whole.
@@ -95,6 +102,26 @@ pub(crate) fn starting_powers<V: crate::Build>(
     }
 }
 
+/// Whom a monster's starting power is aimed at. The Aeonglass aims a
+/// Withering Presence at each opponent, and the Gremlin Merc a Thievery at
+/// each player.
+pub(crate) fn starting_power_aim<V: crate::Build>(
+    monster: V::Monster,
+    power: V::Power,
+) -> Option<sts2_core::Aim> {
+    match (monster, power) {
+        (__c0, __c1)
+            if __c0 == V::Monster::AEONGLASS && __c1 == V::Power::WITHERING_PRESENCE_POWER =>
+        {
+            Some(sts2_core::Aim::EachOpponent)
+        }
+        (__c0, __c1) if __c0 == V::Monster::GREMLIN_MERC && __c1 == V::Power::THIEVERY_POWER => {
+            Some(sts2_core::Aim::EachPlayer)
+        }
+        _ => None,
+    }
+}
+
 /// Powers a monster's `AfterAddedToRoom` applies to each of its opponents.
 /// The Rocket surrounds the player.
 pub(crate) fn starting_opponent_powers<V: crate::Build>(
@@ -127,8 +154,9 @@ pub(crate) fn health_after_added<V: crate::Build>(
     ascension: crate::generated::ascension::AscensionLevel,
     rolled: i32,
     teammates: &[i32],
+    scaled: impl Fn(i32) -> sts2_core::Decimal,
 ) -> Option<i32> {
-    hive::health_after_added::<V>(monster, ascension, rolled, teammates)
+    hive::health_after_added::<V>(monster, ascension, rolled, teammates, scaled)
 }
 
 /// A move's attack damage that the monster works out from the fight, from
@@ -350,36 +378,11 @@ pub(crate) fn event_hook<V: crate::Build>(
 ///
 /// A monster nobody has ported.
 #[tracing::instrument(level = "trace", skip_all, fields(monster = ?monster, move_id = ?move_id))]
-pub(crate) fn perform<V: crate::Build, F: Fight<V>>(
+pub(crate) fn perform<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     monster: V::Monster,
     move_id: V::MoveId,
-    fight: &mut F,
-) -> Played<V, F::Kind> {
-    perform_from::<V, _>(monster, move_id, 0, fight)
-}
-
-/// A move whose attack stood still on a question the player had to answer,
-/// carried on from where it stopped.
-pub(crate) fn resume_move<V: crate::Build, F: Fight<V>>(
-    monster: V::Monster,
-    move_id: V::MoveId,
-    at: Resume,
-    fight: &mut F,
-) -> Played<V, F::Kind> {
-    let Resume::Step(step) = at else {
-        unreachable!("{at:?} resumes a choice, not a move")
-    };
-    perform_from::<V, _>(monster, move_id, step, fight)
-}
-
-/// A move from `step`, which stands still, naming the step it goes on from,
-/// where its attack made the player answer something.
-fn perform_from<V: crate::Build, F: Fight<V>>(
-    monster: V::Monster,
-    move_id: V::MoveId,
-    step: u8,
-    fight: &mut F,
-) -> Played<V, F::Kind> {
+    fight: &mut K::Fight<'a>,
+) -> Played<V, K> {
     // Two states no table names. `Creature.Stun` builds one and
     // `IllusionPower` builds the other, and what each does belongs to
     // whoever built it rather than to the monster standing on it.
@@ -413,41 +416,20 @@ fn perform_from<V: crate::Build, F: Fight<V>>(
             || __c1 == V::MoveId::SLAP_MOVE
             || __c1 == V::MoveId::PONDER_MOVE)
     {
-        return hive::knowledge_demon::<V, _>(move_id, step, fight);
+        return hive::knowledge_demon::<V, K>(move_id, fight);
     }
     // A move whose rule is the build's own.
-    let next = match V::own_move(monster, move_id, step, fight) {
-        Some(next) => next,
-        None => match V::filed(monster) {
-            Filed::Glory => glory::perform::<V, _>(monster, move_id, step, fight),
-            Filed::Hive => hive::perform::<V, _>(monster, move_id, step, fight),
-            Filed::Overgrowth => overgrowth::perform::<V, _>(monster, move_id, step, fight),
-            Filed::Shared => shared::perform::<V, _>(monster, move_id, step, fight),
-            Filed::Summoned => summoned::perform::<V, _>(monster, move_id, step, fight),
-            Filed::Underdocks => underdocks::perform::<V, _>(monster, move_id, step, fight),
-        },
-    };
-    match next {
-        Some(step) => Played::Waiting {
-            at: Resume::Step(step).into(),
-        },
-        None => Played::Done,
+    if let Some(played) = V::own_move::<K>(monster, move_id, fight) {
+        return played;
     }
-}
-
-/// A move's opening attack, at step 0. True where the attack made the player
-/// answer something, and the move stands still until step 1.
-///
-/// The attack is the one command a move can stand still on. Every other
-/// command takes a `ThrowingPlayerChoiceContext`, which throws on a question.
-/// Each move ported by hand attacks first or last, so none needs a step past
-/// 1. The board panics on a command that runs on past an attack that asked.
-pub(crate) fn attack_first<V: crate::Build, F: Fight<V>>(fight: &mut F, step: u8) -> bool {
-    if step == 0 {
-        fight.attack_opponents();
-        return fight.waiting();
+    match V::filed(monster) {
+        Filed::Glory => glory::perform::<V, K>(monster, move_id, fight),
+        Filed::Hive => hive::perform::<V, K>(monster, move_id, fight),
+        Filed::Overgrowth => overgrowth::perform::<V, K>(monster, move_id, fight),
+        Filed::Shared => shared::perform::<V, K>(monster, move_id, fight),
+        Filed::Summoned => summoned::perform::<V, K>(monster, move_id, fight),
+        Filed::Underdocks => underdocks::perform::<V, K>(monster, move_id, fight),
     }
-    false
 }
 
 /// What a monster's own model saves between its moves.

@@ -1,0 +1,12 @@
+# The second turn's draw leaves the draw pile dry. Glowwater exhausts the
+# hand one card at a time, and Dark Embrace draws for the first, which
+# shuffles, and Stratagem asks for its pick. The rest of the exhausts, and
+# Glowwater's draw, wait on the answer.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"GLOWWATER_POTION"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"power","power":"DARK_EMBRACE_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"answer","cards":[0]}

@@ -12,13 +12,13 @@
 //! ```
 //!
 //! With `rules`, each step goes through `Sim::advance`, which is what a search
-//! pays. Without it, through `Play::step`, which also builds the observation.
+//! pays. Without it, through `Sim::step`, which also builds the observation.
 
 use std::process::ExitCode;
 
 use clap::Parser;
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::{Construct, Play, Step};
+use sts2_core::Step;
 use sts2_golden::bench::reached;
 use sts2_golden::{every_run, recording};
 use sts2_sim::Sim;
@@ -36,7 +36,7 @@ struct Cli {
     through: Through,
 }
 
-/// `Play::step`, which builds the observation, or `Sim::advance`, which is
+/// `Sim::step`, which builds the observation, or `Sim::advance`, which is
 /// what a search pays.
 #[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 enum Through {
@@ -69,7 +69,7 @@ fn run(cli: Cli) -> Result<(), Error> {
     let recorded = recording::<V>(&name)?;
     let start = recorded.start().clone();
     let steps: Vec<Step<V>> = recorded.steps().to_vec();
-    let supported = reached::<V, Sim<V>>(&start, &steps);
+    let supported = reached::<V>(&start, &steps);
     let played = &steps[..supported];
 
     println!(
@@ -77,7 +77,7 @@ fn run(cli: Cli) -> Result<(), Error> {
         REPLAYS * supported
     );
     for _ in 0..REPLAYS {
-        let mut sim = Sim::<V>::begin((), &start).map_err(Error::Begin)?;
+        let mut sim = Sim::<V>::begin(&start).map_err(Error::Begin)?;
         for step in played {
             if rules {
                 let _ = std::hint::black_box(sim.advance(step));

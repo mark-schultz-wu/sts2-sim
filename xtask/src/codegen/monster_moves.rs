@@ -9,10 +9,10 @@
 //!
 //! A move's attack can make the player answer something, as a relic's draw
 //! that shuffles on a hit does. The game's move stands still on its `await`
-//! until the answer comes. So a move with more to do after an attack stops
-//! there, names the step it goes on from, and is called again with it. Every
-//! other command takes a `ThrowingPlayerChoiceContext`, which throws on a
-//! question, so none of them is a place to stop.
+//! until the answer comes. So a move with more to do after an attack is the
+//! file's `diapause` coroutine, which yields there. Every other command takes
+//! a `ThrowingPlayerChoiceContext`, which throws on a question, so none of
+//! them is a place to stop.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -223,26 +223,15 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
         let bucket = super::monsters::bucket(act_of.get(id));
         buckets.entry(bucket).or_default().push(id);
     }
+    // Each file, and whether it has a move that can stand still.
+    let mut pausing: Vec<(&str, bool)> = Vec::new();
     for (bucket, ids) in &buckets {
         let out = split.body(bucket);
         writeln!(out, "type V = super::super::super::{version};\n").unwrap();
-        writeln!(
-            out,
-            "/// A move of a monster in this file, for every move whose statements\n\
-             /// the dump matched.\n\
-             ///\n\
-             /// Any other move panics, and `behaviour/` ports it by hand. It\n\
-             /// starts at `step`, and hands back the step to go on from where a\n\
-             /// command made the player answer something.\n\
-             pub fn perform<F: Fight<V>>(\n\
-             monster: Monster,\n\
-             move_id: MoveId,\n\
-             step: u8,\n\
-             fight: &mut F,\n\
-             ) -> Option<u8> {{\n\
-             match (monster, move_id) {{"
-        )
-        .unwrap();
+        // Each move of the file, and whether it stands still after an attack.
+        let mut plain: Vec<(String, &Move)> = Vec::new();
+        let mut stopping: Vec<(String, &Move)> = Vec::new();
+        let mut blocked: Vec<(String, &String)> = Vec::new();
         for id in ids {
             let (_, moves) = monsters
                 .iter()
@@ -250,47 +239,99 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
                 .expect("every bucketed monster is in the dump");
             for held in moves {
                 let arm = format!("(Monster::{}, MoveId::{})", camel(id), camel(&held.id));
-                if let Some(blocked) = &held.blocked {
-                    comment(out, blocked);
-                    writeln!(
-                        out,
-                        "{arm} => unimplemented!(\"what {{move_id:?}} does when {{monster:?}} performs it\"),"
-                    )
-                    .unwrap();
+                if let Some(why) = &held.blocked {
+                    blocked.push((arm, why));
                     continue;
                 }
-                writeln!(out, "{arm} => {{").unwrap();
                 let last = held.rows.len().saturating_sub(1);
-                let stops = held.rows[..last].iter().any(|row| row == &["attack"]);
-                if stops {
-                    writeln!(out, "if step == 0 {{").unwrap();
+                match held.rows[..last].iter().any(|row| row == &["attack"]) {
+                    true => stopping.push((arm, held)),
+                    false => plain.push((arm, held)),
                 }
-                let mut steps = 0;
-                for (at, row) in held.rows.iter().enumerate() {
-                    command(out, row, &cards).map_err(|source| Error::In {
-                        at: format!("{id} {}", held.id),
-                        source: Box::new(source),
-                    })?;
-                    if row == &["attack"] && at < last {
-                        steps += 1;
-                        writeln!(
-                            out,
-                            "if fight.waiting() {{ return Some({steps}); }}\n}}\nif step <= {steps} {{"
-                        )
-                        .unwrap();
-                    }
-                }
-                if stops {
-                    writeln!(out, "}}").unwrap();
-                }
-                writeln!(out, "}}").unwrap();
             }
         }
         writeln!(
             out,
-            "(monster, move_id) => unimplemented!(\"{{monster:?}} has no {{move_id:?}} in the table\"),\n}}\nNone\n}}"
+            "/// A move of a monster in this file that never stands still, for\n\
+             /// every move whose statements the dump matched. `None` for a move\n\
+             /// with more to do after an attack, which [`paused`] performs.\n\
+             ///\n\
+             /// Any other move panics, and `behaviour/` ports it by hand.\n\
+             pub fn perform<F: Fight<V>>(\n\
+             monster: Monster,\n\
+             move_id: MoveId,\n\
+             fight: &mut F,\n\
+             ) -> Option<()> {{\n\
+             match (monster, move_id) {{"
         )
         .unwrap();
+        for (arm, why) in &blocked {
+            comment(out, why);
+            writeln!(
+                out,
+                "{arm} => unimplemented!(\"what {{move_id:?}} does when {{monster:?}} performs it\"),"
+            )
+            .unwrap();
+        }
+        for (arm, held) in &plain {
+            writeln!(out, "{arm} => {{").unwrap();
+            for row in &held.rows {
+                command(out, row, &cards).map_err(|source| Error::In {
+                    at: arm.clone(),
+                    source: Box::new(source),
+                })?;
+            }
+            writeln!(out, "}}").unwrap();
+        }
+        if !stopping.is_empty() {
+            let arms: Vec<&str> = stopping.iter().map(|(arm, _)| arm.as_str()).collect();
+            writeln!(out, "{} => return None,", arms.join(" | ")).unwrap();
+        }
+        writeln!(
+            out,
+            "(monster, move_id) => unimplemented!(\"{{monster:?}} has no {{move_id:?}} in the table\"),\n}}\nSome(())\n}}\n"
+        )
+        .unwrap();
+        if !stopping.is_empty() {
+            writeln!(
+                out,
+                "/// A move of a monster in this file with more to do after an attack,\n\
+                 /// from its start to its end. An attack that leaves a question waiting\n\
+                 /// stands the rest still, as the game's `await` does. Each step is lent\n\
+                 /// the fight, and after a question the answer.\n\
+                 #[diapause::coroutine(yield = Ask<V>, resume = for<'f, 'a> Lent<'f, 'a, V, K>)]\n\
+                 #[derive(Debug, Clone, PartialEq, Eq, Hash)]\n\
+                 pub fn paused<K: FightKind<V>>(item: (Monster, MoveId)) {{\n\
+                 match item {{"
+            )
+            .unwrap();
+            for (arm, held) in &stopping {
+                writeln!(out, "{arm} => {{").unwrap();
+                let last = held.rows.len() - 1;
+                for (at, row) in held.rows.iter().enumerate() {
+                    writeln!(out, "{{\nlet fight = &mut *resumed!().fight;").unwrap();
+                    command(out, row, &cards).map_err(|source| Error::In {
+                        at: arm.clone(),
+                        source: Box::new(source),
+                    })?;
+                    writeln!(out, "}}").unwrap();
+                    if row == &["attack"] && at < last {
+                        writeln!(
+                            out,
+                            "if resumed!().fight.waiting() {{\nyield_!(Ask::Waiting);\n}}"
+                        )
+                        .unwrap();
+                    }
+                }
+                writeln!(out, "}}").unwrap();
+            }
+            writeln!(
+                out,
+                "other => unreachable!(\"{{other:?}} has nothing to do after an attack\"),\n}}\n}}\n"
+            )
+            .unwrap();
+        }
+        pausing.push((bucket, !stopping.is_empty()));
     }
 
     let mut shape = super::banner(
@@ -332,6 +373,7 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
         writeln!(shape, "{} => Filed::{},", arms.join(" | "), camel(bucket)).unwrap();
     }
     writeln!(shape, "}}\n}}").unwrap();
+    shape.push_str(&dispatch(&version, &pausing));
     split.finish(
         &shape,
         |bucket| format!("What the moves of the monsters in `{bucket}` do."),
@@ -343,11 +385,111 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
             ),
             ("super::super::monsters", &["Monster", "MoveId"]),
             ("super::super::powers", &["Power"]),
+            ("crate::behaviour::paused", &["Ask", "Lent"]),
             (
                 "sts2_core",
-                &["Amount", "Effect", "Fight", "PowerAmount", "Scaling"],
+                &[
+                    "Amount",
+                    "Effect",
+                    "Fight",
+                    "FightKind",
+                    "PowerAmount",
+                    "Scaling",
+                ],
             ),
         ],
     )?;
     Ok(())
+}
+
+/// The parent's `Paused`, `perform` and `resume`, over every file. `pausing`
+/// names each file, and whether it has a move that can stand still.
+fn dispatch(version: &str, pausing: &[(&str, bool)]) -> String {
+    let mut out = format!(
+        "\ntype V = super::super::{version};\n\n\
+         /// A generated move standing still on a question, by its file.\n\
+         #[derive(Debug, Clone, PartialEq, Eq, Hash)]\n\
+         pub enum Paused<K: sts2_core::FightKind<V>> {{\n"
+    );
+    for (bucket, pauses) in pausing {
+        if *pauses {
+            writeln!(out, "{}({bucket}::paused::State<K>),", camel(bucket)).unwrap();
+        }
+    }
+    out.push_str(
+        "}\n\n\
+         /// A move, for every move whose statements the dump matched.\n\
+         ///\n\
+         /// Any other move panics, and `behaviour/` ports it by hand.\n\
+         pub fn perform<'a, K: sts2_core::FightKind<V>>(\n\
+         monster: super::monsters::Monster,\n\
+         move_id: super::monsters::MoveId,\n\
+         fight: &mut K::Fight<'a>,\n\
+         ) -> crate::behaviour::Played<V, K> {\n\
+         match filed(monster) {\n",
+    );
+    for (bucket, pauses) in pausing {
+        let name = camel(bucket);
+        match pauses {
+            true => writeln!(
+                out,
+                "Filed::{name} => match {bucket}::perform(monster, move_id, fight) {{\n\
+                 Some(()) => crate::behaviour::Played::Done,\n\
+                 None => {{\n\
+                 let mut play = {bucket}::paused::<K>((monster, move_id));\n\
+                 let state = play.start_with(crate::behaviour::paused::Lent {{ fight, taken: None }});\n\
+                 settle(Paused::{name}(play), state)\n\
+                 }}\n\
+                 }},"
+            ),
+            false => writeln!(
+                out,
+                "Filed::{name} => {{\n\
+                 {bucket}::perform(monster, move_id, fight);\n\
+                 crate::behaviour::Played::Done\n\
+                 }}"
+            ),
+        }
+        .unwrap();
+    }
+    out.push_str(
+        "}\n}\n\n\
+         /// A generated move that stood still, with the answer it waited for.\n\
+         pub fn resume<'a, K: sts2_core::FightKind<V>>(\n\
+         fight: &mut K::Fight<'a>,\n\
+         paused: Paused<K>,\n\
+         taken: sts2_core::Taken<V>,\n\
+         ) -> crate::behaviour::Played<V, K> {\n\
+         let lent = crate::behaviour::paused::Lent { fight, taken: Some(taken) };\n\
+         match paused {\n",
+    );
+    for (bucket, pauses) in pausing {
+        if *pauses {
+            let name = camel(bucket);
+            writeln!(
+                out,
+                "Paused::{name}(mut play) => {{\n\
+                 let state = diapause::Coroutine::resume(&mut play, lent);\n\
+                 settle(Paused::{name}(play), state)\n\
+                 }}"
+            )
+            .unwrap();
+        }
+    }
+    out.push_str(
+        "}\n}\n\n\
+         /// How far a step of a move got.\n\
+         fn settle<K: sts2_core::FightKind<V>>(\n\
+         play: Paused<K>,\n\
+         state: diapause::CoroutineState<crate::behaviour::paused::Ask<V>, ()>,\n\
+         ) -> crate::behaviour::Played<V, K> {\n\
+         match state {\n\
+         diapause::CoroutineState::Complete(()) => crate::behaviour::Played::Done,\n\
+         diapause::CoroutineState::Yielded(ask) => {\n\
+         ask.at(crate::behaviour::Resume::Build(play.into()))\n\
+         }\n\
+         }\n\
+         }\n",
+    );
+    out
 }

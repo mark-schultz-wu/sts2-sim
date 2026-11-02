@@ -1,7 +1,6 @@
 //! A game held open by a daemon, driven from a process that did not launch it.
 //!
-//! The second implementation of [`Play`] in this crate, and the same game
-//! behind it. [`Oracle`](crate::Oracle) owns a child process and dies with it.
+//! The second way this crate drives a game, and the same game behind it. [`Oracle`](crate::Oracle) owns a child process and dies with it.
 //! This reaches one that a [`daemon`](crate::daemon) is holding, so `sts2
 //! play-card 0` can be a whole process and still land in a run forty decisions
 //! deep.
@@ -13,7 +12,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
-use sts2_core::{Answered, Construct, Decision, Play, Setup, Snapshot, Start};
+use sts2_core::{Answered, Decision, Setup, Snapshot, Start};
 
 use super::daemon::{
     self,
@@ -170,19 +169,15 @@ impl<V: sts2_content_wire::WireContentVersion> Session<V> {
     }
 }
 
-impl<V: sts2_content_wire::WireContentVersion> Play<V> for Session<V> {
-    type Error = Error;
-
-    /// Nothing. The daemon is already holding a game, so there is nowhere to
-    /// point this: the socket is derived from the build.
-    type Host = ();
-
-    /// Asks the daemon to start a run on the game it is holding.
+impl<V: sts2_content_wire::WireContentVersion> Session<V> {
+    /// Asks the daemon to start a run on the game it is holding. It takes no
+    /// host: the daemon is already holding a game, and the socket is derived
+    /// from the build.
     ///
     /// Whether it will is the daemon's business. It holds one game, so it is
     /// the thing that knows a run is already open. It says so, rather than
     /// starting a second one over the first.
-    fn begin(_: Self::Host, start: &Start<V>) -> Result<Self, Error> {
+    pub fn begin(start: &Start<V>) -> Result<Self, Error> {
         // The game's `start` begins a solo run.
         start.alone();
         let mut session = Session::new();
@@ -192,21 +187,118 @@ impl<V: sts2_content_wire::WireContentVersion> Play<V> for Session<V> {
         }
     }
 
-    fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Error> {
+    /// Plays one decision and reports what it produced.
+    pub fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Error> {
         self.dispatch(decision)
     }
 
-    fn observe(&mut self) -> Result<Snapshot<V>, Error> {
+    /// Where the run stands.
+    pub fn observe(&mut self) -> Result<Snapshot<V>, Error> {
         match self.dispatch(Command::Observe)? {
             Ok(applied) => Ok(applied.snapshot()),
             Err(refusal) => Err(Error::NotObserved(refusal.to_string())),
         }
     }
+
+    /// Puts the run into a position, without playing to it.
+    pub fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Error> {
+        self.dispatch(step)
+    }
 }
 
-impl<V: sts2_content_wire::WireContentVersion> Construct<V> for Session<V> {
-    fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Error> {
-        self.dispatch(step)
+/// The daemon's run as a table of one seat, as the terminal plays it.
+///
+/// The daemon holds the run. This keeps where it last stood, so a seat's view
+/// can be lent rather than asked for each time. It asks only once something
+/// wants to see the run, so a session holding no run yet can stand behind one.
+pub struct HeldTable<V: sts2_content_wire::WireContentVersion> {
+    session: Session<V>,
+    last: Option<Snapshot<V>>,
+}
+
+impl<V: sts2_content_wire::WireContentVersion> HeldTable<V> {
+    /// The run the daemon is holding, or will hold.
+    pub fn attached(session: Session<V>) -> Self {
+        Self {
+            session,
+            last: None,
+        }
+    }
+
+    /// The session underneath, for what the daemon says beyond the run.
+    pub fn session(&self) -> &Session<V> {
+        &self.session
+    }
+
+    /// Where the run last stood, asked of the daemon if nothing has said yet.
+    fn standing(&mut self) -> Result<&Snapshot<V>, Error> {
+        if self.last.is_none() {
+            self.last = Some(self.session.observe()?);
+        }
+        Ok(self.last.as_ref().expect("the run was just looked at"))
+    }
+
+    /// A reply's answer, keeping where it left the run.
+    fn settled(&mut self, answered: Answered<V>) -> sts2_core::Settled<V> {
+        let (decided, snapshot) = answered?.split();
+        self.last = Some(snapshot);
+        Ok(decided)
+    }
+}
+
+impl<V: sts2_content_wire::WireContentVersion> sts2_core::RunTable<V> for HeldTable<V> {
+    type Error = Error;
+    type Host = ();
+    type Seen<'a> = &'a sts2_core::Observation<V>;
+
+    /// Asks the daemon to start a run, as [`Session::begin`] does.
+    fn begin(_: Self::Host, start: &Start<V>) -> Result<Self, Error> {
+        Ok(Self::attached(Session::begin(start)?))
+    }
+
+    fn seats(&self) -> usize {
+        1
+    }
+
+    fn seen(&mut self, _: sts2_core::SeatIndex) -> Result<Self::Seen<'_>, Error> {
+        Ok(&self.standing()?.observation)
+    }
+
+    fn moves(
+        &mut self,
+        _: sts2_core::SeatIndex,
+        moves: &mut Vec<Decision<V>>,
+    ) -> Result<(), Error> {
+        moves.clear();
+        let listed = &self.standing()?.observation.moves;
+        moves.extend_from_slice(listed);
+        Ok(())
+    }
+
+    fn play(
+        &mut self,
+        _: sts2_core::SeatIndex,
+        decision: &Decision<V>,
+    ) -> Result<sts2_core::Settled<V>, Error> {
+        let answered = self.session.play(decision)?;
+        Ok(self.settled(answered))
+    }
+
+    /// Asked of the daemon each time, because it can idle out from under a
+    /// held run, and a look is how a screen finds out.
+    fn snapshot(&mut self, _: sts2_core::SeatIndex) -> Result<Snapshot<V>, Error> {
+        let standing = self.session.observe()?;
+        self.last = Some(standing.clone());
+        Ok(standing)
+    }
+
+    fn construct(
+        &mut self,
+        _: sts2_core::SeatIndex,
+        setup: &Setup<V>,
+    ) -> Result<sts2_core::Settled<V>, Error> {
+        let answered = self.session.setup(setup)?;
+        Ok(self.settled(answered))
     }
 }
 

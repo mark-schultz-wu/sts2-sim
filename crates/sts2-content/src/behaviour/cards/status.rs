@@ -5,33 +5,38 @@ use sts2_core::{Amount, Effect, EventHook, Fight, HookEffect, Scaling};
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 
 /// What a status card does when it is played.
-pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
+pub(super) fn on_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     card: V::Card,
-    fight: &mut F,
-) -> crate::behaviour::Played<V, F::Kind> {
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
     match card {
         __c0 if __c0 == V::Card::FRANTIC_ESCAPE => frantic_escape::<V, _>(fight),
-        card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
+        card => crate::behaviour::cards::generated::<V, K>(card, fight),
     }
 }
 
-/// `FranticEscape`: one more on the Sandpit of the first enemy that holds
-/// one, then its own cost one higher for the rest of the fight. A fight here
-/// has one player, whom every Sandpit targets.
+/// `FranticEscape`: one more on the first enemy's Sandpit that is aimed at
+/// the card's owner. Then its own cost is one higher for the rest of the
+/// fight.
 fn frantic_escape<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
 ) -> crate::behaviour::Played<V, F::Kind> {
     use sts2_core::CreatureView as _;
 
-    let player_side = fight.side();
+    let (owner, player_side) = (fight.actor(), fight.side());
     let pit = fight
         .creatures()
         .find(|creature| {
             creature.side() != player_side && creature.power(V::Power::SANDPIT_POWER).is_some()
         })
         .map(|creature| creature.id());
-    if let Some(pit) = pit {
-        fight.modify_power_amount(pit, V::Power::SANDPIT_POWER, 1, Some(pit));
+    if let Some(pit) = pit
+        && let Some(nth) = fight
+            .power_instances(pit, V::Power::SANDPIT_POWER)
+            .iter()
+            .position(|&(target, _)| target == Some(owner))
+    {
+        fight.modify_power_at(pit, V::Power::SANDPIT_POWER, nth, 1, Some(pit));
     }
     fight.modify_this(
         sts2_core::Change::ChangeCost(sts2_core::CostPool::Energy, 1),

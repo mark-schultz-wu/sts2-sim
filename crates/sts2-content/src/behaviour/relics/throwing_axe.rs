@@ -25,9 +25,14 @@ pub(super) fn event_hook<V: crate::Build>(state: &mut State, hook: EventHook<V>)
 }
 
 /// `ModifyCardPlayCount`: one more play of its owner's card while unspent.
-/// A fight here has one player.
-pub(super) fn modify_hook<V: crate::Build>(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &State,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
+        // `card.Owner != base.Owner`: another player's number is left as it is.
+        ModifyHook::CardPlayCount { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::CardPlayCount { .. } if !state.used => Modify::Added(1),
         ModifyHook::CardPlayCount { .. } => Modify::Nothing,
         hook => unimplemented!("what ThrowingAxe does for {hook:?}"),
