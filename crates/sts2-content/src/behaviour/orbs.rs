@@ -63,6 +63,9 @@ pub(crate) fn turn_end<V: crate::Build, F: Fight<V>>(orb: &mut Channelled<V>, fi
 
 /// `Passive(null)`. An orb whose numbers move writes them on `orb`.
 pub(crate) fn passive<V: crate::Build, F: Fight<V>>(orb: &mut Channelled<V>, fight: &mut F) {
+    if V::own_orb_passive(orb, fight).is_some() {
+        return;
+    }
     match orb.orb {
         // Its passive number to a random enemy.
         __c0 if __c0 == V::Orb::LIGHTNING_ORB => {
@@ -148,6 +151,9 @@ pub(crate) fn evoke<V: crate::Build, F: Fight<V>>(
     orb: &Channelled<V>,
     fight: &mut F,
 ) -> sts2_core::Opponents {
+    if let Some(named) = V::own_orb_evoke(orb, fight) {
+        return named;
+    }
     match orb.orb {
         __c0 if __c0 == V::Orb::LIGHTNING_ORB => {
             lightning(evoke_val(orb, |n| fight.orb_value(orb.orb, n)), fight)

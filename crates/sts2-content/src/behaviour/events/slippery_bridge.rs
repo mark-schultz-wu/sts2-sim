@@ -102,6 +102,11 @@ impl<V: crate::Build> EventBehavior<V> for SlipperyBridge {
         )
     }
 
+    /// `WillKillPlayer`, for `HoldOn`: `CurrentHpLoss`, three and one more for each hold before.
+    fn kills(&self, state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 1 && run.hp() <= HP_LOSS + i32::from(state.holds)
+    }
+
     /// `Overcome`: the named card leaves the deck, which finishes the event.
     /// `HoldOn`: its hit points, unblockable, then a new card named.
     fn choose<R: GameRng>(
