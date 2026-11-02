@@ -859,7 +859,8 @@ internal static class ScreenPathSelections
             uint choiceId = RunManager.Instance.PlayerChoiceSynchronizer.ReserveChoiceId(player);
             await GameApi.SignalChoiceBegun(context, player, PlayerChoiceOptions.CancelPlayCardActions);
             result = (await CardSelection.Ask(list, 1, 1,
-                RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString())).FirstOrDefault();
+                RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString(),
+                () => PileType.Hand.GetPile(player).Cards.Where(c => c.IsUpgradable).ToList())).FirstOrDefault();
             RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
                 player, choiceId, PlayerChoiceResult.FromMutableCombatCard(result));
             await context.SignalPlayerChoiceEnded();
@@ -884,7 +885,8 @@ internal static class ScreenPathSelections
         else
         {
             result = await AskAsTheScreenDoes(
-                context, player, PlayerChoiceOptions.CancelPlayCardActions, list, prefs);
+                context, player, PlayerChoiceOptions.CancelPlayCardActions, list, prefs,
+                () => PileType.Hand.GetPile(player).Cards.Where(filter ?? (_ => true)).ToList());
         }
         LogChoice(player, result);
         return result;
@@ -929,12 +931,13 @@ internal static class ScreenPathSelections
     /// <summary>The screen branch, with the question parked where the screen would be.</summary>
     private static async Task<IEnumerable<CardModel>> AskAsTheScreenDoes(
         PlayerChoiceContext context, Player player, PlayerChoiceOptions options,
-        List<CardModel> offered, CardSelectorPrefs prefs)
+        List<CardModel> offered, CardSelectorPrefs prefs,
+        Func<IReadOnlyList<CardModel>>? live = null)
     {
         uint choiceId = RunManager.Instance.PlayerChoiceSynchronizer.ReserveChoiceId(player);
         await GameApi.SignalChoiceBegun(context, player, options);
         List<CardModel> result = (await CardSelection.Ask(offered, prefs.MinSelect, prefs.MaxSelect,
-            RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString())).ToList();
+            RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString(), live)).ToList();
         RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
             player, choiceId, PlayerChoiceResult.FromMutableCombatCards(result));
         await context.SignalPlayerChoiceEnded();
@@ -1386,4 +1389,45 @@ internal static class DropCancelledQuestion
 {
     [HarmonyPostfix]
     private static void Cancelled(GameAction __instance) => Pending.DropFor(__instance);
+}
+
+/// <summary>
+/// Where a pick from the hand reads its options, for the selector to take up.
+/// </summary>
+/// <remarks>
+/// On a build that asks <c>LocalSelector</c>, the selector is handed the
+/// hand as a list, fixed as the pick opens. The screen it stands in for,
+/// <c>NPlayerHand.SelectCards</c>, offers the hand as it stands, so a card
+/// another player puts into it while the pick is open can be picked. Each
+/// hand pick notes here how to read its hand, and the selector takes that up
+/// when the list it is handed is that hand.
+/// </remarks>
+[HarmonyPatch(typeof(CardSelectCmd))]
+internal static class HandPicksLive
+{
+    private static Func<IReadOnlyList<CardModel>>? _hand;
+
+    [HarmonyPrepare]
+    private static bool Prepare() => !GameApi.AsksThroughTheScreen;
+
+    [HarmonyPrefix]
+    [HarmonyPatch(nameof(CardSelectCmd.FromHand))]
+    private static void FromHand(Player player, Func<CardModel, bool>? filter) =>
+        _hand = () => PileType.Hand.GetPile(player).Cards.Where(filter ?? (_ => true)).ToList();
+
+    [HarmonyPrefix]
+    [HarmonyPatch(nameof(CardSelectCmd.FromHandForUpgrade))]
+    private static void FromHandForUpgrade(Player player) =>
+        _hand = () => PileType.Hand.GetPile(player).Cards.Where(c => c.IsUpgradable).ToList();
+
+    /// <summary>
+    /// How to read the hand <paramref name="offered"/> came from, once, or
+    /// null for a pick that is not from the hand.
+    /// </summary>
+    internal static Func<IReadOnlyList<CardModel>>? Take(IReadOnlyList<CardModel> offered)
+    {
+        Func<IReadOnlyList<CardModel>>? hand = _hand;
+        _hand = null;
+        return hand != null && hand().SequenceEqual(offered) ? hand : null;
+    }
 }

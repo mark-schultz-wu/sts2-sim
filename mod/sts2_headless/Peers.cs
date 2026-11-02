@@ -169,9 +169,15 @@ internal static class Peers
 
     /// <summary>
     /// Whether the game here cannot go on until another seat acts: this seat
-    /// has ended its turn or voted, or the game waits on another player's
-    /// choice.
+    /// has ended its turn or voted while another has not, or the game waits
+    /// on another player's choice.
     /// </summary>
+    /// <remarks>
+    /// Once every player has ended the turn, nobody holds the game. It is on
+    /// its way to the enemies' turn, which it runs off a signal the next
+    /// frame takes up, and stands idle until then. Every vote in is the same:
+    /// the host moves the party, and the votes clear as it arrives.
+    /// </remarks>
     internal static bool HeldByOthers(RunState state)
     {
         if (!Shared)
@@ -179,7 +185,9 @@ internal static class Peers
             return false;
         }
         Player me = Seat.Me(state);
-        return EndedTurn(me) || Vote(me) != null || AwaitedChoices().Count > 0;
+        bool waitsOnTurnEnds = EndedTurn(me) && !state.Players.All(EndedTurn);
+        bool waitsOnVotes = Vote(me) != null && !state.Players.All(p => Vote(p) != null);
+        return waitsOnTurnEnds || waitsOnVotes || AwaitedChoices().Count > 0;
     }
 
     /// <summary>The facts above, for the observation.</summary>
