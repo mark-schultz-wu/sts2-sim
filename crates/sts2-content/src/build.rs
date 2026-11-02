@@ -462,6 +462,7 @@ pub trait OwnRules: ContentVersion + Sized {
     /// A relic's `EventHook`, for a relic whose rule is the build's own.
     fn own_relic_event_hook(
         state: &mut crate::behaviour::relics::State<Self>,
+        owner: sts2_core::CombatId,
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) where
@@ -476,19 +477,25 @@ pub trait OwnRules: ContentVersion + Sized {
     /// cards answer for it.
     fn own_card_event_hook(
         card: Self::Card,
+        id: sts2_core::CardId<Self>,
         owner: sts2_core::CombatId,
+        history: sts2_core::History<'_, Self>,
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) -> Option<()>
     where
         Self: Build;
 
+    /// The fields a copy of a card of the build's own starts with, or
+    /// nothing for a shared card or one that keeps none.
+    fn own_card_fields(card: Self::Card) -> Option<crate::behaviour::cards::Fields>;
+
     /// Where a played card goes, for a card whose `GetResultLocationForCardPlay`
     /// is the build's own, or nothing for a shared one.
     fn own_card_result_pile(
         card: Self::Card,
         base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>>;
+    ) -> Option<sts2_core::HookResponse<sts2_core::CardResult>>;
 
     /// What a card of the build's own does when it is played, or nothing for
     /// a shared one.
@@ -586,6 +593,24 @@ pub trait OwnRules: ContentVersion + Sized {
         run: &impl sts2_core::EventView<Self>,
         rng: &mut R,
     ) -> Option<<Self::OwnEvents as sts2_core::EventBehavior<Self>>::State>;
+
+    /// An orb's `Passive(null)`, for an orb whose passive the build ports
+    /// for itself, or nothing for a shared one.
+    fn own_orb_passive<F: sts2_core::Fight<Self>>(
+        orb: &mut sts2_core::Channelled<Self>,
+        fight: &mut F,
+    ) -> Option<()>
+    where
+        Self: Build;
+
+    /// An orb's `Evoke`, and the creatures it names, for an orb whose evoke
+    /// the build ports for itself, or nothing for a shared one.
+    fn own_orb_evoke<F: sts2_core::Fight<Self>>(
+        orb: &sts2_core::Channelled<Self>,
+        fight: &mut F,
+    ) -> Option<sts2_core::Opponents>
+    where
+        Self: Build;
 
     /// A power's `AfterDeath` commands, for a power whose death the build
     /// ports for itself, or nothing for a shared one.
@@ -702,6 +727,7 @@ pub trait Build:
     + ContentVersion<
         EnchantmentState = crate::behaviour::enchantments::State,
         CardWrite = crate::behaviour::cards::CardWrite,
+        CardFilter = crate::behaviour::CardFilter<Self>,
     >
 {
 }
@@ -721,6 +747,7 @@ impl<V> Build for V where
         + ContentVersion<
             EnchantmentState = crate::behaviour::enchantments::State,
             CardWrite = crate::behaviour::cards::CardWrite,
+            CardFilter = crate::behaviour::CardFilter<V>,
         >
 {
 }
@@ -802,8 +829,7 @@ macro_rules! rules {
                 fn card_result_pile(
                     card: Self::Card,
                     base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-                ) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>
-                {
+                ) -> sts2_core::HookResponse<sts2_core::CardResult> {
                     crate::behaviour::rules::card_result_pile::<Self>(card, base)
                 }
 
@@ -1067,6 +1093,15 @@ macro_rules! rules {
                     crate::behaviour::rules::on_card_turn_end::<Self, F>(card, fight)
                 }
 
+                fn among<F: Fight<Self>>(
+                    fight: &F,
+                    pile: sts2_core::Pile,
+                    filter: &Self::CardFilter,
+                ) -> smallvec::SmallVec<[sts2_core::CardAt<Self>; sts2_core::MAX_CARDS_IN_HAND]>
+                {
+                    crate::behaviour::filter::among::<Self, F>(fight, pile, filter)
+                }
+
                 fn resume_play<'a, K: sts2_core::FightKind<Self>>(
                     fight: &mut K::Fight<'a>,
                     at: Self::Resume<K>,
@@ -1211,9 +1246,10 @@ macro_rules! rules {
                     ascension: Self::AscensionLevel,
                     rolled: Self::Health,
                     teammates: &[Self::Health],
+                    scaled: impl Fn(Self::Health) -> sts2_core::Decimal,
                 ) -> Option<Self::Health> {
                     crate::behaviour::rules::monster_health_after_added::<Self>(
-                        monster, ascension, rolled, teammates,
+                        monster, ascension, rolled, teammates, scaled,
                     )
                 }
 
@@ -1306,6 +1342,13 @@ macro_rules! rules {
                     crate::behaviour::rules::monster_starting_powers::<Self>(
                         monster, ascension, side, model,
                     )
+                }
+
+                fn monster_starting_power_aim(
+                    monster: Self::Monster,
+                    power: Self::Power,
+                ) -> Option<sts2_core::Aim> {
+                    crate::behaviour::monsters::starting_power_aim::<Self>(monster, power)
                 }
 
                 fn monster_starting_opponent_powers(
@@ -1470,6 +1513,14 @@ macro_rules! rules {
                     run: &impl sts2_core::EventView<Self>,
                 ) -> sts2_core::Room<Self> {
                     crate::behaviour::rules::observe_event::<Self>(state, run)
+                }
+
+                fn event_kills(
+                    state: &Self::EventState,
+                    option: u8,
+                    run: &impl sts2_core::EventView<Self>,
+                ) -> bool {
+                    crate::behaviour::rules::event_kills::<Self>(state, option, run)
                 }
 
                 fn choose_event<R: sts2_core::rng::GameRng>(

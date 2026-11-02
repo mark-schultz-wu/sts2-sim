@@ -28,8 +28,11 @@ pub(super) fn event_hook<V: crate::Build>(
             state.dexterity_applied = false;
             !holding_potions
         }
-        EventHook::PotionProcured { in_fight: true } => {
-            if state.dexterity_applied {
+        EventHook::PotionProcured {
+            in_fight: true,
+            holding_potions,
+        } => {
+            if holding_potions && state.dexterity_applied {
                 state.dexterity_applied = false;
                 asked.push(HookEffect::ApplyToOwner(
                     V::Power::DEXTERITY_POWER,

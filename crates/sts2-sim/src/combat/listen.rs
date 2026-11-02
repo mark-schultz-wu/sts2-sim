@@ -1169,35 +1169,59 @@ pub(crate) fn first_deciding<V: Rules>(
         .unwrap_or_else(|| unreachable!("{hook:?} is asked of one power, not raised"));
     let hooks = Overrides::of(model_hook);
     Kinds::hearing(fight.live, fight.belts, hooks)?;
+    first_of::<V>(fight, hooks, hook, answer).map(|(model, _)| model)
+}
+
+/// [`first_deciding`], with the seat whose belt holds the model where it is
+/// a relic.
+pub(crate) fn first_deciding_placed<V: Rules>(
+    fight: Walk<'_, V>,
+    hook: DecisionHook<V>,
+    answer: bool,
+) -> Option<(sts2_core::ModelId<V>, Option<sts2_core::SeatIndex>)> {
+    let model_hook = hook
+        .model_hook()
+        .unwrap_or_else(|| unreachable!("{hook:?} is asked of one power, not raised"));
+    let hooks = Overrides::of(model_hook);
+    Kinds::hearing(fight.live, fight.belts, hooks)?;
     first_of::<V>(fight, hooks, hook, answer)
 }
 
-/// [`first_deciding`] once something hears `hook`.
+/// [`first_deciding_placed`] once something hears `hook`.
 #[inline(never)]
 fn first_of<V: Rules>(
     fight: Walk<'_, V>,
     hooks: Overrides,
     hook: DecisionHook<V>,
     answer: bool,
-) -> Option<sts2_core::ModelId<V>> {
+) -> Option<(sts2_core::ModelId<V>, Option<sts2_core::SeatIndex>)> {
     let mut first = None;
     each::<V>(fight, hooks, |listener, _| {
         if first.is_none() && V::decide_hook(listener, hook).is_decision_and(|said| said == answer)
         {
             first = Some(match listener {
-                sts2_core::Listener::Power { power, .. } => sts2_core::ModelId::Power(power),
-                sts2_core::Listener::Monster { monster, .. } => {
-                    sts2_core::ModelId::Monster(monster)
+                sts2_core::Listener::Power { power, .. } => {
+                    (sts2_core::ModelId::Power(power), None)
                 }
-                sts2_core::Listener::Card { card, .. } => sts2_core::ModelId::Card(card),
-                sts2_core::Listener::Potion { potion, .. } => sts2_core::ModelId::Potion(potion),
-                sts2_core::Listener::Modifier(modifier) => sts2_core::ModelId::Modifier(modifier),
+                sts2_core::Listener::Monster { monster, .. } => {
+                    (sts2_core::ModelId::Monster(monster), None)
+                }
+                sts2_core::Listener::Card { card, .. } => (sts2_core::ModelId::Card(card), None),
+                sts2_core::Listener::Potion { potion, .. } => {
+                    (sts2_core::ModelId::Potion(potion), None)
+                }
+                sts2_core::Listener::Modifier(modifier) => {
+                    (sts2_core::ModelId::Modifier(modifier), None)
+                }
                 // The relic whose model this is, which only its place on the
                 // belt names.
-                sts2_core::Listener::Relic { state, .. } => sts2_core::ModelId::Relic({
+                sts2_core::Listener::Relic { state, .. } => {
                     let (seat, slot) = super::relic::place_of::<V>(fight.belts, state);
-                    fight.belts[seat][slot].relic
-                }),
+                    (
+                        sts2_core::ModelId::Relic(fight.belts[seat][slot].relic),
+                        Some(seat),
+                    )
+                }
             });
         }
     });

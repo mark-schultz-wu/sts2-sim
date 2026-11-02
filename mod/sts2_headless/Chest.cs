@@ -114,6 +114,23 @@ public static class Chest
         TreasureRoomRelicSynchronizer sync = RunManager.Instance.TreasureRoomRelicSynchronizer;
         return sync.CurrentRelics != null && !sync.GetPlayerVote(me).voteReceived;
     }
+
+    /// <summary>
+    /// Whether the chest offers its skip, which <c>NTreasureRoom</c> puts on
+    /// its proceed button for a single player alone. Several players only
+    /// vote for a relic.
+    /// </summary>
+    public static bool Skippable(RunState state) => state.Players.Count == 1;
+
+    /// <summary>
+    /// Whether <c>NTreasureRoom</c> has turned travel on. A single player's
+    /// skip does at once. Otherwise the room waits for
+    /// <c>RelicPickingFinished</c>, once every player voted and the relics
+    /// are awarded, which clears <c>CurrentRelics</c>.
+    /// </summary>
+    public static bool Done(RunState state, Player me) =>
+        !Open(me)
+        && (Skippable(state) || RunManager.Instance.TreasureRoomRelicSynchronizer.CurrentRelics == null);
 }
 
 /// <summary>
