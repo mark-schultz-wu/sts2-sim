@@ -14,9 +14,14 @@ const FROM_TURN: u32 = 3;
 pub(super) fn event_hook<V: crate::Build>(_hook: EventHook<V>) {}
 
 /// `ModifyMaxEnergy`: its energy while its owner's `TurnNumber` is three or
-/// more. A relic's owner is the player, and a fight here has one.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+/// more.
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
+        // `player != base.Owner`: another player's number is left as it is.
+        ModifyHook::MaxEnergy { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::MaxEnergy { turn, .. } if turn >= FROM_TURN => {
             Modify::Added(V::Relic::PAELS_FLESH_ENERGY)
         }

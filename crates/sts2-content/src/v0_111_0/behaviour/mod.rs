@@ -11,6 +11,7 @@ pub(crate) mod cards;
 pub(crate) mod enchantments;
 pub mod events;
 pub(crate) mod monsters;
+pub(crate) mod orbs;
 pub(crate) mod potions;
 pub(crate) mod powers;
 pub(crate) mod relics;
@@ -61,10 +62,11 @@ impl crate::build::OwnRules for V {
 
     fn own_relic_event_hook(
         state: &mut crate::behaviour::relics::State<V>,
+        owner: sts2_core::CombatId,
         hook: sts2_core::EventHook<V>,
         asked: &mut sts2_core::HookEffects<V>,
     ) {
-        relics::own_relic_event_hook(state, hook, asked);
+        relics::own_relic_event_hook(state, owner, hook, asked);
     }
 
     fn own_card_hooks(card: <V as sts2_core::ContentVersion>::Card) -> bool {
@@ -73,16 +75,25 @@ impl crate::build::OwnRules for V {
 
     fn own_card_event_hook(
         card: <V as sts2_core::ContentVersion>::Card,
+        id: sts2_core::CardId<V>,
+        owner: sts2_core::CombatId,
+        history: sts2_core::History<'_, V>,
         hook: sts2_core::EventHook<V>,
         asked: &mut sts2_core::HookEffects<V>,
     ) -> Option<()> {
-        cards::own_card_event_hook(card, hook, asked)
+        cards::own_card_event_hook(card, id, owner, history, hook, asked)
+    }
+
+    fn own_card_fields(
+        card: <V as sts2_core::ContentVersion>::Card,
+    ) -> Option<crate::behaviour::cards::Fields> {
+        cards::own_fields(card)
     }
 
     fn own_card_result_pile(
         card: <V as sts2_core::ContentVersion>::Card,
         base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>> {
+    ) -> Option<sts2_core::HookResponse<sts2_core::CardResult>> {
         cards::result_pile(card, base)
     }
 
@@ -149,6 +160,10 @@ impl crate::build::OwnRules for V {
                 super::generated::card_plays::resume::<K>(fight, paused, taken)
             }
             Paused::Own(paused) => cards::resume::<K>(fight, paused, taken),
+            Paused::Moves(paused) => {
+                super::generated::monster_moves::resume::<K>(fight, paused, taken)
+            }
+            Paused::OwnMoves(paused) => monsters::resume::<K>(fight, paused, taken),
         }
     }
 
@@ -175,32 +190,34 @@ impl crate::build::OwnRules for V {
         }
     }
 
-    fn own_move<F: sts2_core::Fight<V>>(
+    fn own_move<'a, K: sts2_core::FightKind<V>>(
         monster: <V as sts2_core::ContentVersion>::Monster,
         move_id: <V as sts2_core::ContentVersion>::MoveId,
-        step: u8,
-        fight: &mut F,
-    ) -> Option<Option<u8>> {
-        monsters::own_move(monster, move_id, step, fight)
+        fight: &mut K::Fight<'a>,
+    ) -> Option<crate::behaviour::Played<V, K>> {
+        monsters::own_move::<K>(monster, move_id, fight)
     }
 
-    fn generated_move<F: sts2_core::Fight<V>>(
+    fn generated_move<'a, K: sts2_core::FightKind<V>>(
         monster: <V as sts2_core::ContentVersion>::Monster,
         move_id: <V as sts2_core::ContentVersion>::MoveId,
-        step: u8,
-        fight: &mut F,
-    ) -> Option<u8> {
-        use super::generated::monster_moves;
-        use crate::generated::monster_moves::Filed;
+        fight: &mut K::Fight<'a>,
+    ) -> crate::behaviour::Played<V, K> {
+        super::generated::monster_moves::perform::<K>(monster, move_id, fight)
+    }
 
-        match monster_moves::filed(monster) {
-            Filed::Glory => monster_moves::glory::perform(monster, move_id, step, fight),
-            Filed::Hive => monster_moves::hive::perform(monster, move_id, step, fight),
-            Filed::Overgrowth => monster_moves::overgrowth::perform(monster, move_id, step, fight),
-            Filed::Shared => monster_moves::shared::perform(monster, move_id, step, fight),
-            Filed::Summoned => monster_moves::summoned::perform(monster, move_id, step, fight),
-            Filed::Underdocks => monster_moves::underdocks::perform(monster, move_id, step, fight),
-        }
+    fn own_orb_passive<F: sts2_core::Fight<V>>(
+        orb: &mut sts2_core::Channelled<V>,
+        fight: &mut F,
+    ) -> Option<()> {
+        orbs::own_passive(orb, fight)
+    }
+
+    fn own_orb_evoke<F: sts2_core::Fight<V>>(
+        orb: &sts2_core::Channelled<V>,
+        fight: &mut F,
+    ) -> Option<sts2_core::Opponents> {
+        orbs::own_evoke(orb, fight)
     }
 
     fn own_power_death<F: sts2_core::Fight<V>>(
@@ -260,10 +277,10 @@ impl crate::build::OwnRules for V {
         powers::own_power_decide_hook(power, amount, held, state, hook)
     }
 
-    fn own_potion_use<F: sts2_core::Fight<V>>(
+    fn own_potion_use<'a, K: sts2_core::FightKind<V>>(
         potion: <V as sts2_core::ContentVersion>::Potion,
-        fight: &mut F,
-    ) -> Option<crate::behaviour::Played<V, F::Kind>> {
+        fight: &mut K::Fight<'a>,
+    ) -> Option<crate::behaviour::Played<V, K>> {
         potions::own_potion_use(potion, fight)
     }
 
@@ -292,17 +309,19 @@ impl crate::build::OwnRules for V {
 
     fn own_shared_relic_modify_hook(
         state: &crate::behaviour::relics::State<V>,
+        owner: sts2_core::CombatId,
         hook: sts2_core::ModifyHook<V>,
     ) -> Option<sts2_core::Modify<i32>> {
-        relics::own_shared_relic_modify_hook(state, hook)
+        relics::own_shared_relic_modify_hook(state, owner, hook)
     }
 
     fn own_shared_relic_event_hook(
         state: &mut crate::behaviour::relics::State<V>,
+        owner: sts2_core::CombatId,
         hook: sts2_core::EventHook<V>,
         asked: &mut sts2_core::HookEffects<V>,
     ) -> Option<()> {
-        relics::own_shared_relic_event_hook(state, hook, asked)
+        relics::own_shared_relic_event_hook(state, owner, hook, asked)
     }
 
     fn own_potion_use_on_run(
@@ -314,13 +333,23 @@ impl crate::build::OwnRules for V {
     }
 }
 
-/// A play of this build's standing still on a question.
+/// A play or a move of this build's standing still on a question.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Paused<K: sts2_core::FightKind<V>> {
     /// One of its generated plays.
     Generated(super::generated::card_plays::Paused<K>),
     /// One of the plays it ports for itself.
     Own(cards::paused::State<K>),
+    /// One of its generated moves.
+    Moves(super::generated::monster_moves::Paused<K>),
+    /// One of the moves it ports for itself.
+    OwnMoves(monsters::paused::State<K>),
+}
+
+impl<K: sts2_core::FightKind<V>> From<super::generated::monster_moves::Paused<K>> for Paused<K> {
+    fn from(paused: super::generated::monster_moves::Paused<K>) -> Self {
+        Paused::Moves(paused)
+    }
 }
 
 impl<K: sts2_core::FightKind<V>> From<super::generated::card_plays::Paused<K>> for Paused<K> {

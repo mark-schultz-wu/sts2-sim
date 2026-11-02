@@ -579,7 +579,7 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
                 ],
             ),
             ("crate::behaviour", &["Played"]),
-            ("crate::behaviour::cards", &["Ask", "Lent"]),
+            ("crate::behaviour::paused", &["Ask", "Lent"]),
             ("super::super::orbs", &["Orb"]),
             ("super::super::powers", &["Power"]),
             (
@@ -636,7 +636,7 @@ fn dispatch(version: &str, pausing: &[(&str, &str, bool)]) -> String {
                  Some(()) => crate::behaviour::Played::Done,\n\
                  None => {{\n\
                  let mut play = {module}::paused::<K>(card);\n\
-                 let state = play.start_with(crate::behaviour::cards::Lent {{ fight, taken: None }});\n\
+                 let state = play.start_with(crate::behaviour::paused::Lent {{ fight, taken: None }});\n\
                  settle(Paused::{}(play), state)\n\
                  }}\n\
                  }},",
@@ -660,7 +660,7 @@ fn dispatch(version: &str, pausing: &[(&str, &str, bool)]) -> String {
          paused: Paused<K>,\n\
          taken: sts2_core::Taken<V>,\n\
          ) -> crate::behaviour::Played<V, K> {\n\
-         let lent = crate::behaviour::cards::Lent { fight, taken: Some(taken) };\n\
+         let lent = crate::behaviour::paused::Lent { fight, taken: Some(taken) };\n\
          match paused {\n",
     );
     for (module, _, pauses) in pausing {
@@ -681,12 +681,12 @@ fn dispatch(version: &str, pausing: &[(&str, &str, bool)]) -> String {
          /// How far a step of `play` got.\n\
          fn settle<K: sts2_core::FightKind<V>>(\n\
          play: Paused<K>,\n\
-         state: diapause::CoroutineState<crate::behaviour::cards::Ask<V>, ()>,\n\
+         state: diapause::CoroutineState<crate::behaviour::paused::Ask<V>, ()>,\n\
          ) -> crate::behaviour::Played<V, K> {\n\
          match state {\n\
          diapause::CoroutineState::Complete(()) => crate::behaviour::Played::Done,\n\
          diapause::CoroutineState::Yielded(ask) => {\n\
-         ask.at(crate::behaviour::cards::Resume::Build(play.into()).into())\n\
+         ask.at(crate::behaviour::Resume::Build(play.into()))\n\
          }\n\
          }\n\
          }\n",

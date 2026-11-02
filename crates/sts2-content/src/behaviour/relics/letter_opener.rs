@@ -4,7 +4,6 @@ use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
-use crate::generated::runstate::CombatSide;
 
 /// `SkillsPlayedThisTurn`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -17,13 +16,15 @@ pub struct State {
 /// count again, and so does `AfterSideTurnStart` on its owner's side past
 /// the first turn. `AfterCombatEnd` leaves it.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::CardPlayed { card, .. }
-            if <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Skill) =>
+        EventHook::CardPlayed { card, player, .. }
+            if player == owner
+                && <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Skill) =>
         {
             state.skills_played_this_turn += 1;
             if state
@@ -34,10 +35,8 @@ pub(super) fn event_hook<V: crate::Build>(
             }
         }
         EventHook::SideTurnStart {
-            side: CombatSide::Player,
-            turn,
-            ..
-        } if turn != 1 => state.skills_played_this_turn = 0,
+            participants, turn, ..
+        } if participants.contains(owner) && turn != 1 => state.skills_played_this_turn = 0,
         EventHook::CombatStarting { .. } => state.skills_played_this_turn = 0,
         _ => {}
     }

@@ -110,6 +110,7 @@ pub(crate) enum WireReason {
         target: Option<sts2_core::SeatIndex>,
     },
     OptionLocked {},
+    OptionWouldKill {},
     AlreadyAnswered {},
     Unpurchasable {
         index: u8,
@@ -246,6 +247,7 @@ impl WireReason {
             WireReason::OptionDisabled {} => Reason::OptionDisabled,
             WireReason::WrongOptionTarget { target } => Reason::WrongOptionTarget { target },
             WireReason::OptionLocked {} => Reason::OptionLocked,
+            WireReason::OptionWouldKill {} => Reason::OptionWouldKill,
             WireReason::AlreadyAnswered {} => Reason::AlreadyAnswered,
             WireReason::Unpurchasable {
                 index,

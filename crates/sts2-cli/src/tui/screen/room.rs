@@ -10,7 +10,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
-use sts2_core::{Decision, Play, Question, RewardKind, Room, Stock, Take, TakeReward};
+use sts2_core::{Decision, Question, RewardKind, Room, Stock, Take, TakeReward};
 
 use crate::render::{self, spelling};
 use crate::tui::app::App;
@@ -34,11 +34,9 @@ struct Choice {
 // Rooms.
 // ---------------------------------------------------------------------------
 
-pub fn draw<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, room: &Room<V>)
+pub fn draw<V>(frame: &mut Frame, area: Rect, app: &App<V>, room: &Room<V>)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     match room {
         Room::Shop { entries } => {
@@ -201,11 +199,9 @@ fn chose<V: crate::tui::Build>(moves: &[Decision<V>], index: u8) -> Option<usize
 ///
 /// A shop is the room that has both: stock to buy and a door to leave by, at
 /// the same time.
-fn leaving<V, G>(app: &App<V, G>, moves: &[Decision<V>]) -> Vec<Choice>
+fn leaving<V>(app: &App<V>, moves: &[Decision<V>]) -> Vec<Choice>
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     let travelable = app
         .view()
@@ -246,11 +242,9 @@ where
 // Questions.
 // ---------------------------------------------------------------------------
 
-pub fn asking<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, question: &Question<V>)
+pub fn asking<V>(frame: &mut Frame, area: Rect, app: &App<V>, question: &Question<V>)
 where
     V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
 {
     match question {
         Question::SelectCards {

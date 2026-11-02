@@ -4,7 +4,6 @@ use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
-use crate::generated::runstate::CombatSide;
 
 /// Its owner's `PlayerCombatState.TurnNumber`, which it reads, as the
 /// fight's turns start. Nothing outside a fight.
@@ -16,20 +15,19 @@ pub struct State {
 /// `BeforeSideTurnEnd` on its owner's side: its damage to every hittable
 /// enemy on the seventh turn.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
         EventHook::SideTurnStart {
-            side: CombatSide::Player,
-            turn,
-            ..
-        } => state.turn = u8::try_from(turn).unwrap_or(u8::MAX),
-        EventHook::BeforeSideTurnEnd {
-            side: CombatSide::Player,
-            ..
-        } if state.turn == (V::Relic::STONE_CALENDAR_DAMAGE_TURN as u8) => {
+            participants, turn, ..
+        } if participants.contains(owner) => state.turn = u8::try_from(turn).unwrap_or(u8::MAX),
+        EventHook::BeforeSideTurnEnd { participants, .. }
+            if participants.contains(owner)
+                && state.turn == (V::Relic::STONE_CALENDAR_DAMAGE_TURN as u8) =>
+        {
             asked.push(HookEffect::DamageOpponents(V::Relic::STONE_CALENDAR_DAMAGE))
         }
         EventHook::CombatEnd { .. } => state.turn = 0,

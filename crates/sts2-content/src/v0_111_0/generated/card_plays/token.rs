@@ -4,7 +4,7 @@
 //! Source: `dumps/card_plays.txt`, build v0.111.0 (41cef1ea), assembly 1579942752.
 
 use super::super::cards::{CardVar, TokenCard};
-use crate::behaviour::cards::{Ask, Lent};
+use crate::behaviour::paused::{Ask, Lent};
 use sts2_core::{Amount, Change, CostPool, Effect, Fight, FightKind, Scaling};
 
 type V = super::super::super::V0_111_0;
