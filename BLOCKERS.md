@@ -274,7 +274,8 @@ run as its own machine sees it. The work goes in this order:
    `new Rng(Owner, Id)` does. A card made for a dead player goes into no
    pile, and every listener still hears it made. A card auto-played at
    any ally draws its target from the other living players alone, never
-   from a pet.
+   from a pet. The mod waits on its own player's part of a shared event's
+   option alone, not on a reward screen it opened for another player.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
@@ -289,7 +290,7 @@ run as its own machine sees it. The work goes in this order:
    on 60 of the 64. Defect and Necrobinder seeds 33 and 39 agree now. The
    harness lost Regent and Ironclad seed 43 to a game that exited as it
    started, and the seed agrees when it plays again. Ironclad and Silent
-   seed 34 hangs at the same step each time, listed below.
+   seed 34 hung in the mod, and all 64 agree now.
    What is still open is listed below, worked by
    class, with the seeds that show it.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
@@ -342,10 +343,6 @@ run as its own machine sees it. The work goes in this order:
    - Two players who each hold Fur Coat. The game leaves out of each
      coat's marks the points another coat marked, which the simulator's
      map does not record, so it is `unimplemented!`.
-   - Ironclad and Silent seed 34 hangs at step 1292. After an event's
-     option, both players take rewards, and the host skips the last. Its
-     game then waits with an empty queue and never replies, until the
-     harness times out. The mod's reward screen is the place to look.
    - The splits the hunt of 2026-10-30 found, by where they show:
      - A co-op scenario's `enter_room` setup hangs: the host leaves its
        room and enters none, and the reply never comes. The mod's
