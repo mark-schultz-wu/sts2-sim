@@ -76,7 +76,7 @@ pub fn play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Option<()> {
         DefectCard::IceLance => unimplemented!("what {card:?} does when it is played"),
         // `call OrbCmd.Channel`
         DefectCard::Ignition => unimplemented!("what {card:?} does when it is played"),
-        // `statement`
+        // `call Owner.Creature.Powers.OfType`
         DefectCard::ImitationLearning => unimplemented!("what {card:?} does when it is played"),
         // `for`
         DefectCard::MeteorStrike => unimplemented!("what {card:?} does when it is played"),
@@ -118,7 +118,7 @@ pub fn play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Option<()> {
         DefectCard::Turbo => unimplemented!("what {card:?} does when it is played"),
         // `call PileType.Draw.GetPile`
         DefectCard::Uproar => unimplemented!("what {card:?} does when it is played"),
-        // `statement`
+        // `call Calculate`
         DefectCard::Voltaic => unimplemented!("what {card:?} does when it is played"),
         // `call CardFactory.GetDistinctForCombat`
         DefectCard::WhiteNoise => unimplemented!("what {card:?} does when it is played"),

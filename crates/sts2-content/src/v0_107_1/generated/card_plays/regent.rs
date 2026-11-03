@@ -71,7 +71,7 @@ pub fn play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Option<()> {
         RegentCard::ShiningStrike => unimplemented!("what {card:?} does when it is played"),
         // `call DamageCmd.Attack`
         RegentCard::Stardust => unimplemented!("what {card:?} does when it is played"),
-        // `statement`
+        // `call Owner.PlayerCombatState.AllCards.OfType`
         RegentCard::SummonForth => unimplemented!("what {card:?} does when it is played"),
         // `call PlayerCmd.EndTurn`
         RegentCard::VoidForm => unimplemented!("what {card:?} does when it is played"),

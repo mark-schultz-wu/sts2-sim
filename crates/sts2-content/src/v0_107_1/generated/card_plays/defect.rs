@@ -112,7 +112,7 @@ pub fn play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Option<()> {
         DefectCard::Turbo => unimplemented!("what {card:?} does when it is played"),
         // `call PileType.Draw.GetPile`
         DefectCard::Uproar => unimplemented!("what {card:?} does when it is played"),
-        // `statement`
+        // `call Calculate`
         DefectCard::Voltaic => unimplemented!("what {card:?} does when it is played"),
         // `call CardFactory.GetDistinctForCombat`
         DefectCard::WhiteNoise => unimplemented!("what {card:?} does when it is played"),

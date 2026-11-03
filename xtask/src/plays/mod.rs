@@ -82,7 +82,8 @@ impl Error {
 /// Written into the dump as its reason, so each reads as the dump says it.
 #[derive(Debug, thiserror::Error)]
 pub enum Blocked {
-    /// The first statement no command matches.
+    /// What the first statement no command matches is, by
+    /// [`csharp::Stmt::head`].
     #[error("{0}")]
     Statement(String),
     #[error(transparent)]

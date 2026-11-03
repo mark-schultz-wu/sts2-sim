@@ -57,7 +57,7 @@ pub fn play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Option<()> {
         NecrobinderCard::HighFive => unimplemented!("what {card:?} does when it is played"),
         // `call CombatState.PlayerCreatures.Where`
         NecrobinderCard::LegionOfBone => unimplemented!("what {card:?} does when it is played"),
-        // `statement`
+        // `call select`
         NecrobinderCard::Misery => unimplemented!("what {card:?} does when it is played"),
         // `foreach`
         NecrobinderCard::NegativePulse => unimplemented!("what {card:?} does when it is played"),

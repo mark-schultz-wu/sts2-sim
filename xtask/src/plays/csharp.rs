@@ -164,6 +164,60 @@ pub enum Stmt {
 }
 
 impl Stmt {
+    /// What the statement is, named and not quoted: its keyword, or the
+    /// first method it calls, such as `call PowerCmd.Apply`. A dump carries
+    /// this in place of the statement, so it holds none of the game's code.
+    pub fn head(&self) -> String {
+        let toks = match self {
+            Stmt::If { .. } => return "if".to_owned(),
+            Stmt::Foreach { .. } => return "foreach".to_owned(),
+            Stmt::Other(toks) => match toks.first() {
+                Some(Tok::Ident(keyword)) => return keyword.clone(),
+                _ => return "block".to_owned(),
+            },
+            Stmt::Simple(toks) => toks,
+        };
+        // A dotted name, its type arguments passed over, right before `(`.
+        let mut chain: Vec<&str> = Vec::new();
+        let mut at = 0;
+        while at < toks.len() {
+            match &toks[at] {
+                Tok::Ident(name)
+                    if !chain.is_empty() && (toks[at - 1].is(".") || toks[at - 1].is("?.")) =>
+                {
+                    chain.push(name);
+                }
+                Tok::Ident(name) => chain = vec![name],
+                Tok::Punct("." | "?.") if !chain.is_empty() => {}
+                Tok::Punct("<") if !chain.is_empty() => {
+                    let mut depth = 0;
+                    while at < toks.len() {
+                        if toks[at].is("<") {
+                            depth += 1;
+                        } else if toks[at].is(">") {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        at += 1;
+                    }
+                }
+                Tok::Punct("(") if !chain.is_empty() => {
+                    let named: Vec<&str> = chain
+                        .iter()
+                        .copied()
+                        .skip_while(|part| matches!(*part, "base" | "this"))
+                        .collect();
+                    return format!("call {}", named.join("."));
+                }
+                _ => chain.clear(),
+            }
+            at += 1;
+        }
+        "statement".to_owned()
+    }
+
     /// The statement as its tokens, spaced, for a person to read.
     pub fn text(&self) -> String {
         match self {
@@ -420,6 +474,33 @@ mod tests {
             stmts[4].text(),
             "await ExampleCmd.Hit(base.Vars.Amount.Value).From(this)\
              .At(play.Aim).Run(context);"
+        );
+    }
+
+    #[test]
+    fn a_statement_is_named_by_what_it_calls() {
+        let toks = tokens(
+            "Guard.NotNull(play.Aim, \"play.Aim\");\n\
+             Node n = Screen.Instance?.NodeFor(play.Aim);\n\
+             if (n != null) { Sound.Play(\"x\"); }\n\
+             foreach (Thing e in things) { Effect.PlayOn(e, \"v\"); }\n\
+             await ExampleCmd.Hit<Thing>(base.Vars.Amount.Value).From(this);\n\
+             base.Vars.Amount.Raise(1m);\n\
+             n = m;",
+        )
+        .unwrap();
+        let heads: Vec<String> = statements(&toks).unwrap().iter().map(Stmt::head).collect();
+        assert_eq!(
+            heads,
+            [
+                "call Guard.NotNull",
+                "call Screen.Instance.NodeFor",
+                "if",
+                "foreach",
+                "call ExampleCmd.Hit",
+                "call Vars.Amount.Raise",
+                "statement",
+            ]
         );
     }
 

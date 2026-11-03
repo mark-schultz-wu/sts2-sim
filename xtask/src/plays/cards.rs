@@ -105,12 +105,12 @@ pub fn cards(game: &Path, version: &str, version_dir: &Path) -> Result<String, E
          # play <card> <draw|energy|stars|forge> <amount>\n\
          # play <card> channel <orb>\n\
          # play <card> summon <amount>, which is Osty for the player\n\
-         # unplayed <card> <the first statement no command matches>\n\
+         # unplayed <card> <what the first statement no command matches is>\n\
          # upgrade <card> raise <var> <by>\n\
          # upgrade <card> cost <by>\n\
          # upgrade <card> keyword <keyword>\n\
          # upgrade <card> unkeyword <keyword>\n\
-         # unupgraded <card> <the first statement no change matches>\n\
+         # unupgraded <card> <what the first statement no change matches is>\n\
          # turnend <card>, which acts when a turn ends with it in hand\n\
          # An amount is `var <key>` or `number <n>`.\n",
     );
@@ -391,7 +391,7 @@ fn plays(card: &Card, body: Option<Vec<Tok>>) -> Result<Vec<String>, Blocked> {
         // reads as the list stood here.
         if let Some(name) = holds(stmt) {
             if locals.held.is_some() {
-                return Err(Blocked::Statement(stmt.text()));
+                return Err(Blocked::Statement(stmt.head()));
             }
             locals.held = Some(name.clone());
             locals.plain.insert(name.clone());
@@ -403,7 +403,7 @@ fn plays(card: &Card, body: Option<Vec<Tok>>) -> Result<Vec<String>, Blocked> {
         }
         match game(card, stmt, &locals) {
             Some(command) => out.push(command),
-            None => return Err(Blocked::Statement(stmt.text())),
+            None => return Err(Blocked::Statement(stmt.head())),
         }
     }
     Ok(out)
@@ -580,7 +580,7 @@ fn upgrades(card: &Card, body: Option<Vec<Tok>>) -> Result<Vec<String>, Blocked>
     for stmt in csharp::statements(&body)? {
         match upgrade(card, &stmt) {
             Some(change) => out.push(change),
-            None => return Err(Blocked::Statement(stmt.text())),
+            None => return Err(Blocked::Statement(stmt.head())),
         }
     }
     Ok(out)
