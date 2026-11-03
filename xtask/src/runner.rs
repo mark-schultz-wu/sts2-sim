@@ -9,6 +9,7 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 use sts2_core::{End, Verdict};
 
@@ -73,8 +74,14 @@ pub fn retrying(
     ran
 }
 
+/// How often [`pool`] says how far it is.
+const PROGRESS_EVERY: Duration = Duration::from_secs(5 * 60);
+
 /// `work` on every job, `width` at a time, each told its worker's number and
 /// the job's index. What each came to, in the jobs' order.
+///
+/// Every [`PROGRESS_EVERY`], as a job ends, a line on stderr says how many
+/// are done and about how long the rest will take.
 pub fn pool<J: Sync, R: Send>(
     jobs: &[J],
     width: usize,
@@ -82,15 +89,26 @@ pub fn pool<J: Sync, R: Send>(
 ) -> Vec<R> {
     let next = AtomicUsize::new(0);
     let done = Mutex::new(Vec::with_capacity(jobs.len()));
+    let started = Instant::now();
+    let said = Mutex::new(started);
     std::thread::scope(|scope| {
         for worker in 0..width.max(1) {
-            let (next, done, work) = (&next, &done, &work);
+            let (next, done, work, said) = (&next, &done, &work, &said);
             scope.spawn(move || {
                 while let Some(at) =
                     Some(next.fetch_add(1, Ordering::Relaxed)).filter(|&at| at < jobs.len())
                 {
                     let result = work(worker, at, &jobs[at]);
-                    done.lock().expect("no thread panics").push((at, result));
+                    let finished = {
+                        let mut done = done.lock().expect("no thread panics");
+                        done.push((at, result));
+                        done.len()
+                    };
+                    let mut said = said.lock().expect("no thread panics");
+                    if said.elapsed() >= PROGRESS_EVERY {
+                        *said = Instant::now();
+                        eprintln!("{}", progress(finished, jobs.len(), started.elapsed()));
+                    }
                 }
             });
         }
@@ -98,6 +116,17 @@ pub fn pool<J: Sync, R: Send>(
     let mut done = done.into_inner().expect("no thread panics");
     done.sort_by_key(|(at, _)| *at);
     done.into_iter().map(|(_, result)| result).collect()
+}
+
+/// How far a pool is: `done` of `total` jobs after `elapsed`, and the rest
+/// at the rate so far.
+fn progress(done: usize, total: usize, elapsed: Duration) -> String {
+    let minutes = elapsed.as_secs() / 60;
+    let left = elapsed.mul_f64((total - done) as f64 / done.max(1) as f64);
+    format!(
+        "{done} of {total} runs done after {minutes} min, about {} min left",
+        left.as_secs().div_ceil(60)
+    )
 }
 
 /// Seed `n`, as the runs spell it: `C` and `n` in nine digits.
@@ -108,4 +137,25 @@ pub fn seed(n: usize) -> String {
 /// `args`, as the runner's arguments.
 pub fn args<I: IntoIterator<Item = S>, S: Into<OsString>>(args: I) -> Vec<OsString> {
     args.into_iter().map(Into::into).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn progress_says_the_rest_at_the_rate_so_far() {
+        assert_eq!(
+            progress(750, 3000, Duration::from_secs(30 * 60)),
+            "750 of 3000 runs done after 30 min, about 90 min left"
+        );
+    }
+
+    #[test]
+    fn progress_rounds_what_is_left_up() {
+        assert_eq!(
+            progress(2999, 3000, Duration::from_secs(60 * 60)),
+            "2999 of 3000 runs done after 60 min, about 1 min left"
+        );
+    }
 }
