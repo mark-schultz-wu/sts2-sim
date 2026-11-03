@@ -18,3 +18,30 @@ facts mean is the Rust client's job.
 
 `build.sh` builds them in dependency order, and `deploy.sh` installs them.
 `identity.sh` hashes the source of every mod the oracle loads, for the greeting.
+
+## The game
+
+The mods compile against the game's assemblies, and the checks run the game.
+This repository holds neither. Each supported build has a lock under
+`games/`, which holds the hash of each assembly. `game.sh` names each
+build's Steam manifest. `game.sh` moves the game into place.
+
+With a Steam account that owns the game, get each build from Steam:
+
+```sh
+STS2_STEAM_USERNAME=<your account> just acquire-game v0.107.1
+just install-game v0.107.1
+```
+
+`acquire-game` needs
+[DepotDownloader](https://github.com/SteamRE/DepotDownloader). It asks for
+your password and Steam Guard code itself, and `game.sh` stores neither.
+`install-game` checks the copy against the lock, and refuses one that does
+not match. It puts the game in `$XDG_DATA_HOME/sts2/games/<build>`, where
+`.envrc` points `STS2_GAME_DIR`. To install a copy from somewhere else, give
+its directory: `just install-game v0.107.1 /path/to/copy`.
+
+Mark's machines fetch the same builds from a private package on his forge
+instead, with `just vendor-game`. That needs a token for the forge.
+
+The mods and the checks need the .NET SDK too, and run on Linux.

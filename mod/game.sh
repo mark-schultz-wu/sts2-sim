@@ -15,8 +15,14 @@
 # Both carry the same version, so the thing we compile against and the thing we
 # run can never drift apart.
 #
+# Without access to that forge, bring your own copy. Anyone who owns the game
+# can download the exact build from Steam with `acquire`, which knows each
+# build's manifest. `install` then checks the copy against the
+# lock and puts it where the build and the tests look.
+#
 # Usage:
-#     mod/game.sh acquire v0.106.1 3504874971053265041
+#     mod/game.sh acquire v0.107.1
+#     mod/game.sh install v0.107.1
 #     mod/game.sh fetch v0.107.1
 #     mod/game.sh fetch-game v0.111.0
 #     mod/game.sh publish v0.111.0 # source from STS2_STEAM_DIR
@@ -50,6 +56,14 @@ ACQUIRED="${STS2_STEAM_DIR:-$DATA_HOME/steam/$GAME}"
 # The lock is a sha256sum manifest, so `sha256sum -c` reads it directly and the
 # package coordinates ride along in comments it ignores.
 PACKAGE="$(sed -n 's/^# package: //p' "$LOCK" 2>/dev/null || true)"
+
+# Each build's manifest in Steam's Linux depot, for `acquire`. It lives here
+# and not in the lock, because the CI runner's image hashes every lock.
+case "$GAME" in
+  v0.107.1) MANIFEST=7881097836989620034 ;;
+  v0.111.0) MANIFEST=1506251310063253032 ;;
+  *) MANIFEST="" ;;
+esac
 VERSION="$(sed -n 's/^# version: //p' "$LOCK" 2>/dev/null || true)"
 BASE="$FORGE/api/packages/$OWNER/generic/$PACKAGE/$VERSION"
 
@@ -76,10 +90,10 @@ EXCLUDE=(--exclude=./mods --exclude=./crates)
 TOKEN_FILE="${STS2_FORGE_TOKEN_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/sts2/token}"
 
 acquire() {
-  local manifest="${3:-}"
+  local manifest="${3:-$MANIFEST}"
   local branch="${4:-public}"
   if [ -z "$manifest" ] || [ -z "${STS2_STEAM_USERNAME:-}" ]; then
-    echo "Usage: STS2_STEAM_USERNAME=name mod/game.sh acquire <version> <manifest> [branch]" >&2
+    echo "Usage: STS2_STEAM_USERNAME=name mod/game.sh acquire <version> [manifest] [branch]" >&2
     exit 2
   fi
 
@@ -209,6 +223,35 @@ fetch_game() {
   echo "game unpacked at $VERSION in $VENDORED"
 }
 
+# A copy that did not come from the forge: one `acquire` downloaded, or one
+# the user brings. Its assemblies are checked against the lock, which is what
+# makes it the pinned build. This does not check the archive's hash, because
+# only a publish packs one.
+install() {
+  local source="${3:-$ACQUIRED}"
+  local sums; sums="$(manifest_for "${ASSEMBLIES[@]}")"
+  local data="$source/data_sts2_linuxbsd_x86_64"
+
+  if ! (cd "$data" 2>/dev/null && echo "$sums" | sha256sum -c --quiet -); then
+    echo "mod/game.sh: $source is not the $GAME pinned by $LOCK." >&2
+    echo "Its assemblies in $data do not match the lock." >&2
+    exit 1
+  fi
+
+  make_runnable "$source"
+  mkdir -p "$PIN_DIR"
+  local f
+  for f in "${ASSEMBLIES[@]}"; do cp "$data/$f" "$PIN_DIR/$f"; done
+
+  if [ "$(realpath "$source")" != "$(realpath -m "$VENDORED")" ]; then
+    rm -rf "$VENDORED"
+    mkdir -p "$(dirname "$VENDORED")"
+    cp -a --reflink=auto "$source" "$VENDORED"
+  fi
+  echo "$VERSION" > "$VENDORED/.pinned-version"
+  echo "game installed at $VERSION in $VENDORED"
+}
+
 archive_into() {
   # Sorted names, flattened timestamps and owners, single-threaded zstd. The
   # same install has to produce the same bytes. Otherwise a second publish of a
@@ -288,11 +331,13 @@ case "$COMMAND" in
   acquire) acquire "$@" ;;
   fetch) fetch ;;
   fetch-game) fetch_game ;;
+  install) install "$@" ;;
   publish) publish ;;
   *)
     cat >&2 <<'USAGE'
 Usage:
-    mod/game.sh acquire <version> <manifest> [branch]
+    mod/game.sh acquire <version> [manifest] [branch]
+    mod/game.sh install <version> [dir]
     mod/game.sh fetch [version]
     mod/game.sh fetch-game [version]
     mod/game.sh publish [version]
@@ -300,10 +345,12 @@ Usage:
 Versions are lock names under mod/games/; the default is v0.107.1.
 Publish reads its source from STS2_STEAM_DIR.
 
-All three need a forge token with package scope, in STS2_FORGE_TOKEN or in
+Fetch, fetch-game and publish need a forge token with package scope, in STS2_FORGE_TOKEN or in
 ${XDG_CONFIG_HOME:-~/.config}/sts2/token (chmod 600).
 
-Acquire needs STS2_STEAM_USERNAME and DepotDownloader. It may prompt for a
+Acquire needs STS2_STEAM_USERNAME, DepotDownloader, and a Steam account that
+owns the game. Install needs neither a token nor Steam. Its directory defaults
+to where acquire puts the build. It may prompt for a
 password or Steam Guard code; neither is handled or stored by this script.
 USAGE
     exit 2 ;;

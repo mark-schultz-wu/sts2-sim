@@ -91,15 +91,8 @@ One was not benign, and has a patch. That is `MonsterModel.Rng`, below.
 
 ## The canonical-monster warning
 
-`MonsterModel.Rng` is:
-
-```csharp
-get
-{
-    if (!base.IsMutable) return Rng.Chaotic;
-    return _rng;
-}
-```
+`MonsterModel.Rng` returns `Rng.Chaotic` when the model is not mutable, and
+its own generator otherwise.
 
 A **canonical** model is the shared template `ModelDb` holds, as opposed to the
 per-run copy `ToMutable()` makes. Reading this property on one silently yields
