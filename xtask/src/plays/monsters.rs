@@ -104,7 +104,7 @@ pub fn monsters(game: &Path, version: &str, version_dir: &Path) -> Result<String
          # does <monster> <move> power <self|opponents> <power> <amount>\n\
          # does <monster> <move> block <amount>\n\
          # does <monster> <move> cards <card> <amount>, into each opponent's discard pile\n\
-         # unmoved <monster> <move> <the first statement no command matches>\n\
+         # unmoved <monster> <move> <what the first statement no command matches is>\n\
          # An amount is `number <n>` or `ascension <level> <at> <below>`.\n",
     );
     for (id, states) in moves {
@@ -314,7 +314,7 @@ impl Monster<'_> {
             }
             match self.command(state, &stmt, &locals) {
                 Some(command) => out.push(command),
-                None => return Err(Blocked::Statement(stmt.text())),
+                None => return Err(Blocked::Statement(stmt.head())),
             }
         }
         Ok(out)

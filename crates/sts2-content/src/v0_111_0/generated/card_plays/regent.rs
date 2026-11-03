@@ -71,7 +71,7 @@ pub fn play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Option<()> {
         RegentCard::Resonance => unimplemented!("what {card:?} does when it is played"),
         // `call DamageCmd.Attack`
         RegentCard::Stardust => unimplemented!("what {card:?} does when it is played"),
-        // `statement`
+        // `call Owner.PlayerCombatState.AllCards.OfType`
         RegentCard::SummonForth => unimplemented!("what {card:?} does when it is played"),
         // `call CardSelectCmd.FromCombatPile`
         RegentCard::Tutor => unimplemented!("what {card:?} does when it is played"),
