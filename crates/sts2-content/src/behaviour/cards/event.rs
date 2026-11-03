@@ -303,15 +303,15 @@ fn metamorphosis<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Ki
         let Some(card) = fight.generate_card(&attacks) else {
             unimplemented!("a character pool with no attack")
         };
-        if let Some(at) = fight.add_at_random(card, Pile::Draw) {
-            for pool in [CostPool::Energy, CostPool::Star] {
-                fight.modify_card(
-                    at,
-                    Change::SetCost(pool, num_traits::zero()),
-                    Lasting::ThisFight,
-                );
-            }
-        }
+        // `SetToFreeThisCombat`, before the card is added. So its own
+        // `AfterCardEnteredCombat`, as Banshee's Cry's, writes after it.
+        let free = [CostPool::Energy, CostPool::Star].map(|pool| {
+            (
+                Change::SetCost(pool, num_traits::zero()),
+                Lasting::ThisFight,
+            )
+        });
+        fight.add_at_random_written(card, Pile::Draw, &free);
     }
     Played::Done
 }

@@ -45,10 +45,14 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(
                     <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,
                 )
                 .unwrap_or_else(|_| unreachable!("the colorless pool holds far more than three"));
+            // `CardCmd.Upgrade` on each, before it is added.
             for card in made {
-                for at in fight.add_generated_cards(card, Pile::Hand, 1) {
-                    fight.modify_card(at, Change::Upgrade, Lasting::ThisFight);
-                }
+                fight.add_generated_written(
+                    card,
+                    Pile::Hand,
+                    1,
+                    &[(Change::Upgrade, Lasting::ThisFight)],
+                );
             }
             Played::Done
         }

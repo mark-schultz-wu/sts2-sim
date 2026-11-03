@@ -75,15 +75,7 @@ fn drain_power<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind
 /// draw pile at random, each upgraded where Reave is.
 fn reave<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     strike::<V, _>(fight);
-    let upgraded = fight.upgraded();
-    for _ in 0..fight.var(V::CardVar::CARDS) {
-        let Some(soul) = fight.add_at_random(V::Card::SOUL, Pile::Draw) else {
-            break;
-        };
-        if upgraded {
-            fight.modify_card(soul, Change::Upgrade, Lasting::ThisFight);
-        }
-    }
+    souls_into_draw(fight, fight.var(V::CardVar::CARDS));
     Played::Done
 }
 
@@ -296,16 +288,26 @@ fn dirge<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     for _ in 0..x {
         fight.summon_osty(fight.var(V::CardVar::SUMMON));
     }
-    let upgraded = fight.upgraded();
-    for _ in 0..x {
-        let Some(soul) = fight.add_at_random(V::Card::SOUL, Pile::Draw) else {
+    souls_into_draw(fight, x);
+    Played::Done
+}
+
+/// `count` Souls into the draw pile at random, each upgraded before it is
+/// added where the card playing is, as Reave and Dirge do.
+fn souls_into_draw<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    count: crate::behaviour::cards::Number,
+) {
+    let upgrade = [(Change::Upgrade, Lasting::ThisFight)];
+    let writes: &[_] = if fight.upgraded() { &upgrade } else { &[] };
+    for _ in 0..count {
+        if fight
+            .add_at_random_written(V::Card::SOUL, Pile::Draw, writes)
+            .is_none()
+        {
             break;
-        };
-        if upgraded {
-            fight.modify_card(soul, Change::Upgrade, Lasting::ThisFight);
         }
     }
-    Played::Done
 }
 
 pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(

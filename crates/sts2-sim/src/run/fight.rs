@@ -406,6 +406,12 @@ impl<V: Rules> State<V> {
                 let proportion = live.gold_proportion();
                 let escaped = live.any_escaped();
                 let combats = live.finish(belts);
+                // What the fight did to each player comes out with it, before
+                // what its end asks of the run. A heal that asks for, such as
+                // Book of Five Rings' for Pael's Tooth's card, lands on top.
+                for (&each, combat) in seats.iter().zip(&combats) {
+                    self.left_with(each, combat);
+                }
                 let encounter = combats[0].encounter;
                 if let Some(resuming) = self.resuming.as_mut() {
                     resuming.escaped = escaped;

@@ -241,8 +241,11 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 };
             if let Some(found) = picked {
                 let skill: sts2_core::CardAt<V> = found;
-                let plays: Number = resumed!().fight.var(V::CardVar::REPEAT);
-                for _ in 0..plays {
+                // The loop reads `Repeat` again each time round, as the
+                // game's does.
+                let mut played: Number = 0;
+                while played < resumed!().fight.var(V::CardVar::REPEAT) {
+                    played += 1;
                     let fight = &mut *resumed!().fight;
                     let at = crate::behaviour::cards::standing::<V, _>(fight, skill)
                         .unwrap_or_else(|| {
@@ -544,16 +547,10 @@ fn manifest_authority<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, 
     ) else {
         return Played::Done;
     };
-    let upgraded = fight.upgraded();
-    for at in fight.add_generated_cards(card, sts2_core::Pile::Hand, 1) {
-        if upgraded {
-            fight.modify_card(
-                at,
-                sts2_core::Change::Upgrade,
-                sts2_core::Lasting::ThisFight,
-            );
-        }
-    }
+    // `CardCmd.Upgrade` where it is upgraded, before the card is added.
+    let upgrade = [(sts2_core::Change::Upgrade, sts2_core::Lasting::ThisFight)];
+    let writes: &[_] = if fight.upgraded() { &upgrade } else { &[] };
+    fight.add_generated_written(card, sts2_core::Pile::Hand, 1, writes);
     Played::Done
 }
 

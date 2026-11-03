@@ -164,9 +164,12 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
         // auto-played. Each is the first of the playable ones
         // `StableShuffle`d off the shuffle stream, or of the whole pile where
         // none is playable. A card it plays that asks stands the loop still.
+        // The loop reads `Cards` again each time round, so a card it plays
+        // that upgrades it, such as Apotheosis, adds a play.
         __c0 if __c0 == V::Card::CATASTROPHE => {
-            let plays: Number = resumed!().fight.var(V::CardVar::CARDS);
-            for _ in 0..plays {
+            let mut played: Number = 0;
+            while played < resumed!().fight.var(V::CardVar::CARDS) {
+                played += 1;
                 catastrophe_play::<V, _>(resumed!().fight);
                 if resumed!().fight.waiting() {
                     yield_!(Ask::Waiting);
@@ -399,9 +402,7 @@ fn into_hand_taken<V: crate::Build, K: FightKind<V>>(lent: &mut Lent<'_, '_, V, 
 fn free_into_hand<V: crate::Build, K: FightKind<V>>(lent: &mut Lent<'_, '_, V, K>) {
     let Lent { fight, taken } = lent;
     if let Some(chosen) = crate::behaviour::paused::chosen::<V>(taken) {
-        for at in fight.add_generated_cards(chosen, Pile::Hand, 1) {
-            crate::behaviour::free_this_turn(&mut **fight, at);
-        }
+        fight.add_generated_written(chosen, Pile::Hand, 1, &crate::behaviour::free_this_turn());
     }
 }
 
