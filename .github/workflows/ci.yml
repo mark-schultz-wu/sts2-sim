@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# The checks that need no copy of the game. The full checks, which build the
+# mods and run the game headless, run on the project's own runner from
+# `.forgejo/workflows/`.
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # rustup reads `rust-toolchain.toml`, so this installs the pinned compiler
+      # with clippy and rustfmt.
+      - name: Install the pinned Rust
+        run: |
+          set -euo pipefail
+          rustup show active-toolchain || rustup toolchain install
+          channel="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+          test "$(cargo --version | cut -d' ' -f2)" = "$channel"
+
+      - uses: Swatinem/rust-cache@v2
+
+      # The version and checksum the project's runner image bakes, read from
+      # the one file that names them.
+      - name: Install Vale
+        run: |
+          set -euo pipefail
+          . .forgejo/runner/versions.env
+          curl -fsSL -o /tmp/vale.tar.gz \
+            "https://github.com/vale-cli/vale/releases/download/v$VALE_VERSION/vale_${VALE_VERSION}_Linux_64-bit.tar.gz"
+          echo "$VALE_SHA256  /tmp/vale.tar.gz" | sha256sum -c -
+          sudo tar -xzf /tmp/vale.tar.gz -C /usr/local/bin vale
+          test "$(vale --version | grep -o '[0-9.]*$')" = "$VALE_VERSION"
+
+      # The scenarios read what the game answered from `scenarios.bin`, so they
+      # hold the simulator to the game without launching it.
+      - name: Test
+        run: |
+          set -euo pipefail
+          cargo test --workspace --exclude sts2-golden
+          cargo test -p sts2-golden --test scenarios --test map --test setup --test travel --test play
+
+      # Each pinned build's tables come back unchanged from its dumps.
+      - name: Check the generated tables reproduce
+        run: |
+          set -euo pipefail
+          builds=0
+          for lock in mod/games/*.lock; do
+            STS2_GAME_VERSION="$(basename "$lock" .lock)" cargo run -q -p xtask -- codegen
+            builds=$((builds + 1))
+          done
+          test "$builds" -gt 0
+          git diff --exit-code -- 'crates/sts2-content/src/*/generated'
+
+      - name: Lint prose
+        run: |
+          set -euo pipefail
+          ./tools/prose-lint.py
+          ./tools/vale-lint.py --self-test
+          ./tools/vale-lint.py
+
+      - name: Lint Rust
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Check formatting
+        run: cargo fmt --all --check
