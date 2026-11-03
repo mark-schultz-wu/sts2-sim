@@ -2449,10 +2449,13 @@ pub trait Fight<V: ContentVersion> {
     /// `CardPileCmd.Add` of a new card to one combat pile, made for the fight
     /// but not through `AddGeneratedCardToCombat`, so no generation hook
     /// hears it. Nothing once the fight is over.
+    /// `writes` lands on the card before it enters the fight, as
+    /// [`Fight::add_generated_written`] does.
     fn add_card(
         &mut self,
         _card: crate::CardIdent<V>,
         _pile: crate::Pile,
+        _writes: &[(crate::Change<V>, crate::Lasting)],
     ) -> Option<crate::CardAt<V>> {
         unimplemented!("a card added to the fight")
     }
@@ -2477,6 +2480,21 @@ pub trait Fight<V: ContentVersion> {
         _count: usize,
     ) -> Vec<crate::CardAt<V>> {
         unimplemented!("adding generated cards to a pile")
+    }
+
+    /// [`Fight::add_generated_cards`] of copies that `writes` lands on before
+    /// they enter the fight. The game writes on a new card, as
+    /// `SetToFreeThisTurn` or `CardCmd.Upgrade` does, before
+    /// `AddGeneratedCardToCombat`. So the card's own `AfterCardEnteredCombat`
+    /// writes after them.
+    fn add_generated_written(
+        &mut self,
+        _card: crate::CardIdent<V>,
+        _pile: crate::Pile,
+        _count: usize,
+        _writes: &[(crate::Change<V>, crate::Lasting)],
+    ) -> Vec<crate::CardAt<V>> {
+        unimplemented!("adding generated cards written on first")
     }
 
     /// `CreatureCmd.Stun(target, nextMoveId)` on a monster: `stun` in place of
@@ -2723,6 +2741,17 @@ pub trait Fight<V: ContentVersion> {
     /// already over.
     fn add_at_random(&mut self, _card: V::Card, _pile: crate::Pile) -> Option<crate::CardAt<V>> {
         unimplemented!("a card added at a random place")
+    }
+
+    /// [`Fight::add_at_random`] of a copy that `writes` lands on before it
+    /// enters the fight, as [`Fight::add_generated_written`] does.
+    fn add_at_random_written(
+        &mut self,
+        _card: V::Card,
+        _pile: crate::Pile,
+        _writes: &[(crate::Change<V>, crate::Lasting)],
+    ) -> Option<crate::CardAt<V>> {
+        unimplemented!("a card added at a random place, written on first")
     }
 
     /// `PowerCmd.ModifyAmount` on `creature`'s `power`, by a signed amount,

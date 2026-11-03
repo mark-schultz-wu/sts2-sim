@@ -2465,12 +2465,19 @@ impl<V: Rules> State<V> {
         }
     }
 
-    /// Park the run on the rewards a won fight left each player, in seat
-    /// order.
-    ///
-    /// What the fight did to each player comes out with it. The creature was
+    /// What a won fight did to `seat`'s player, out of it. The creature was
     /// built from the run's own numbers and is where they stood while the
     /// fight lasted.
+    pub(super) fn left_with(&mut self, seat: sts2_core::SeatIndex, combat: &Combat<V>) {
+        if let Some(player) = combat.creatures.iter().find(|c| c.id == seat.creature()) {
+            self.players[seat].hp = player.hp;
+            self.players[seat].max_hp = player.max_hp;
+        }
+    }
+
+    /// Park the run on the rewards a won fight left each player, in seat
+    /// order. [`State::left_with`] has taken each player's numbers out of
+    /// the fight.
     /// `spent` is the fight's own storage.
     pub(super) fn won(
         &mut self,
@@ -2480,10 +2487,6 @@ impl<V: Rules> State<V> {
         let mut seats = Vec::with_capacity(screens.len());
         for (seat, (combat, offered)) in self.players.seats().zip(screens) {
             self.players[seat].last_turn = Some(combat.turn);
-            if let Some(player) = combat.creatures.iter().find(|c| c.id == seat.creature()) {
-                self.players[seat].hp = player.hp;
-                self.players[seat].max_hp = player.max_hp;
-            }
             seats.push(RewardSeat {
                 combat,
                 offered,

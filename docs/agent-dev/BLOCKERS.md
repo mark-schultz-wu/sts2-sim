@@ -413,7 +413,8 @@ v0.111.0. All 4 are fixed. A fourth round, from seed 30000, parted 3 on
 v0.107.1 and 2 on v0.111.0, and all 5 are fixed.
 
 A fifth round, from seed 40000, parted 2 on v0.107.1 and 3 on v0.111.0,
-and all 5 are fixed.
+and all 5 are fixed. A sixth round, from seed 50000, parted 1 on v0.107.1
+and 2 on v0.111.0, and all 3 are fixed.
 
 Next, hunt both builds again toward 3,000 runs in a row with no split.
 

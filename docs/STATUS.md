@@ -38,6 +38,7 @@ through the mods in `mod/`.
 | Mixed hunts, from seed 20000 | 3,000 runs per build | 1 and 3 parted, all since fixed | 2026-10 |
 | Mixed hunts, from seed 30000 | 3,000 runs per build | 3 and 2 parted, all since fixed | 2026-10 |
 | Mixed hunts, from seed 40000 | 3,000 runs per build | 2 and 3 parted, all since fixed | 2026-11-02 |
+| Mixed hunts, from seed 50000 | 3,000 runs per build | 1 and 2 parted, all since fixed | 2026-11-02 |
 | Co-op hunts, two players | 4 pairs of characters, seeds 0 to 47 | all agree | 2026-11-01 |
 
 A *mixed* hunt spreads its seeds over every ascension level and every

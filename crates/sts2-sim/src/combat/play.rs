@@ -221,6 +221,7 @@ pub(crate) fn grant_card<V: Rules>(
         &mut board,
         sts2_core::CardIdent::new(card),
         sts2_core::Pile::Hand,
+        &[],
     );
     let skipped = std::mem::take(&mut board.skipped);
     merge::<V>(&mut live.skip_tick, skipped);

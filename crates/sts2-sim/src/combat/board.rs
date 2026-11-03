@@ -1844,18 +1844,19 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `AddGeneratedCardToCombat` of one new copy into the draw pile at
     /// `CardPilePosition.Random`. Nothing once the fight is over.
     pub(super) fn add_to_draw_at_random(&mut self, card: V::Card, creator: Option<CombatId>) {
-        self.add_at_random_here(card, Pile::Draw, creator);
+        self.add_at_random_here(card, Pile::Draw, creator, &[]);
     }
 
     /// `AddGeneratedCardToCombat` of one new copy into `pile` at
     /// `CardPilePosition.Random`: the place `Rng.Shuffle.NextInt(count + 1)`
-    /// names, from the top, made by `creator`. Nothing once the fight is
-    /// over.
+    /// names, from the top, made by `creator`. `writes` land on it before it
+    /// enters. Nothing once the fight is over.
     fn add_at_random_here(
         &mut self,
         card: V::Card,
         pile: Pile,
         creator: Option<CombatId>,
+        writes: &[(sts2_core::Change<V>, sts2_core::Lasting)],
     ) -> Option<CardAt<V>> {
         let seat = self.seat();
         use sts2_core::rng::GameRng as _;
@@ -1875,6 +1876,9 @@ impl<'a, V: Rules> Board<'a, V> {
         let index = num_traits::NumCast::from(at)
             .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
         let at = CardAt::new(id, pile, index);
+        for &(change, lasting) in writes {
+            sts2_core::Fight::modify_card(self, at, change, lasting);
+        }
         self.card_entered_combat(at, card, false);
         self.card_generated(Some(at), card, creator);
         Some(at)
@@ -5078,7 +5082,17 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn add_at_random(&mut self, card: V::Card, pile: Pile) -> Option<CardAt<V>> {
         self.ran_on();
-        self.add_at_random_here(card, pile, self.creator())
+        self.add_at_random_here(card, pile, self.creator(), &[])
+    }
+
+    fn add_at_random_written(
+        &mut self,
+        card: V::Card,
+        pile: Pile,
+        writes: &[(sts2_core::Change<V>, sts2_core::Lasting)],
+    ) -> Option<CardAt<V>> {
+        self.ran_on();
+        self.add_at_random_here(card, pile, self.creator(), writes)
     }
 
     fn modify_power_amount(
@@ -6722,13 +6736,18 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
-    fn add_card(&mut self, card: CardIdent<V>, pile: Pile) -> Option<CardAt<V>> {
+    fn add_card(
+        &mut self,
+        card: CardIdent<V>,
+        pile: Pile,
+        writes: &[(sts2_core::Change<V>, sts2_core::Lasting)],
+    ) -> Option<CardAt<V>> {
         self.ran_on();
         // `IsInProgress`, which a fight already over fails.
         if self.stopped() {
             return None;
         }
-        Some(self.put(card, pile))
+        Some(self.put_written(card, pile, writes))
     }
 
     fn add_generated_cards(
@@ -6751,6 +6770,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     ) -> Vec<CardAt<V>> {
         self.ran_on();
         self.generate(card, pile, count, Some(creator))
+    }
+
+    fn add_generated_written(
+        &mut self,
+        card: CardIdent<V>,
+        pile: Pile,
+        count: usize,
+        writes: &[(sts2_core::Change<V>, sts2_core::Lasting)],
+    ) -> Vec<CardAt<V>> {
+        self.generate_written(card, pile, count, writes)
     }
 
     fn cards_in(&self, pile: Pile) -> Vec<CardAt<V>> {

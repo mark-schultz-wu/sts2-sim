@@ -227,7 +227,9 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
         __c0 if __c0 == V::Card::BULLET_TIME => {
             for at in fight.cards_in(Pile::Hand) {
                 if sts2_core::CardTable::cost(fight.card_ident(at).card) != sts2_core::Cost::X {
-                    crate::behaviour::free_this_turn(fight, at);
+                    for (change, lasting) in crate::behaviour::free_this_turn() {
+                        fight.modify_card(at, change, lasting);
+                    }
                 }
             }
             fight.apply_to_actor(V::Power::NO_DRAW_POWER, PowerAmount::Counted(1));

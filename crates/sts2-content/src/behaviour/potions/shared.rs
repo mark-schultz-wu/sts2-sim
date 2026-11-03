@@ -389,9 +389,12 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
                 made.push(card);
             }
             for card in made {
-                for at in fight.add_generated_cards(card, Pile::Hand, 1) {
-                    crate::behaviour::free_this_turn(fight, at);
-                }
+                fight.add_generated_written(
+                    card,
+                    Pile::Hand,
+                    1,
+                    &crate::behaviour::free_this_turn(),
+                );
             }
             Played::Done
         }
@@ -443,9 +446,12 @@ pub fn paused<V: crate::Build, K: sts2_core::FightKind<V>>(potion: V::Potion) {
             });
             let crate::behaviour::paused::Lent { fight, taken } = resumed!();
             if let Some(card) = crate::behaviour::paused::chosen::<V>(taken) {
-                for at in fight.add_generated_cards(card, Pile::Hand, 1) {
-                    crate::behaviour::free_this_turn(&mut **fight, at);
-                }
+                fight.add_generated_written(
+                    card,
+                    Pile::Hand,
+                    1,
+                    &crate::behaviour::free_this_turn(),
+                );
             }
         }
         // `LiquidMemories`: one card from the discard pile, free this turn,
@@ -458,7 +464,9 @@ pub fn paused<V: crate::Build, K: sts2_core::FightKind<V>>(potion: V::Potion) {
             let crate::behaviour::paused::Lent { fight, taken } = resumed!();
             let picked = crate::behaviour::paused::selected::<V>(taken);
             for &at in picked.as_slice() {
-                crate::behaviour::free_this_turn(&mut **fight, at);
+                for (change, lasting) in crate::behaviour::free_this_turn() {
+                    fight.modify_card(at, change, lasting);
+                }
             }
             fight.act_on(PileAct::IntoHand, picked.as_slice());
         }

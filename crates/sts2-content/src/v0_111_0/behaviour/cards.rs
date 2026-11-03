@@ -620,9 +620,12 @@ pub fn paused<K: FightKind<V>>(card: Cards) {
             });
             let Lent { fight, taken } = resumed!();
             if let Some(chosen) = crate::behaviour::paused::chosen::<V>(taken) {
-                for at in fight.add_generated_cards(chosen, sts2_core::Pile::Hand, 1) {
-                    crate::behaviour::free_this_turn(&mut **fight, at);
-                }
+                fight.add_generated_written(
+                    chosen,
+                    sts2_core::Pile::Hand,
+                    1,
+                    &crate::behaviour::free_this_turn(),
+                );
             }
         }
         card => unreachable!("{card:?} never stops on a question"),

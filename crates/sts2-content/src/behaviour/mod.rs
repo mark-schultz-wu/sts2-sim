@@ -21,9 +21,7 @@ pub(crate) mod relics;
 pub(crate) mod restsite;
 pub(crate) mod rules;
 
-use sts2_core::{
-    CardAt, CardKind, Change, CostPool, Fight, FightKind, Lasting, Pile, RunStreamKinds,
-};
+use sts2_core::{CardKind, Change, CostPool, Fight, FightKind, Lasting, Pile, RunStreamKinds};
 
 pub use filter::CardFilter;
 
@@ -111,15 +109,15 @@ pub enum DeckWrite {
 }
 
 /// `CardModel.SetToFreeThisTurn`: energy and stars at nothing this turn or
-/// until played.
-pub(crate) fn free_this_turn<V: crate::Build, F: Fight<V>>(fight: &mut F, at: CardAt<V>) {
-    for pool in [CostPool::Energy, CostPool::Star] {
-        fight.modify_card(
-            at,
+/// until played. The game writes it on a new card before the card enters the
+/// fight, so it goes to [`Fight::add_generated_written`].
+pub(crate) fn free_this_turn<V: crate::Build>() -> [(Change<V>, Lasting); 2] {
+    [CostPool::Energy, CostPool::Star].map(|pool| {
+        (
             Change::SetCost(pool, num_traits::zero()),
             Lasting::ThisTurnOrUntilPlayed,
-        );
-    }
+        )
+    })
 }
 
 /// `GetDistinctForCombat` of one card of the character's pool that `keeps`
@@ -146,15 +144,13 @@ pub(crate) fn free_card_into_hand<V: crate::Build, F: Fight<V>>(
     let [made] = fight
         .generate_cards::<1>(&mut pool, stream)
         .unwrap_or_else(|_| unreachable!("a pool with a card in it makes one"));
-    let at = match generated {
-        true => fight
-            .add_generated_cards(made, Pile::Hand, 1)
-            .first()
-            .copied(),
-        false => fight.add_card(made, Pile::Hand),
-    };
-    if let Some(at) = at {
-        free_this_turn(fight, at);
+    match generated {
+        true => {
+            fight.add_generated_written(made, Pile::Hand, 1, &free_this_turn());
+        }
+        false => {
+            fight.add_card(made, Pile::Hand, &free_this_turn());
+        }
     }
 }
 
