@@ -125,6 +125,8 @@ pub enum Error {
     Version(#[from] crate::codegen::VersionError),
 }
 
+/// Play the hunt, and report it. Each run that parts or fails is said on
+/// stderr as it ends, so a long hunt shows its splits before its report.
 pub fn run(args: Args) -> Result<String, Error> {
     let Args {
         runs,
@@ -197,6 +199,9 @@ pub fn run(args: Args) -> Result<String, Error> {
             counted.as_deref(),
             &retried,
         );
+        if let Went::Parted(why) | Went::Failed(why) = &went {
+            eprintln!("{} {} {}: {why}", job.character, job.seed, job.setup.0);
+        }
         (at, went)
     });
 
